@@ -1,7 +1,5 @@
 <script lang="ts" setup>
-import { useSysSettingStore } from '@/store/modules/sys-setting'
 defineOptions({ name: 'SystemLogo' })
-const sysSettingStore = useSysSettingStore()
 export interface Props {
   width: string
 }
@@ -16,10 +14,7 @@ withDefaults(defineProps<Props>(), {
   <div :style="{ height: width + 'rpx' }">
     <!--  v-if="sysSettingStore.logo_background"  -->
     <!-- {{sysSettingStore  }} -->
-    <n-image
-      :width="width"
-      :src="sysSettingStore.logo_background === '' ? '/favicon.svg' : sysSettingStore.logo_background"
-    />
+    <n-image :width="width" src="/favicon.ico" />
     <!-- <v-else icon-local-logo /> -->
   </div>
 </template>

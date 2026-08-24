@@ -7,7 +7,6 @@ import { fetchHomeData } from '@/service/api'
 import { getThingsVisHomeDashboard, type ThingsVisHomeDashboard } from '@/service/api/thingsvis'
 import type { ICardRender, ICardView } from '@/components/panel/card'
 import { localStg } from '@/utils/storage'
-import { $t } from '@/locales'
 import ThingsVisAppFrame from '@/components/thingsvis/ThingsVisAppFrame.vue'
 import { useAuthStore } from '@/store/modules/auth'
 import { clearThingsVisHomeCache, readThingsVisHomeCache, writeThingsVisHomeCache } from '@/utils/thingsvis/home-cache'
@@ -17,7 +16,6 @@ const layoutFetched = ref(false)
 const layout = ref<ICardView[]>([])
 const theme = ref('')
 const isError = ref<boolean>(false)
-const active = ref<boolean>(true)
 const showSysAdminSetup = ref(false)
 const token = localStg.get('token')
 const cr = ref<ICardRender>()
@@ -262,26 +260,16 @@ const breakpointChanged = (_newBreakpoint: any, newLayout: any) => {
   </div>
 
   <div v-else-if="isError && !useThingsVis" class="h-full w-full flex-center">
-    <n-result status="418" :title="$t('custom.home.title')" :description="$t('custom.home.description')">
+    <n-result
+      status="success"
+      title="NSNR 核心服务运行正常"
+      description="当前未启用可视化首页；设备、规则、告警和 OTA 功能可从左侧菜单使用。"
+    >
       <template #footer>
-        <n-button
-          type="primary"
-          :disabled="active"
-          @click="
-            () => {
-              router.go(0)
-            }
-          "
-        >
-          <n-countdown
-            v-if="active"
-            :duration="60000"
-            :render="props => props.seconds + 's'"
-            :active="active"
-            @finish="active = false"
-          />
-          {{ active ? '' : $t('custom.home.refresh') }}
-        </n-button>
+        <div class="flex items-center gap-3">
+          <n-button type="primary" @click="router.push('/device/manage')">进入设备管理</n-button>
+          <n-button @click="router.go(0)">重新加载</n-button>
+        </div>
       </template>
     </n-result>
   </div>

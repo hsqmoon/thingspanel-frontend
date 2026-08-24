@@ -1,11 +1,7 @@
 <script setup lang="ts">
-import { $t } from '@/locales'
-import { useSysSettingStore } from '@/store/modules/sys-setting'
-
 defineOptions({
   name: 'GlobalLogo'
 })
-const sysSettingStore = useSysSettingStore()
 
 interface Props {
   /** Whether to show the title */
@@ -26,7 +22,7 @@ withDefaults(defineProps<Props>(), {
           style="max-width: 150px"
           class="text-16px text-primary font-bold transition duration-300 ease-in-out"
         >
-          {{ sysSettingStore.system_name === '' ? $t('title') : sysSettingStore.system_name }}
+          NSNR
         </n-ellipsis>
       </div>
     </div>
