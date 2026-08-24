@@ -247,7 +247,7 @@ watch(moduleTitle, newTitle => {
               textAlign: 'center'
             }"
           >
-            {{ $t('system.title') }}
+            NSNR
           </n-ellipsis>
         </div>
         <p class="text-xs opacity-60" :style="{ color: themeStore.darkMode ? '#9ca3af' : '#6b7280' }">
