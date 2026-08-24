@@ -70,7 +70,8 @@ export default defineConfig(configEnv => {
       }
     },
     define: {
-      BUILD_TIME: JSON.stringify(buildTime)
+      BUILD_TIME: JSON.stringify(buildTime),
+      'import.meta.env.VITE_RSA_PUBLIC_KEY': JSON.stringify(process.env.VITE_RSA_PUBLIC_KEY || '')
     },
     lintOnSave: false
   }
