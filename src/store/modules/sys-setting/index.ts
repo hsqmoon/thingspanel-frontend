@@ -9,7 +9,7 @@ const url = new URL(otherBaseURL.demo ? otherBaseURL.demo : `${window.location.o
 type SysSetting = Omit<Api.GeneralSetting.ThemeSetting, 'id'>
 export const useSysSettingStore = defineStore('sys-setting', {
   state: (): SysSetting => ({
-    system_name: '',
+    system_name: 'NSNR 设备云',
     logo_background: '',
     logo_loading: '',
     logo_cache: '',

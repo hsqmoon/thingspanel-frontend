@@ -46,7 +46,7 @@ function getIconComponent(iconString: string) {
     <header class="mobile-header">
       <div class="header-content">
         <GlobalLogo class="logo" />
-        <h1 class="title">ThingsPanel</h1>
+        <h1 class="title">NSNR</h1>
         <UserAvatar class="avatar" />
       </div>
     </header>
