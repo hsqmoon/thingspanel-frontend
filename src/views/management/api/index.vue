@@ -8,12 +8,15 @@ import { useBoolean, useLoading } from '@sa/hooks'
 import { apiKeyDel, fetchKeyList, updateKey } from '@/service/api'
 import { $t } from '@/locales'
 import { formatDateTime } from '@/utils/common/datetime'
+import { localStg } from '@/utils/storage'
+import { useAuthStore } from '@/store/modules/auth'
 import TableActionModal from './modules/table-action-modal.vue'
 import type { ModalType } from './modules/table-action-modal.vue'
 // import ColumnSetting from './components/column-setting.vue'
 
 const { loading, startLoading, endLoading } = useLoading(false)
 const { bool: visible, setTrue: openModal } = useBoolean()
+const authStore = useAuthStore()
 type QueryFormModel = Pick<UserManagement.UserKey, 'name' | 'status'> & {
   page: number
   page_size: number
@@ -146,6 +149,10 @@ function setEditData(data: UserManagement.UserKey | null) {
 }
 
 function handleAddTable() {
+  if (authStore.userInfo.authority === 'SYS_ADMIN' && !localStg.get('tenantScopeId')) {
+    window.$message?.warning('创建 API Key 前请先选择租户')
+    return
+  }
   openModal()
   setModalType('add')
 }

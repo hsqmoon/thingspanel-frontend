@@ -8,6 +8,7 @@ import { createRequiredFormRule } from '@/utils/form/rule'
 import { addKey, updateKey } from '@/service/api'
 import { $t } from '@/locales'
 import { useAuthStore } from '@/store/modules/auth'
+import { localStg } from '@/utils/storage'
 const authStore = useAuthStore()
 // dom树形结构数据
 export interface Props {
@@ -71,7 +72,10 @@ const rules: Record<keyof FormModel, FormItemRule | FormItemRule[]> = {
 function createDefaultFormModel(): FormModel {
   return {
     name: '',
-    tenant_id: authStore.userInfo.tenant_id as string
+    tenant_id:
+      authStore.userInfo.authority === 'SYS_ADMIN'
+        ? localStg.get('tenantScopeId') || ''
+        : (authStore.userInfo.tenant_id as string)
   }
 }
 
