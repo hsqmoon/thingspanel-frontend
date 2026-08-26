@@ -52,10 +52,7 @@ const handleLogin = async () => {
   }
 }
 
-const handleGoToRegister = () => {
-  const portalBase = (import.meta.env.VITE_MARKET_PORTAL_URL || 'https://r.thingspanel.cn').replace(/\/+$/, '')
-  window.open(`${portalBase}/register`, '_blank', 'noopener,noreferrer')
-}
+const marketRegisterUrl = `${(import.meta.env.VITE_MARKET_PORTAL_URL || 'https://r.thingspanel.cn').replace(/\/+$/, '')}/register`
 
 defineExpose({ open })
 </script>
@@ -119,7 +116,16 @@ defineExpose({ open })
 
     <div class="market-login-footer">
       <span>{{ $t('market.noAccount') }}</span>
-      <NButton text type="primary" @click="handleGoToRegister">{{ $t('market.goToRegister') }}</NButton>
+      <NButton
+        tag="a"
+        :href="marketRegisterUrl"
+        target="_blank"
+        rel="noopener noreferrer"
+        text
+        type="primary"
+      >
+        {{ $t('market.goToRegister') }}
+      </NButton>
     </div>
   </NModal>
 </template>
