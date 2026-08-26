@@ -211,8 +211,6 @@ const sendSimulationDataByForm = async () => {
   const { error } = await sendSimulationData({
     device_id: props.id,
     data: simulationForm.default_data,
-    server: simulationForm.server,
-    port: simulationForm.port,
     topic: simulationForm.topic
   })
   simulationLoading.value = false
@@ -655,11 +653,14 @@ const inputFeedback = computed(() => {
             </div>
             <n-collapse-transition :show="showAdvanced">
               <div class="simulation-advanced-fields flex flex-col gap-12px">
+                <n-alert type="default" :show-icon="false">
+                  下方是设备使用的公网接入地址；本页模拟消息由平台自动通过内网 MQTT 发送。
+                </n-alert>
                 <n-form-item label="服务器" label-align="left" :show-feedback="false">
-                  <n-input v-model:value="simulationForm.server" />
+                  <n-input :value="simulationForm.server" readonly />
                 </n-form-item>
                 <n-form-item label="端口" label-align="left" :show-feedback="false">
-                  <n-input-number v-model:value="simulationForm.port" :min="1" :max="65535" />
+                  <n-input-number :value="simulationForm.port" readonly />
                 </n-form-item>
                 <n-form-item label-align="left" :label="`Topic（${simulationForm.topic}）`" :show-feedback="false">
                   <n-select

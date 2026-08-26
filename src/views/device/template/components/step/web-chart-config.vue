@@ -13,8 +13,10 @@ import ThingsVisWidget from '@/components/thingsvis/ThingsVisWidget.vue'
 import { extractPlatformFields } from '@/utils/thingsvis/platform-fields'
 import { initializeAppChartConfigOnce } from '@/utils/thingsvis/chart-config-initialization'
 import type { PlatformField } from '@/utils/thingsvis/types'
+import { isThingsVisEnabled } from '@/config/runtime-features'
 
 const emit = defineEmits(['update:stepCurrent', 'update:modalVisible'])
+const thingsVisEnabled = isThingsVisEnabled()
 
 const props = defineProps({
   stepCurrent: {
@@ -260,13 +262,16 @@ watch(showEditorModal, visible => {
     <NCard title="Web 图表配置" class="preview-card">
       <template #header-extra>
         <NSpace align="center">
-          <NButton type="primary" size="small" @click="openEditor">
+          <NButton type="primary" size="small" :disabled="!thingsVisEnabled" @click="openEditor">
             {{ hasConfig ? '编辑配置' : '创建配置' }}
           </NButton>
         </NSpace>
       </template>
 
-      <NSpin :show="loading" description="加载中...">
+      <NAlert v-if="!thingsVisEnabled" type="info" title="当前生产 Profile 未启用可视化">
+        Web 图表配置将在启用 visualization 或 full Profile 后可用。
+      </NAlert>
+      <NSpin v-else :show="loading" description="加载中...">
         <!-- 有配置时显示预览 -->
         <div v-if="hasConfig && initialConfig" class="preview-area">
           <ThingsVisWidget

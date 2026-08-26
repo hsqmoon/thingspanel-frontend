@@ -8,6 +8,7 @@ import { SetupStoreId } from '@/enum'
 import { ROOT_ROUTE, createRoutes, getAuthVueRoutes } from '@/router/routes'
 import { getRouteName, getRoutePath } from '@/router/elegant/transform'
 import { fetchGetUserRoutes, fetchIsRouteExist } from '@/service/api'
+import { isThingsVisEnabled } from '@/config/runtime-features'
 import { useAppStore } from '../app'
 import { useAuthStore } from '../auth'
 import { useTabStore } from '../tab'
@@ -203,7 +204,30 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
    * @param routes Auth routes
    */
   function handleAuthRoutes(routes: ElegantConstRoute[]) {
-    const sortRoutes = sortRoutesByOrder(routes)
+    const runtimeRoutes = isThingsVisEnabled()
+      ? routes
+      : routes.flatMap(function removeThingsVisRoutes(route): ElegantConstRoute[] {
+          const name = String(route.name || '')
+          const path = String(route.path || '')
+          const component = String(route.component || '')
+          if (
+            name.startsWith('visualization') ||
+            name.startsWith('home_dashboard_') ||
+            path.startsWith('/visualization') ||
+            path.startsWith('/home/dashboard/') ||
+            component.toLowerCase().includes('thingsvis')
+          ) {
+            return []
+          }
+
+          return [
+            {
+              ...route,
+              ...(route.children ? { children: route.children.flatMap(removeThingsVisRoutes) } : {})
+            } as ElegantConstRoute
+          ]
+        })
+    const sortRoutes = sortRoutesByOrder(runtimeRoutes)
 
     const vueRoutes = getAuthVueRoutes(sortRoutes)
 

@@ -51,6 +51,7 @@ export const views: Record<LastLevelRouteKey, RouteComponent | (() => Promise<Ro
   "device_service-access": () => import("@/views/device/service-access/index.vue"),
   "device_service-details": () => import("@/views/device/service-details/index.vue"),
   device_template: () => import("@/views/device/template/index.vue"),
+  "feature-unavailable": () => import("@/views/feature-unavailable/index.vue"),
   "function_hide-child_one": () => import("@/views/function/hide-child/one/index.vue"),
   "function_hide-child_three": () => import("@/views/function/hide-child/three/index.vue"),
   "function_hide-child_two": () => import("@/views/function/hide-child/two/index.vue"),

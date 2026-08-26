@@ -8,6 +8,7 @@ import { setupStore } from './store'
 import { router, setupRouter } from './router'
 import { i18n, setupI18n } from './locales'
 import { initEChartsComponents } from '@/utils/echarts/echarts-manager'
+import { initRuntimeFeatures } from '@/config/runtime-features'
 
 import App from './App.vue'
 const RECENTLY_VISITED_ROUTES_KEY = 'RECENTLY_VISITED_ROUTES'
@@ -29,6 +30,7 @@ function debounce<T extends () => any>(func: T, wait: number): T {
 let recentRoutesCache: any[] | null = null
 
 async function setupApp() {
+  await initRuntimeFeatures()
   const app = createApp(App)
 
   setupStore(app)

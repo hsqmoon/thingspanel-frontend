@@ -207,6 +207,7 @@ const routeMap: RouteMap = {
   "device_service-details": "/device/service-details",
   "device_template": "/device/thingsmodel",
   "device-details-app": "/device-details-app",
+  "feature-unavailable": "/feature-unavailable",
   "function": "/function",
   "function_hide-child": "/function/hide-child",
   "function_hide-child_one": "/function/hide-child/one",

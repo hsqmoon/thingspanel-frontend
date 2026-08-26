@@ -24,6 +24,15 @@ export const ROOT_ROUTE: CustomRoute = {
 const customRoutes: CustomRoute[] = [
   ROOT_ROUTE,
   {
+    name: 'feature-unavailable',
+    path: '/feature-unavailable',
+    component: 'layout.blank$view.feature-unavailable',
+    meta: {
+      title: 'feature-unavailable',
+      constant: true
+    }
+  } as CustomRoute,
+  {
     name: 'device-config-legacy-redirect',
     path: '/device/config',
     redirect: '/device/template',
@@ -146,7 +155,12 @@ export function createRoutes() {
 
   const authRoutes: ElegantRoute[] = []
 
-  const appEmbedRouteNames = new Set(['visualization-app', 'visualization-app-dashboards', 'visualization-app-preview'])
+  const appEmbedRouteNames = new Set([
+    'feature-unavailable',
+    'visualization-app',
+    'visualization-app-dashboards',
+    'visualization-app-preview'
+  ])
 
   // 添加独立的常量路由
   constantRoutes.push(createThingsvisPreviewRoute())

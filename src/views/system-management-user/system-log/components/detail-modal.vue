@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { defineExpose, ref } from 'vue'
-import moment from 'moment'
 import { $t } from '@/locales'
+import { formatDateTime } from '@/utils/common/datetime'
 
 const modalVisible = ref(false)
 const detailInfo = ref({
@@ -43,7 +43,7 @@ defineExpose({
       </NFormItem>
       <NFormItem :label="$t('custom.management.time')">
         <div class="result">
-          {{ moment(detailInfo.created_at).format('YYYY-MM-DD hh:mm:ss') }}
+          {{ formatDateTime(detailInfo.created_at) }}
         </div>
       </NFormItem>
       <NFormItem :label="$t('custom.management.requestPath')">

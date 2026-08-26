@@ -11,6 +11,7 @@ import ThingsVisAppFrame from '@/components/thingsvis/ThingsVisAppFrame.vue'
 import { useAuthStore } from '@/store/modules/auth'
 import { clearThingsVisHomeCache, readThingsVisHomeCache, writeThingsVisHomeCache } from '@/utils/thingsvis/home-cache'
 import { isSysAdminUser } from '@/utils/thingsvis/space'
+import { isThingsVisEnabled } from '@/config/runtime-features'
 
 const layoutFetched = ref(false)
 const layout = ref<ICardView[]>([])
@@ -112,6 +113,12 @@ const getLayout = async (retryCount = 0) => {
   layoutFetched.value = false
   layout.value = []
   theme.value = ''
+
+  if (!isThingsVisEnabled()) {
+    isError.value = true
+    layoutFetched.value = true
+    return
+  }
 
   const cachedHome = readThingsVisHomeCache()
   if (cachedHome?.state === 'thingsvis' && isCompleteThingsVisDashboard(cachedHome.dashboard)) {

@@ -1,5 +1,12 @@
 <template>
-  <div ref="container" class="thingsvis-widget-container"></div>
+  <div v-if="!thingsVisEnabled" class="thingsvis-widget-container flex-center p-24px">
+    <NResult
+      status="info"
+      title="当前生产 Profile 未启用可视化"
+      description="当前页面不会连接 ThingsVis；启用 visualization 或 full Profile 后即可使用。"
+    />
+  </div>
+  <div v-else ref="container" class="thingsvis-widget-container"></div>
 </template>
 
 <script setup lang="ts">
@@ -14,6 +21,7 @@ import {
 } from '@/service/api/device'
 import { getPlatformApiBase, getThingsVisApiBase } from '@/utils/thingsvis/constants'
 import { localStg } from '@/utils/storage'
+import { isThingsVisEnabled } from '@/config/runtime-features'
 
 const FIELD_BINDING_EXPR_RE = /^\{\{\s*ds\.([^.\s]+)\.data(?:\.(.+?))?\s*\}\}$/
 const FIELD_BINDING_EXPR_GLOBAL_RE = /\{\{\s*ds\.([^.\s]+)\.data(?:\.(.+?))?\s*\}\}/g
@@ -80,6 +88,7 @@ const emit = defineEmits<{
 }>()
 
 const container = ref<HTMLElement | null>(null)
+const thingsVisEnabled = isThingsVisEnabled()
 let client: ThingsVisClient | null = null
 
 const getPreviewDeviceId = () => {
@@ -939,7 +948,7 @@ import { getThingsVisToken } from '@/utils/thingsvis'
 
 // 初始化客户端
 onMounted(async () => {
-  if (!container.value) return
+  if (!thingsVisEnabled || !container.value) return
 
   // Register platform-write listener for the lifetime of this component instance.
   window.addEventListener('message', handlePlatformWrite)

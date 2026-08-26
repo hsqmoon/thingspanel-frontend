@@ -407,6 +407,15 @@ export const generatedRoutes: GeneratedRoute[] = [
     }
   },
   {
+    name: 'feature-unavailable',
+    path: '/feature-unavailable',
+    component: 'layout.base$view.feature-unavailable',
+    meta: {
+      title: 'feature-unavailable',
+      i18nKey: 'route.feature-unavailable'
+    }
+  },
+  {
     name: 'function',
     path: '/function',
     component: 'layout.base',

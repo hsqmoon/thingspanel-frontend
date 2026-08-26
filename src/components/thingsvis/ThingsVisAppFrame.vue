@@ -1,5 +1,16 @@
 <template>
-  <div class="thingsvis-frame-container" :class="{ 'thingsvis-frame-container--auto-height': autoHeight }">
+  <div
+    v-if="!thingsVisEnabled"
+    class="thingsvis-frame-container flex-center p-24px"
+    :class="{ 'thingsvis-frame-container--auto-height': autoHeight }"
+  >
+    <NResult
+      status="info"
+      title="当前生产 Profile 未启用可视化"
+      description="当前页面不会连接 ThingsVis；启用 visualization 或 full Profile 后即可使用。"
+    />
+  </div>
+  <div v-else class="thingsvis-frame-container" :class="{ 'thingsvis-frame-container--auto-height': autoHeight }">
     <iframe
       v-if="url"
       ref="iframeRef"
@@ -40,6 +51,7 @@ import type { PlatformField } from '@/utils/thingsvis/types'
 import { localStg } from '@/utils/storage'
 import { getWebsocketServerUrl } from '@/utils/common/tool'
 import { resolveHostPreviewUrl } from '@/utils/thingsvis/share-url'
+import { isThingsVisEnabled } from '@/config/runtime-features'
 
 const EDITOR_TEMPLATE_FIELD_PAGE_SIZE = 1000
 const EDITOR_DEVICE_CONFIG_PAGE_SIZE = 1000
@@ -77,6 +89,7 @@ const emit = defineEmits<{
 }>()
 
 const router = useRouter()
+const thingsVisEnabled = isThingsVisEnabled()
 
 // Device WebSocket management
 
@@ -2347,6 +2360,7 @@ const handleMessage = async (event: MessageEvent) => {
 }
 
 onMounted(async () => {
+  if (!thingsVisEnabled) return
   window.addEventListener('message', handleMessage)
 
   try {

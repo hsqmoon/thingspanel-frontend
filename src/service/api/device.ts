@@ -511,8 +511,6 @@ export const getSimulationInit = async (params: { device_id: string }) => {
 export const sendSimulationData = async (params: {
   device_id: string
   data: string
-  server?: string
-  port?: number
   topic?: string
 }) => {
   return await request.post<any>(`/telemetry/datas/simulation/send`, params)
