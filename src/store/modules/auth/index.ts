@@ -1,6 +1,5 @@
 import { computed, reactive, ref } from 'vue'
 import { defineStore } from 'pinia'
-import moment from 'moment'
 import { SetupStoreId } from '@/enum'
 import { useLoading } from '@sa/hooks'
 import { useRouterPush } from '@/hooks/common/router'
@@ -8,7 +7,7 @@ import { fetchGetUserInfo, fetchLogin, logout } from '@/service/api'
 import { transformUser } from '@/service/api/auth'
 import { localStg } from '@/utils/storage'
 import { $t } from '@/locales'
-import { encryptDataByRsa, generateRandomHexString, validPassword } from '@/utils/common/tool'
+import { encryptDataByRsa, generateRandomHexString } from '@/utils/common/tool'
 import { useRouteStore } from '../route'
 import { useTabStore } from '../tab'
 import { clearAuthStorage, getToken, getUserInfo } from './shared'
@@ -66,48 +65,17 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
 
       const { loop, info } = await loginByToken(loginToken)
       if (loop && info) {
-        const password_last_updated = info.password_last_updated
-        const now = new Date()
-        const cha = moment(now).diff(password_last_updated, 'days')
-        const tipFunc = async () => {
-          // dialog.warning({
-          //   content: str,
-          //   positiveText: $t('common.confirm'),
-          //   onPositiveClick: () => {
-          //     routerPush({
-          //       path: '/personal-center',
-          //       query: {
-          //         password: 'invalid'
-          //       }
-          //     })
-          //   },
-          //   negativeText: $t('common.cancel'),
-          //   onNegativeClick: async () => {
-          //     await routeStore.initAuthRoute()
-          //     await redirectFromLogin()
-          //   }
-          // })
-          const initialized = await routeStore.initAuthRoute()
-          if (!initialized) {
-            if (info.authority === 'TENANT_USER') {
-              routeStore.setIsInitAuthRoute(true)
-              await routerPushByKey('403')
-            } else {
-              await resetStore()
-            }
-            return
+        const initialized = await routeStore.initAuthRoute()
+        if (!initialized) {
+          if (info.authority === 'TENANT_USER') {
+            routeStore.setIsInitAuthRoute(true)
+            await routerPushByKey('403')
+          } else {
+            await resetStore()
           }
-          await redirectFromLogin()
+          return
         }
-
-        if (!validPassword(password)) {
-          tipFunc()
-        } else if (!info.password_last_updated || cha > 90) {
-          tipFunc()
-        } else {
-          await routeStore.initAuthRoute()
-          await redirectFromLogin()
-        }
+        await redirectFromLogin()
       }
     } catch {
       await resetStore()
