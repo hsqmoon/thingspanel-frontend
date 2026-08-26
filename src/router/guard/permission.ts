@@ -133,6 +133,11 @@ async function createAuthRouteGuard(
   // If init failed, reset store (which likely redirects to login) and stop navigation
   if (!initSuccess) {
     const authStore = useAuthStore()
+    if (authStore.userInfo?.authority === 'TENANT_USER') {
+      routeStore.setIsInitAuthRoute(true)
+      next({ name: '403' })
+      return false
+    }
     await authStore.resetStore() // This typically handles redirection to login
 
     return false
