@@ -26,6 +26,8 @@ import AddDevicesServer1 from '@/views/device/manage/modules/add-devices-server1
 import { useRouterPush } from '@/hooks/common/router'
 import { $t } from '@/locales'
 import { usePageCache } from '../../../utils/usePageCache'
+import { fetchUserList } from '@/service/api/auth'
+import { useAuthStore } from '@/store/modules/auth'
 
 interface ServiceIds {
   service_identifier: string
@@ -45,6 +47,8 @@ const showMessage = ref(false)
 const messageColor = ref('')
 const route: any = useRoute()
 const router: any = useRouter()
+const authStore = useAuthStore()
+const tenantNames = ref<Record<string, string>>({})
 const initialDeviceConfigId = ref(typeof route.query.deviceConfigId === 'string' ? route.query.deviceConfigId : '')
 
 const secondLevelOptions = ref<DeviceManagement.ServiceData[]>([])
@@ -242,8 +246,20 @@ const columns_to_show: Ref<any> = ref([
   }
 ]) as Ref<any>
 
+if (authStore.userInfo.authority === 'SYS_ADMIN') {
+  columns_to_show.value.splice(1, 0, {
+    key: 'tenant_id',
+    minWidth: '160px',
+    label: () => '所属租户',
+    render: (row: any) => tenantNames.value[row.tenant_id] || row.tenant_id || '-'
+  })
+}
+
 const { routerPushByKey } = useRouterPush()
 const goDeviceDetails = row => {
+  if (authStore.userInfo.authority === 'SYS_ADMIN' && !localStg.get('tenantScopeId') && row.tenant_id) {
+    localStg.set('tenantScopeId', row.tenant_id)
+  }
   routerPushByKey('device_details', {
     query: {
       d_id: row.id
@@ -474,8 +490,20 @@ const setServiceParams = () => {
   })
 }
 
+const loadTenantNames = async () => {
+  if (authStore.userInfo.authority !== 'SYS_ADMIN') return
+
+  const { data } = await fetchUserList({ page: 1, page_size: 1000 })
+  tenantNames.value = Object.fromEntries(
+    (data?.list || []).map((tenant: any) => [
+      tenant.tenant_id,
+      tenant.organization || tenant.name || tenant.email || tenant.tenant_id
+    ])
+  )
+}
+
 onBeforeMount(async () => {
-  await fetchFirstLevelOptions()
+  await Promise.all([fetchFirstLevelOptions(), loadTenantNames()])
   setServiceParams()
 })
 
@@ -545,6 +573,10 @@ const completeHandAdd = () => {
 }
 
 async function handleSelect(key: string | number) {
+  if (authStore.userInfo.authority === 'SYS_ADMIN' && !localStg.get('tenantScopeId')) {
+    window.$message?.warning('新增设备前请先在顶部选择所属租户。')
+    return
+  }
   await activate('bottom', key)
 }
 

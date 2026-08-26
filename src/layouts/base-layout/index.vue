@@ -236,7 +236,8 @@ const createEventSource = () => {
     eventSource = new EventSourcePolyfill(getSSEEndpoint(import.meta.env), {
       heartbeatTimeout: 3 * 60 * 1000, // 心跳超时时间：3分钟
       headers: {
-        'x-token': token // 传递用户认证token
+        'x-token': token,
+        ...(localStg.get('tenantScopeId') ? { 'x-tenant-id': localStg.get('tenantScopeId')! } : {})
       }
     })
 

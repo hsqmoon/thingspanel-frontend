@@ -10,6 +10,7 @@ import GlobalBreadcrumb from '../global-breadcrumb/index.vue'
 import { useMixMenuContext } from '../../hooks/use-mix-menu'
 import ThemeButton from './components/theme-button.vue'
 import UserAvatar from './components/user-avatar.vue'
+import TenantScopeSelect from './components/tenant-scope-select.vue'
 
 defineOptions({
   name: 'GlobalHeader'
@@ -56,6 +57,7 @@ const headerMenus = computed(() => {
     </div>
     <div class="h-full flex-y-center justify-end">
       <!--      <FullScreen v-if="!appStore.isMobile" :full="isFullscreen" @click="toggle" />-->
+      <TenantScopeSelect v-if="!appStore.isMobile" />
       <LangSwitch :lang="appStore.locale" :lang-options="appStore.localeOptions" @change-lang="appStore.changeLocale" />
       <ThemeSchemaSwitch
         :theme-schema="themeStore.themeScheme"

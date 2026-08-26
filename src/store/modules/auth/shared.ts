@@ -36,4 +36,5 @@ export function clearAuthStorage() {
   localStg.remove('refreshToken')
   localStg.remove('userInfo')
   localStg.remove('token_expires_in')
+  localStg.remove('tenantScopeId')
 }

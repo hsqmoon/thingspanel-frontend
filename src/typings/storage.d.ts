@@ -20,6 +20,8 @@ declare namespace StorageType {
     token_expires_in: string
     /** The user info */
     userInfo: Api.Auth.UserInfo
+    /** Tenant selected by a system administrator; missing means all tenants. */
+    tenantScopeId: string
     /** The theme color */
     themeColor: string
     /** The theme settings */

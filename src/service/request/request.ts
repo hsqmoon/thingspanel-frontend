@@ -19,10 +19,15 @@ export const request = createFlatRequest<App.Service.DEVResponse>(
       // set token
       const token = localStg.get('token')
       const userLanguage = localStg.get('lang')
+      const userInfo = localStg.get('userInfo')
+      const tenantScopeID = userInfo?.authority === 'SYS_ADMIN' ? localStg.get('tenantScopeId') : null
       // const Authorization = token ? `Bearer ${token}` : null;
       const headersWithToken = token ? { 'x-token': token } : {}
       if (userLanguage) {
         headersWithToken['Accept-Language'] = userLanguage
+      }
+      if (tenantScopeID) {
+        headersWithToken['x-tenant-id'] = tenantScopeID
       }
       Object.assign(headers, headersWithToken)
       if (params && typeof params === 'object' && !Array.isArray(params)) {

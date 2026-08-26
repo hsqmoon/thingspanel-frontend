@@ -1,5 +1,6 @@
 import { adapterOfFetchRouterList, adapterOfFetchUserRouterList } from '@/service/api/management.adapter'
 import { createLogger } from '@/utils/logger'
+import { getRoutePath } from '@/router/elegant/transform'
 import { request } from '../request'
 const logger = createLogger('Routes')
 
@@ -51,5 +52,5 @@ export const fetchUIElementList = async () => {
  */
 export function fetchIsRouteExist(routeName: string) {
   logger.info(routeName)
-  return false
+  return Boolean(getRoutePath(routeName as never))
 }
