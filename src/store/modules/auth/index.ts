@@ -16,7 +16,7 @@ import { clearThingsVisToken } from '@/utils/thingsvis'
 
 export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
   const routeStore = useRouteStore()
-  const { route, toLogin, redirectFromLogin } = useRouterPush(false)
+  const { route, toLogin, redirectFromLogin, routerPushByKey } = useRouterPush(false)
   const { loading: loginLoading, startLoading, endLoading } = useLoading()
 
   const token = ref(getToken())
@@ -87,7 +87,16 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
           //     await redirectFromLogin()
           //   }
           // })
-          await routeStore.initAuthRoute()
+          const initialized = await routeStore.initAuthRoute()
+          if (!initialized) {
+            if (info.authority === 'TENANT_USER') {
+              routeStore.setIsInitAuthRoute(true)
+              await routerPushByKey('403')
+            } else {
+              await resetStore()
+            }
+            return
+          }
           await redirectFromLogin()
         }
 

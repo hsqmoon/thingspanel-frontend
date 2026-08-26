@@ -67,6 +67,8 @@ declare namespace Env {
     readonly VITE_AUTO_LOGIN_USERNAME?: string
     /** Auto login password for development environment */
     readonly VITE_AUTO_LOGIN_PASSWORD?: string
+    /** Public registration portal for the ThingsPanel resource center */
+    readonly VITE_MARKET_PORTAL_URL?: string
     readonly globEager: <T = any>(globPattern: string) => Record<string, T>
   }
 }

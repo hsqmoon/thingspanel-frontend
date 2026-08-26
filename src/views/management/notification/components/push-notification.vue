@@ -34,7 +34,7 @@ function createDefaultFormModel(): NotificationServices.PushNotification {
 }
 
 const rules = {
-  pushServer: createRequiredFormRule($t('common.pleaseCheckValue'))
+  url: createRequiredFormRule($t('common.pleaseCheckValue'))
 }
 const formRef = ref<HTMLElement & FormInst>()
 async function handleSubmit() {
@@ -64,7 +64,7 @@ init()
         <NFormItemGridItem
           :span="14"
           :label="$t('page.manage.notification.pushNotification.pushServer')"
-          path="pushNotification.pushServer"
+          path="url"
         >
           <NInput v-model:value="formModel.url" />
         </NFormItemGridItem>

@@ -144,7 +144,7 @@ init()
           :label="$t('page.manage.notification.email.form.authorizationCodeOrPassword')"
           path="email_config.from_password"
         >
-          <NInput v-model:value="formModel.email_config.from_password" />
+          <NInput v-model:value="formModel.email_config.from_password" type="password" show-password-on="click" />
         </NFormItemGridItem>
       </NGrid>
       <NGrid :cols="24">

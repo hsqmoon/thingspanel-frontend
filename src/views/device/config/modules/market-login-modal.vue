@@ -53,10 +53,8 @@ const handleLogin = async () => {
 }
 
 const handleGoToRegister = () => {
-  // Opening the market portal registration page
-  // The port 18083 is the Portal's host port as per deployment_info.md
-  const marketUrl = window.location.origin.replace(/:\d+$/, ':18083') + '/register'
-  window.open(marketUrl, '_blank')
+  const portalBase = (import.meta.env.VITE_MARKET_PORTAL_URL || 'https://r.thingspanel.cn').replace(/\/+$/, '')
+  window.open(`${portalBase}/register`, '_blank', 'noopener,noreferrer')
 }
 
 defineExpose({ open })
