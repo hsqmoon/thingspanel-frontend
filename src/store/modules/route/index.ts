@@ -179,7 +179,10 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
     const { data, error } = await fetchGetUserRoutes()
 
     if (!error) {
-      const routes = data?.list
+      const routes = data?.list || []
+      if (!routes.length) {
+        return false
+      }
 
       handleAuthRoutes(routes)
 

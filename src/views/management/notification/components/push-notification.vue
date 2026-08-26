@@ -38,6 +38,10 @@ const rules = {
 }
 const formRef = ref<HTMLElement & FormInst>()
 async function handleSubmit() {
+  if (!formModel.url.trim()) {
+    window.$message?.warning($t('common.pleaseCheckValue'))
+    return
+  }
   await formRef.value?.validate()
   startLoading()
   const formData = deepClone(formModel)
