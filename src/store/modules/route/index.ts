@@ -180,31 +180,33 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
 
   /** Init dynamic auth route */
   async function initDynamicAuthRoute(): Promise<boolean> {
-    const { data, error } = await fetchGetUserRoutes()
+    try {
+      const { data, error } = await fetchGetUserRoutes()
 
-    if (!error) {
-      const routes = data?.list || []
-      hasAuthRoutes.value = routes.length > 0
+      if (!error) {
+        const routes = data?.list || []
+        hasAuthRoutes.value = routes.length > 0
 
-      if (hasAuthRoutes.value) {
-        handleAuthRoutes(routes)
+        if (hasAuthRoutes.value) {
+          handleAuthRoutes(routes)
 
-        setRouteHome('home')
+          setRouteHome('home')
 
-        handleUpdateRootRouteRedirect('home')
+          handleUpdateRootRouteRedirect('home')
+        }
+
+        setIsInitAuthRoute(true)
+
+        return true // Indicate success
       }
 
-      setIsInitAuthRoute(true)
-
-      return true // Indicate success
+      hasAuthRoutes.value = false
+      return false // Indicate failure
+    } catch {
+      hasAuthRoutes.value = false
+      return false
     }
 
-    hasAuthRoutes.value = false
-
-    // Optionally handle the error, e.g., show a notification
-    // window.$message?.error('Failed to fetch user routes.');
-
-    return false // Indicate failure
   }
 
   /**
