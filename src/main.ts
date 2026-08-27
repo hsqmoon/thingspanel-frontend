@@ -175,3 +175,4 @@ async function setupApp() {
 }
 
 setupApp()
+void import('./plugins/svg-icons')

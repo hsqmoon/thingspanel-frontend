@@ -7,13 +7,30 @@ import { useRouterPush } from '@/hooks/common/router'
 import { $t } from '@/locales'
 import AssociatedDevices from './modules/associated-devices.vue'
 
-const AttributeInfo = defineAsyncComponent(() => import('./modules/attribute-info.vue'))
-const ConnectionInfo = defineAsyncComponent(() => import('./modules/connection-info.vue'))
-const DataHandle = defineAsyncComponent(() => import('./modules/data-handle.vue'))
-const Automate = defineAsyncComponent(() => import('./modules/automate.vue'))
-const AlarmInfo = defineAsyncComponent(() => import('./modules/alarm-info.vue'))
-const ExtendInfo = defineAsyncComponent(() => import('./modules/extend-info.vue'))
-const SettingInfo = defineAsyncComponent(() => import('./modules/setting-info.vue'))
+const tabComponentLoaders = [
+  () => import('./modules/attribute-info.vue'),
+  () => import('./modules/connection-info.vue'),
+  () => import('./modules/data-handle.vue'),
+  () => import('./modules/automate.vue'),
+  () => import('./modules/alarm-info.vue'),
+  () => import('./modules/extend-info.vue'),
+  () => import('./modules/setting-info.vue')
+] as const
+
+const AttributeInfo = defineAsyncComponent(tabComponentLoaders[0])
+const ConnectionInfo = defineAsyncComponent(tabComponentLoaders[1])
+const DataHandle = defineAsyncComponent(tabComponentLoaders[2])
+const Automate = defineAsyncComponent(tabComponentLoaders[3])
+const AlarmInfo = defineAsyncComponent(tabComponentLoaders[4])
+const ExtendInfo = defineAsyncComponent(tabComponentLoaders[5])
+const SettingInfo = defineAsyncComponent(tabComponentLoaders[6])
+
+const preloadTabComponents = () => void Promise.allSettled(tabComponentLoaders.map(load => load()))
+if (typeof requestIdleCallback !== 'undefined') {
+  requestIdleCallback(preloadTabComponents, { timeout: 2000 })
+} else {
+  setTimeout(preloadTabComponents, 500)
+}
 
 const { routerPushByKey } = useRouterPush()
 const route = useRoute()
