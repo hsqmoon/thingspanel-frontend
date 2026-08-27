@@ -16,7 +16,7 @@ defineOptions({
 const { locale } = useI18n()
 const auth = useAuthStore()
 const { toggleLoginModule } = useRouterPush()
-const { formRef, validate } = useNaiveForm()
+const { setFormRef, validate } = useNaiveForm()
 const readOnly = ref(true)
 
 interface FormModel {
@@ -117,7 +117,15 @@ setTimeout(() => {
 </script>
 
 <template>
-  <NForm ref="formRef" :key="locale" :model="model" :rules="rules" size="large" :show-label="false" autocomplete="off">
+  <NForm
+    :ref="setFormRef"
+    :key="locale"
+    :model="model"
+    :rules="rules"
+    size="large"
+    :show-label="false"
+    autocomplete="off"
+  >
     <NFormItem path="email">
       <NAutoComplete
         v-model:value="model.email"

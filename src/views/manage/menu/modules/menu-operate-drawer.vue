@@ -37,7 +37,7 @@ const visible = defineModel<boolean>('visible', {
   default: false
 })
 
-const { formRef, validate, restoreValidation } = useNaiveForm()
+const { validate, restoreValidation } = useNaiveForm()
 const { defaultRequiredRule } = useFormRules()
 
 const title = computed(() => {
@@ -121,7 +121,7 @@ watch(visible, () => {
 <template>
   <NDrawer v-model:show="visible" :title="title" display-directive="show" :width="360">
     <NDrawerContent :title="title" :native-scrollbar="false" closable>
-      <NForm ref="formRef" :model="model" :rules="rules" label-placement="left" :label-width="80">
+      <NForm :model="model" :rules="rules" label-placement="left" :label-width="80">
         <NFormItem :label="$t('page.manage.menu.menuType')" path="menuType">
           <NRadioGroup v-model:value="model.menuType">
             <NRadio

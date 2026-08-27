@@ -18,7 +18,7 @@ const isRememberPath = ref(true)
 const rememberMe = ref(false)
 const authStore = useAuthStore()
 const { toggleLoginModule } = useRouterPush()
-const { formRef, validate } = useNaiveForm()
+const { setFormRef, validate } = useNaiveForm()
 const showYzm = ref(false)
 const showZc = ref(false)
 
@@ -153,7 +153,7 @@ async function loadAutoLoginCredentials() {
     setTimeout(async () => {
       try {
         await authStore.login(model.userName.trim(), model.password)
-      } catch (error) {
+      } catch {
         window.$message?.error('自动登录失败，请手动输入账号密码')
       }
     }, 500)
@@ -182,7 +182,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <NForm ref="formRef" :key="locale" :model="model" :rules="rules" size="large" :show-label="false">
+  <NForm :ref="setFormRef" :key="locale" :model="model" :rules="rules" size="large" :show-label="false">
     <NFormItem path="userName">
       <NAutoComplete
         v-model:value="model.userName"

@@ -166,14 +166,12 @@ function handleCloseEye(rowId: string) {
   findItem!.show = false
 }
 async function handleCopyKey(key: string) {
-  let success = false
   let errorMessage = $t('theme.configOperation.copyFail') || '复制失败' // 默认错误信息
 
   // 优先尝试现代 Clipboard API
   if (navigator.clipboard && navigator.clipboard.writeText) {
     try {
       await navigator.clipboard.writeText(key)
-      success = true
       window.$message?.success($t('theme.configOperation.copySuccess') || '复制成功')
       return // 成功则直接返回
     } catch (err) {
@@ -196,8 +194,6 @@ async function handleCopyKey(key: string) {
   }
 
   // 尝试后备方法 document.execCommand('copy')
-  if (process.env.NODE_ENV === 'development') {
-  }
   const textArea = document.createElement('textarea')
   textArea.value = key
   // 防止在屏幕上显示
@@ -211,7 +207,7 @@ async function handleCopyKey(key: string) {
   textArea.setSelectionRange(0, textArea.value.length) // 确保移动端也能选中
 
   try {
-    success = document.execCommand('copy')
+    const success = document.execCommand('copy')
     if (success) {
       window.$message?.success($t('theme.configOperation.copySuccess') || '复制成功')
     } else {

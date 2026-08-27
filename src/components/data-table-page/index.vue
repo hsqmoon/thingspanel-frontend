@@ -1,6 +1,6 @@
 <script lang="tsx" setup>
-import type { VueElement } from 'vue'
-import { computed, defineProps, ref, watch, watchEffect, onMounted, onUnmounted } from 'vue'
+import type { VNode, VNodeChild } from 'vue'
+import { computed, ref, watchEffect, onMounted, onUnmounted } from 'vue'
 import _ from 'lodash'
 import { NButton, NDataTable, NDatePicker, NInput, NSelect, NSpace, NPagination, NSpin } from 'naive-ui'
 import type { TreeSelectOption } from 'naive-ui'
@@ -45,6 +45,16 @@ interface DeviceItem {
   key?: string // DevCardItem 可能用到的备用字段
 }
 
+type FetchDataResult =
+  | {
+      data: { list: DeviceItem[]; total: number }
+      error: null
+    }
+  | {
+      data: null
+      error: Error
+    }
+
 const logger = createLogger('TablePage')
 
 // 定义搜索配置项的类型，支持多种输入类型：纯文本、日期选择器、日期范围选择器、下拉选择和树形选择器
@@ -81,12 +91,12 @@ export type SearchConfig =
 
 // 通过props从父组件接收参数
 const props = defineProps<{
-  fetchData: () => Promise<any> // 数据获取函数
+  fetchData: (params: Record<string, unknown>) => Promise<FetchDataResult> // 数据获取函数
   columnsToShow: // 表格列配置
   | {
         key: string
         label: theLabel
-        render?: () => VueElement | string | undefined // 自定义渲染函数
+        render?: (row: DeviceItem) => VNodeChild // 自定义渲染函数
       }[]
     | 'all' // 特殊值'all'表示显示所有列
   searchConfigs: SearchConfig[] // 搜索配置数组
@@ -96,8 +106,8 @@ const props = defineProps<{
     label: theLabel // 按钮文本
     callback: any // 点击回调
   }>
-  topActions: { element: () => JSX.Element }[] // 顶部操作组件列表
-  rowClick?: () => void // 表格行点击回调
+  topActions: { element: () => VNode }[] // 顶部操作组件列表
+  rowClick?: (row: DeviceItem) => void // 表格行点击回调
   initPage?: number
   initPageSize?: number
 }>()
@@ -487,7 +497,7 @@ const formSize = ref(undefined)
       <n-scrollbar style="height: calc(100vh - 442px)" :size="1">
         <n-spin :show="loading">
           <NGrid x-gap="20px" y-gap="20px" cols="1 s:2 m:3 l:4" responsive="screen">
-            <NGridItem v-for="(item, index) in dataList" :key="item.id">
+            <NGridItem v-for="item in dataList" :key="item.id">
               <DevCardItem
                 :title="item.name || 'N/A'"
                 :status-active="item.is_online === 1"

@@ -32,9 +32,9 @@ const props = withDefaults(defineProps<Props>(), {
 interface Emits {
   (e: 'update:visible', visible: boolean): void
 
-  (e: 'modification', name: string): void
+  (e: 'modification', name?: string): void
 }
-const { formRef, validate } = useNaiveForm()
+const { validate } = useNaiveForm()
 const emit = defineEmits<Emits>()
 
 const modalVisible = computed({
@@ -90,8 +90,9 @@ const editName = async () => {
 /** passwordModification */
 const password = async () => {
   await validate()
-  const data = localStorage.getItem('enableZcAndYzm') ? JSON.parse(localStorage.getItem('enableZcAndYzm')) : []
-  let salt = null
+  const storedSettings = localStorage.getItem('enableZcAndYzm')
+  const data = storedSettings ? JSON.parse(storedSettings) : []
+  let salt = ''
   let password1 = formData.value.password
   if (data.find(v => v.name === 'frontend_res')?.enable_flag === 'enable') {
     salt = generateRandomHexString(16)
@@ -151,7 +152,7 @@ const rules: FormRules = {
 
 <template>
   <NModal v-model:show="modalVisible" preset="card" :title="title" class="w-500px">
-    <NForm ref="formRef" label-placement="left" :model="formData" :rules="rules">
+    <NForm label-placement="left" :model="formData" :rules="rules">
       <NGrid :cols="2" :x-gap="18">
         <NFormItemGridItem v-if="estimate === 'amend'" :span="24" :label="$t('page.manage.user.userName')" path="name">
           <NInput v-model:value="formData.name" />

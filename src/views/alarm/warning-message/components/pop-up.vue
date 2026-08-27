@@ -21,7 +21,7 @@ const logger = createLogger('PopUp')
 export interface Props {
   visible: boolean
   type?: 'add' | 'edit'
-  editData: any
+  editData?: any
 }
 
 export type ModalType = NonNullable<Props['type']>
@@ -81,8 +81,6 @@ const loadMoreNotificationGroupData = async () => {
     state.generalOptions = [...state.generalOptions, ...list]
 
     state.generalOptions = state.generalOptions.map((item: any) => {
-      if (process.env.NODE_ENV === 'development') {
-      }
       return {
         id: item.id,
         name: item.name,

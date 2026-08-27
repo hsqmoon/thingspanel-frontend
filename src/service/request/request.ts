@@ -1,5 +1,6 @@
 import { BACKEND_ERROR_CODE, createFlatRequest } from '@sa/axios'
 import { localStg } from '@/utils/storage'
+import { clearAuthStorage } from '@/store/modules/auth/shared'
 import { createProxyPattern, createServiceConfig } from '~/env.config'
 
 const { otherBaseURL } = createServiceConfig(import.meta.env)
@@ -20,7 +21,12 @@ export const request = createFlatRequest<App.Service.DEVResponse>(
       const token = localStg.get('token')
       const userLanguage = localStg.get('lang')
       const userInfo = localStg.get('userInfo')
-      const tenantScopeID = userInfo?.authority === 'SYS_ADMIN' ? localStg.get('tenantScopeId') : null
+      const requestPath = config.url?.split('?')[0]
+      const requestOptions = config as typeof config & { skipTenantScope?: boolean }
+      const bypassTenantScope = requestOptions.skipTenantScope === true || requestPath === '/user/logout'
+      delete requestOptions.skipTenantScope
+      const tenantScopeID =
+        userInfo?.authority === 'SYS_ADMIN' && !bypassTenantScope ? localStg.get('tenantScopeId') : null
       // const Authorization = token ? `Bearer ${token}` : null;
       const headersWithToken = token ? { 'x-token': token } : {}
       if (userLanguage) {
@@ -65,60 +71,26 @@ export const request = createFlatRequest<App.Service.DEVResponse>(
         // 检查错误码
         const errorData = error?.response?.data
         const errorCode = errorData?.code
+        const failedTokenHeader = error.config?.headers.get('x-token')
+        const failedToken = typeof failedTokenHeader === 'string' ? failedTokenHeader : ''
 
-        if (errorCode === 40102) {
-          // 尝试刷新token
-          const { useAuthStore } = await import('@/store/modules/auth')
-          const authStore = useAuthStore()
-          const refreshTokenFn = (authStore as any).refreshToken
-          const refreshSuccess = typeof refreshTokenFn === 'function' ? await refreshTokenFn.call(authStore) : false
-
-          if (refreshSuccess) {
-            // 刷新成功，重试原请求
-            const originalRequest = error.config
-            if (originalRequest && !(originalRequest as any)._retry) {
-              ;(originalRequest as any)._retry = true
-              const newToken = localStg.get('token')
-              if (newToken) {
-                originalRequest.headers['x-token'] = newToken
-                return request(originalRequest)
-              }
-            }
-          } else {
-            // 刷新失败，跳转到登录页
-            window.$message?.destroyAll()
-            window.$message?.error('登录已过期，请重新登录。')
-
-            setTimeout(() => {
-              localStg.remove('token')
-              localStg.remove('refreshToken')
-              localStg.remove('userInfo')
-              window.location.reload()
-            }, 1000)
-          }
-        } else if (errorCode === 40100 || errorCode === 40101) {
-          // 缺少认证信息或无效Token，直接跳转到登录页
-          window.$message?.destroyAll()
-          window.$message?.error('认证失败，请重新登录。')
-
-          setTimeout(() => {
-            localStg.remove('token')
-            localStg.remove('refreshToken')
-            localStg.remove('userInfo')
-            window.location.reload()
-          }, 1000)
-        } else {
-          // 处理其他所有401情况（默认处理，防止页面卡死）
-          window.$message?.destroyAll()
-          window.$message?.error('登录已过期，请重新登录。')
-
-          setTimeout(() => {
-            localStg.remove('token')
-            localStg.remove('refreshToken')
-            localStg.remove('userInfo')
-            window.location.reload()
-          }, 1000)
+        // A late response from an old request must never clear a newer login.
+        if (!failedToken || failedToken !== localStg.get('token')) {
+          return
         }
+
+        window.$message?.destroyAll()
+        window.$message?.error(
+          errorCode === 40100 || errorCode === 40101 ? '认证失败，请重新登录。' : '登录已过期，请重新登录。'
+        )
+
+        clearAuthStorage()
+
+        setTimeout(() => {
+          if (!localStg.get('token')) {
+            window.location.reload()
+          }
+        }, 1000)
         return
       }
 

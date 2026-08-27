@@ -49,9 +49,10 @@ export function fetchEmailCodeByEmail(email: string) {
   })
 }
 /** 获取用户列表 */
-export const fetchUserList = async (params: any) => {
+export const fetchUserList = async (params: any, skipTenantScope = false) => {
   const data = await request.get<Api.UserManagement.Data | null>('/user', {
-    params
+    params,
+    skipTenantScope
   })
   return data
 }

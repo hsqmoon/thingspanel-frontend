@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineExpose, getCurrentInstance, onMounted, reactive, ref } from 'vue'
+import { computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
 import {
   type FormInst,
   type FormRules,

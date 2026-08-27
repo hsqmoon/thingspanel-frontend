@@ -1,8 +1,9 @@
-import type { CustomRoute, ElegantConstRoute, ElegantRoute } from '@elegant-router/types'
+import type { CustomRoute, ElegantConstRoute } from '@elegant-router/types'
 import type { RouteComponent } from 'vue-router'
 import { generatedRoutes } from '../elegant/routes'
 import { layouts, views } from '../elegant/imports'
 import { transformElegantRoutesToVueRoutes } from '../elegant/transform'
+import { registerRouteRuntime } from './runtime'
 
 /** App 嵌入页视图：elegant-router 需独立目录 page，此处兜底注册避免 watcher 覆盖后找不到组件 */
 const appEmbedViews: Record<string, RouteComponent | (() => Promise<RouteComponent>)> = {
@@ -21,7 +22,7 @@ export const ROOT_ROUTE: CustomRoute = {
   }
 }
 
-const customRoutes: CustomRoute[] = [
+const customRoutes: ElegantConstRoute[] = [
   ROOT_ROUTE,
   {
     name: 'feature-unavailable',
@@ -32,15 +33,6 @@ const customRoutes: CustomRoute[] = [
       constant: true
     }
   } as CustomRoute,
-  {
-    name: 'device-config-legacy-redirect',
-    path: '/device/config',
-    redirect: '/device/template',
-    meta: {
-      title: 'device-config-legacy-redirect',
-      constant: true
-    }
-  },
   {
     name: 'not-found',
     path: '/:pathMatch(.*)*',
@@ -137,7 +129,7 @@ const customRoutes: CustomRoute[] = [
 
 // ThingsVis 预览页面 - 独立的常量路由，无需登录
 // 使用 as any 绕过类型检查，因为这是新增的路由
-function createThingsvisPreviewRoute() {
+function createThingsvisPreviewRoute(): ElegantConstRoute {
   return {
     name: 'thingsvis-preview-standalone',
     path: '/tv-preview',
@@ -146,14 +138,14 @@ function createThingsvisPreviewRoute() {
       title: 'thingsvis-preview',
       constant: true
     }
-  } as any
+  }
 }
 
 /** Create routes */
 export function createRoutes() {
-  const constantRoutes: ElegantRoute[] = []
+  const constantRoutes: ElegantConstRoute[] = []
 
-  const authRoutes: ElegantRoute[] = []
+  const authRoutes: ElegantConstRoute[] = []
 
   const appEmbedRouteNames = new Set([
     'feature-unavailable',
@@ -193,3 +185,9 @@ export function createRoutes() {
 export function getAuthVueRoutes(routes: ElegantConstRoute[]) {
   return transformElegantRoutesToVueRoutes(routes, layouts, appEmbedViews)
 }
+
+registerRouteRuntime({
+  rootRoute: ROOT_ROUTE,
+  createRoutes,
+  getAuthVueRoutes
+})

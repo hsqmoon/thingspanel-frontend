@@ -67,14 +67,14 @@ export function deepClone(data: any): any {
   // 递归遍历一个array类型数据，
   if (type === 'array') {
     reData = []
-    // eslint-disable-next-line no-plusplus
+
     for (let i = 0; i < data.length; i++) {
       reData.push(deepClone(data[i]))
     }
   } else if (type === 'object') {
     // 递归遍历一个object类型数据
     reData = {}
-    // eslint-disable-next-line guard-for-in
+
     for (const i in data) {
       reData[i] = deepClone(data[i])
     }
@@ -110,7 +110,7 @@ export function isJSON(str: string): boolean {
         return obj
       }
       return false
-    } catch (error) {
+    } catch {
       return false
     }
   }
@@ -122,17 +122,17 @@ export function validPassword(str: string): boolean {
   return typeof str === 'string' && str.length > 0
 }
 
-function getRandomBytes(length) {
+function getRandomBytes(length: number): Uint8Array {
   return window.crypto.getRandomValues(new Uint8Array(length))
 }
 
-function randomBytesToHex(bytes) {
+function randomBytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes)
     .map(b => b.toString(16).padStart(2, '0'))
     .join('')
 }
 
-export function generateRandomHexString(length) {
+export function generateRandomHexString(length: number): string {
   const bytes = getRandomBytes(length)
   const hexString = randomBytesToHex(bytes)
   return hexString
@@ -146,7 +146,7 @@ export function encryptDataByRsa(data): string {
   // 使用公钥进行加密
   try {
     return encrypt.encrypt(data) || ''
-  } catch (e) {
+  } catch {
     return ''
   }
 }

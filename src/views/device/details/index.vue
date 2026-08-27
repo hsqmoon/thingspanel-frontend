@@ -166,7 +166,6 @@ const labels = ref<string[]>([])
 
 const deviceData: any = ref({})
 const device_type = ref('')
-const icon_type = ref('')
 const name = ref('')
 const device_number = ref('')
 const device_is_online = ref(0)
@@ -461,7 +460,7 @@ watch(
   () => appStore.locale,
   () => {
     let temporary: any
-    // eslint-disable-next-line prefer-const
+
     temporary = tabValue.value
     tabValue.value = ''
     setTimeout(() => {

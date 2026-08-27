@@ -6,10 +6,15 @@
   },
   "typesVersions": {
     "*": {
-      "*": ["./src/*"]
+      "*": [
+        "./src/*"
+      ]
     }
   },
   "dependencies": {
     "@sa/axios": "workspace:*"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.0"
   }
 }

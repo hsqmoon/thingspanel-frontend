@@ -85,7 +85,7 @@ export interface CreateProjectData {
 
 export interface UpdateProjectData {
   name?: string
-  description?: string
+  description?: string | null
   thumbnail?: string
 }
 
@@ -100,17 +100,19 @@ export interface ProjectListResponse {
 }
 
 /** Dashboard 仪表板 */
+export interface ThingsVisCanvasConfig extends Record<string, unknown> {
+  mode: string
+  width: number
+  height: number
+  background: string | Record<string, unknown> | null
+}
+
 export interface ThingsVisDashboard {
   id: string
   name: string
   thumbnail: string | null
   version: number
-  canvasConfig: {
-    mode: string
-    width: number
-    height: number
-    background: string | Record<string, unknown> | null
-  }
+  canvasConfig: ThingsVisCanvasConfig
   nodes: unknown[]
   dataSources: unknown[]
   variables?: unknown[]
@@ -333,11 +335,11 @@ export function unsetHomeThingsVisDashboard(id: string) {
 export interface ThingsVisHomeDashboard {
   id: string
   name: string
-  canvasConfig: any
-  nodes: any[]
-  dataSources: any[]
+  canvasConfig: ThingsVisCanvasConfig
+  nodes: unknown[]
+  dataSources: unknown[]
   isPublished: boolean
-  shareToken?: string
+  shareToken?: string | null
   project?: { id: string; name: string }
 }
 

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, getCurrentInstance, ref } from 'vue'
-import type { FormInst } from 'naive-ui'
 import { delRolePermissions, fetchUIElementList, getRolePermissions, modifyRolePermissions } from '@/service/api'
 import { $t } from '@/locales'
 const { proxy }: any = getCurrentInstance()
@@ -66,8 +65,6 @@ const title = computed(() => {
   return `${$t('page.manage.role.editPermission')} - ${props.editData?.name}`
 })
 
-const formRef = ref<HTMLElement & FormInst>()
-
 const selectedPermissions = ref<string[]>([])
 const treeOptions = ref<any>([])
 
@@ -118,7 +115,7 @@ async function handleSubmit() {
       }
     "
   >
-    <n-form ref="formRef" label-placement="left" :label-width="80">
+    <n-form label-placement="left" :label-width="80">
       <div class="h-300px overflow-y-auto">
         <n-tree
           ref="treeRef"

@@ -4,7 +4,7 @@ import { NFlex } from 'naive-ui'
 import { deviceConfigEdit, deviceConfigMenu } from '@/service/api/device'
 import { useRouterPush } from '@/hooks/common/router'
 import { $t } from '@/locales'
-// eslint-disable-next-line vue/valid-define-emits
+
 const emit = defineEmits()
 const { routerPushByKey } = useRouterPush()
 

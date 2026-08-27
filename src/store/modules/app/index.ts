@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 import { breakpointsTailwind, useBreakpoints, useTitle } from '@vueuse/core'
 import { useBoolean } from '@sa/hooks'
 import { message } from '@/utils/common/discrete'
-import { router } from '@/router'
+import { router } from '@/router/instance'
 import { SetupStoreId } from '@/enum'
 import { $t, setLocale } from '@/locales'
 import { setDayjsLocale } from '@/locales/dayjs'
@@ -11,6 +11,7 @@ import { localStg } from '@/utils/storage'
 import { useRouteStore } from '../route'
 import { useTabStore } from '../tab'
 import { useThemeStore } from '../theme'
+import { reloadFlag, reloadPage } from './reload'
 
 export const useAppStore = defineStore(SetupStoreId.App, () => {
   const themeStore = useThemeStore()
@@ -19,7 +20,6 @@ export const useAppStore = defineStore(SetupStoreId.App, () => {
   const scope = effectScope()
   const breakpoints = useBreakpoints(breakpointsTailwind)
   const { bool: themeDrawerVisible, setTrue: openThemeDrawer, setFalse: closeThemeDrawer } = useBoolean()
-  const { bool: reloadFlag, setBool: setReloadFlag } = useBoolean(true)
   const { bool: fullContent, setBool: setFullContent, toggle: toggleFullContent } = useBoolean()
   const { bool: contentXScrollable, setBool: setContentXScrollable } = useBoolean()
   const { bool: siderCollapse, setBool: setSiderCollapse, toggle: toggleSiderCollapse } = useBoolean()
@@ -27,23 +27,6 @@ export const useAppStore = defineStore(SetupStoreId.App, () => {
 
   /** Is mobile layout */
   const isMobile = breakpoints.smaller('sm')
-
-  /**
-   * Reload page
-   *
-   * @param duration Duration time
-   */
-  async function reloadPage(duration = 0) {
-    setReloadFlag(false)
-
-    if (duration > 0) {
-      await new Promise(resolve => {
-        setTimeout(resolve, duration)
-      })
-    }
-
-    setReloadFlag(true)
-  }
 
   const locale = ref<App.I18n.LangType>(localStg.get('lang') || 'zh-CN')
 

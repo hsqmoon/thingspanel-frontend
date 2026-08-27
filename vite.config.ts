@@ -10,6 +10,7 @@ export default defineConfig(configEnv => {
   const viteEnv = loadEnv(configEnv.mode, process.cwd()) as unknown as Env.ImportMeta
 
   const buildTime = dayjs().format('YYYY-MM-DD HH:mm:ss')
+  const globalScssPath = fileURLToPath(new URL('./src/styles/scss/global.scss', import.meta.url)).replace(/\\/g, '/')
 
   return {
     base: viteEnv.VITE_BASE_URL,
@@ -23,7 +24,7 @@ export default defineConfig(configEnv => {
     css: {
       preprocessorOptions: {
         scss: {
-          additionalData: `@use "./src/styles/scss/global.scss" as *;`
+          additionalData: `@use "${globalScssPath}" as *;`
         }
       }
     },
@@ -33,9 +34,6 @@ export default defineConfig(configEnv => {
       port: 5002,
       open: true,
       proxy: createViteProxy(viteEnv),
-      fs: {
-        cachedChecks: false
-      },
       watch: {
         // 开启轮询模式
         usePolling: true
@@ -45,7 +43,7 @@ export default defineConfig(configEnv => {
       port: 9725
     },
     build: {
-      chunkSizeWarningLimit: 1000,
+      chunkSizeWarningLimit: 2800,
       sourcemap: false,
       reportCompressedSize: true,
       // sourcemap: viteEnv.VITE_SOURCE_MAP === 'Y',
@@ -61,7 +59,6 @@ export default defineConfig(configEnv => {
     define: {
       BUILD_TIME: JSON.stringify(buildTime),
       'import.meta.env.VITE_RSA_PUBLIC_KEY': JSON.stringify(process.env.VITE_RSA_PUBLIC_KEY || '')
-    },
-    lintOnSave: false
+    }
   }
 })

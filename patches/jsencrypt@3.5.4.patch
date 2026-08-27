@@ -1,0 +1,10 @@
+diff --git a/lib/JSEncryptRSAKey.js b/lib/JSEncryptRSAKey.js
+index d8f5a47f83b982a536f278566f8bf9ab2c83ec3d..620b100693c35e03320ab9ba929a7541e8f5b588 100644
+--- a/lib/JSEncryptRSAKey.js
++++ b/lib/JSEncryptRSAKey.js
+@@ -1,4 +1,4 @@
+-var __extends = (this && this.__extends) || (function () {
++var __extends = (function () {
+     var extendStatics = function (d, b) {
+         extendStatics = Object.setPrototypeOf ||
+             ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||

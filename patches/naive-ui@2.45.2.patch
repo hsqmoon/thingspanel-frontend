@@ -1,0 +1,309 @@
+diff --git a/es/checkbox/src/Checkbox.mjs b/es/checkbox/src/Checkbox.mjs
+index 239677329dd7d808a4d4cbe1604246b03698a04e..aab9fea3661192914b5d3a9437ee870f40dd39f8 100644
+--- a/es/checkbox/src/Checkbox.mjs
++++ b/es/checkbox/src/Checkbox.mjs
+@@ -10,7 +10,7 @@ import useTheme from "../../_mixins/use-theme.mjs";
+ import { createVNodeCache, normalizeClass as normalizeClass$1, normalizeVNode } from "../../vue-jsx-vapor/vdom.mjs";
+ import IconSwitchTransition_default from "../../_internal/icon-switch-transition/src/IconSwitchTransition.mjs";
+ import checkboxLight from "../styles/light.mjs";
+-import { checkboxGroupInjectionKey } from "./CheckboxGroup.mjs";
++import { checkboxGroupInjectionKey } from "./interface.mjs";
+ import CheckMark_default from "./CheckMark.mjs";
+ import LineMark_default from "./LineMark.mjs";
+ import index_cssr_default from "./styles/index.cssr.mjs";
+diff --git a/es/checkbox/src/CheckboxGroup.mjs b/es/checkbox/src/CheckboxGroup.mjs
+index 4b42411d2ac666ba27dbd1a3453c3eb32bc9d60c..b24c442f806fb9595cf4bda34339d404f5967490 100644
+--- a/es/checkbox/src/CheckboxGroup.mjs
++++ b/es/checkbox/src/CheckboxGroup.mjs
+@@ -1,14 +1,13 @@
+-import { createInjectionKey } from "../../_utils/vue/create-injection-key.mjs";
+ import { warnOnce } from "../../_utils/naive/warn.mjs";
+ import { call } from "../../_utils/vue/call.mjs";
+ import useConfig from "../../_mixins/use-config.mjs";
+ import useFormItem from "../../_mixins/use-form-item.mjs";
+ import { normalizeClass as normalizeClass$1, normalizeVNode } from "../../vue-jsx-vapor/vdom.mjs";
+ import Checkbox_default from "./Checkbox.mjs";
++import { checkboxGroupInjectionKey } from "./interface.mjs";
+ import { Fragment, computed, createBlock, createElementBlock, defineComponent, openBlock, provide, ref, toRef, watchEffect } from "vue";
+ import { useMergedState } from "vooks";
+ //#region src/checkbox/src/CheckboxGroup.tsx
+-const checkboxGroupInjectionKey = createInjectionKey("n-checkbox-group");
+ const checkboxGroupProps = {
+   min: Number,
+   max: Number,
+diff --git a/es/checkbox/src/interface.mjs b/es/checkbox/src/interface.mjs
+index e69de29bb2d1d6434b8b29ae775ad8c2e48c5391..54feb950cb8eb2fbbc627770d35797fff5630487 100644
+--- a/es/checkbox/src/interface.mjs
++++ b/es/checkbox/src/interface.mjs
+@@ -0,0 +1,3 @@
++import { createInjectionKey } from "../../_utils/vue/create-injection-key.mjs";
++const checkboxGroupInjectionKey = createInjectionKey("n-checkbox-group");
++export { checkboxGroupInjectionKey };
+diff --git a/es/dropdown/src/Dropdown.mjs b/es/dropdown/src/Dropdown.mjs
+index e976d08a11958b3102083009462b1fc56ea50b70..e5167c65e6f7df06c79ec8da4d7d12a7290ac9af 100644
+--- a/es/dropdown/src/Dropdown.mjs
++++ b/es/dropdown/src/Dropdown.mjs
+@@ -137,6 +137,7 @@ var Dropdown_default = defineComponent({
+     });
+     const themeRef = useTheme("Dropdown", "-dropdown", index_cssr_default, dropdownLight, props, mergedClsPrefixRef);
+     provide(dropdownInjectionKey, {
++      DropdownMenu: DropdownMenu_default,
+       labelFieldRef: toRef(props, "labelField"),
+       childrenFieldRef: toRef(props, "childrenField"),
+       renderLabelRef: toRef(props, "renderLabel"),
+diff --git a/es/dropdown/src/DropdownOption.mjs b/es/dropdown/src/DropdownOption.mjs
+index 1f536562d06b43a0ac84dfb23315187600228ed5..32d1f6e968776d0c9893d20d95c7fef1df3b4dfd 100644
+--- a/es/dropdown/src/DropdownOption.mjs
++++ b/es/dropdown/src/DropdownOption.mjs
+@@ -6,7 +6,6 @@ import ChevronRight_default from "../../_internal/icons/ChevronRight.mjs";
+ import { dropdownInjectionKey, dropdownMenuInjectionKey, dropdownOptionInjectionKey } from "./context.mjs";
+ import { NIcon } from "../../icon/src/Icon.mjs";
+ import { isSubmenuNode } from "./utils.mjs";
+-import DropdownMenu_default from "./DropdownMenu.mjs";
+ import { happensIn } from "seemly";
+ import { Fragment, Transition, computed, createBlock, createElementBlock, defineComponent, h, inject, mergeProps, openBlock, provide, ref } from "vue";
+ import { useMemo } from "vooks";
+@@ -50,7 +49,8 @@ var DropdownOption_default = defineComponent({
+       childrenFieldRef,
+       renderOptionRef,
+       nodePropsRef,
+-      menuPropsRef
++      menuPropsRef,
++      DropdownMenu
+     } = NDropdown;
+     const NDropdownOption = inject(dropdownOptionInjectionKey, null);
+     const NDropdownMenu = inject(dropdownMenuInjectionKey);
+@@ -229,7 +229,7 @@ var DropdownOption_default = defineComponent({
+     if (mergedShowSubmenu) {
+       const submenuNodeProps = this.menuProps?.(rawNode, rawNode.children);
+       submenuVNode = (submenuVNode => {
+-        return openBlock(), createBlock(DropdownMenu_default, mergeProps({
++        return openBlock(), createBlock(DropdownMenu, mergeProps({
+           key: 1
+         }, submenuNodeProps, {
+           clsPrefix,
+diff --git a/es/menu/src/Menu.mjs b/es/menu/src/Menu.mjs
+index 46b8eb643134c7638b24765d52e82f65c0cb2a7e..4b6d61befa125502273c57f334084288a8bd808b 100644
+--- a/es/menu/src/Menu.mjs
++++ b/es/menu/src/Menu.mjs
+@@ -174,6 +174,7 @@ var Menu_default = defineComponent({
+       return treeMateRef.value.getPath(mergedValueRef.value).keyPath;
+     });
+     provide(menuInjectionKey, {
++      itemRenderer,
+       props,
+       mergedCollapsedRef,
+       mergedThemeRef: themeRef,
+diff --git a/es/menu/src/MenuOptionGroup.mjs b/es/menu/src/MenuOptionGroup.mjs
+index eee0189ccd1fa990a750a3866d77591101269032..ff4a9da5a9ed5adc12aee4480265030609bb2c39 100644
+--- a/es/menu/src/MenuOptionGroup.mjs
++++ b/es/menu/src/MenuOptionGroup.mjs
+@@ -4,7 +4,6 @@ import { createVNodeCache, normalizeClass as normalizeClass$1, normalizeVNode }
+ import { menuInjectionKey, menuItemGroupInjectionKey } from "./context.mjs";
+ import { useMenuChild } from "./use-menu-child.mjs";
+ import { useMenuChildProps } from "./use-menu-child-props.mjs";
+-import { itemRenderer } from "./utils.mjs";
+ import { Fragment, computed, createElementBlock, createElementVNode, defineComponent, inject, mergeProps, openBlock, provide } from "vue";
+ //#region src/menu/src/MenuOptionGroup.tsx
+ const menuItemGroupProps = {
+@@ -37,7 +36,8 @@ const NMenuOptionGroup = defineComponent({
+     });
+     const {
+       mergedClsPrefixRef,
+-      props: menuProps
++      props: menuProps,
++      itemRenderer
+     } = inject(menuInjectionKey);
+     return function () {
+       const {
+diff --git a/es/menu/src/Submenu.mjs b/es/menu/src/Submenu.mjs
+index 5a3a012a924e13992effd524380891c4c8971747..348d273ab6e86b15495215b086ffa82f64ac4d4b 100644
+--- a/es/menu/src/Submenu.mjs
++++ b/es/menu/src/Submenu.mjs
+@@ -6,7 +6,6 @@ import { menuItemGroupInjectionKey, submenuInjectionKey } from "./context.mjs";
+ import MenuOptionContent_default from "./MenuOptionContent.mjs";
+ import { useMenuChild } from "./use-menu-child.mjs";
+ import { useMenuChildProps } from "./use-menu-child-props.mjs";
+-import { itemRenderer } from "./utils.mjs";
+ import { Fragment, computed, createBlock, createElementBlock, defineComponent, mergeProps, openBlock, provide, ref } from "vue";
+ import { useMemo } from "vooks";
+ //#region src/menu/src/Submenu.tsx
+@@ -49,7 +48,8 @@ const NSubmenu = defineComponent({
+     const {
+       props: menuProps,
+       mergedCollapsedRef,
+-      mergedThemeRef
++      mergedThemeRef,
++      itemRenderer
+     } = NMenu;
+     const mergedDisabledRef = computed(() => {
+       const {
+diff --git a/lib/checkbox/src/Checkbox.js b/lib/checkbox/src/Checkbox.js
+index 584aa29382ad53fb2ab0dcc5cf8ee913ede1a2c9..dcb2a85c0f1134be9cef3c1ee053477f9a36f07f 100644
+--- a/lib/checkbox/src/Checkbox.js
++++ b/lib/checkbox/src/Checkbox.js
+@@ -14,7 +14,7 @@ const require__mixins_use_theme = require("../../_mixins/use-theme.js");
+ const require_vdom = require("../../vue-jsx-vapor/vdom.js");
+ const require__internal_icon_switch_transition_src_IconSwitchTransition = require("../../_internal/icon-switch-transition/src/IconSwitchTransition.js");
+ const require_checkbox_styles_light = require("../styles/light.js");
+-const require_checkbox_src_CheckboxGroup = require("./CheckboxGroup.js");
++const require_checkbox_src_interface = require("./interface.js");
+ const require_checkbox_src_CheckMark = require("./CheckMark.js");
+ const require_checkbox_src_LineMark = require("./LineMark.js");
+ const require_checkbox_src_styles_index_cssr = require("./styles/index.cssr.js");
+@@ -90,7 +90,7 @@ var Checkbox_default = (0, vue.defineComponent)({
+ 		if (process.env.NODE_ENV !== "production") (0, vue.watchEffect)(() => {
+ 			if (props.onChange) require__utils_naive_warn.warnOnce("checkbox", "`on-change` is deprecated, please use `on-update:checked` instead.");
+ 		});
+-		const NCheckboxGroup = (0, vue.inject)(require_checkbox_src_CheckboxGroup.checkboxGroupInjectionKey, null);
++		const NCheckboxGroup = (0, vue.inject)(require_checkbox_src_interface.checkboxGroupInjectionKey, null);
+ 		const selfRef = (0, vue.ref)(null);
+ 		const { mergedClsPrefixRef, inlineThemeDisabled, mergedRtlRef, mergedComponentPropsRef } = require__mixins_use_config.default(props);
+ 		const uncontrolledCheckedRef = (0, vue.ref)(props.defaultChecked);
+diff --git a/lib/checkbox/src/CheckboxGroup.js b/lib/checkbox/src/CheckboxGroup.js
+index 3831c9c37d59729302b36c46e77e937a41b9f0dc..47b8fd9e38da7d9551faddb539e767d4889e3a7a 100644
+--- a/lib/checkbox/src/CheckboxGroup.js
++++ b/lib/checkbox/src/CheckboxGroup.js
+@@ -2,17 +2,17 @@ Object.defineProperties(exports, {
+ 	__esModule: { value: true },
+ 	[Symbol.toStringTag]: { value: "Module" }
+ });
+-const require__utils_vue_create_injection_key = require("../../_utils/vue/create-injection-key.js");
+ const require__utils_naive_warn = require("../../_utils/naive/warn.js");
+ const require__utils_vue_call = require("../../_utils/vue/call.js");
+ const require__mixins_use_config = require("../../_mixins/use-config.js");
+ const require__mixins_use_form_item = require("../../_mixins/use-form-item.js");
+ const require_vdom = require("../../vue-jsx-vapor/vdom.js");
+ const require_checkbox_src_Checkbox = require("./Checkbox.js");
++const require_checkbox_src_interface = require("./interface.js");
+ let vue = require("vue");
+ let vooks = require("vooks");
+ //#region src/checkbox/src/CheckboxGroup.tsx
+-const checkboxGroupInjectionKey = require__utils_vue_create_injection_key.createInjectionKey("n-checkbox-group");
++const checkboxGroupInjectionKey = require_checkbox_src_interface.checkboxGroupInjectionKey;
+ const checkboxGroupProps = {
+ 	min: Number,
+ 	max: Number,
+diff --git a/lib/checkbox/src/interface.js b/lib/checkbox/src/interface.js
+index e69de29bb2d1d6434b8b29ae775ad8c2e48c5391..f2b2f586ef50f7f8260796d82173fb6fd5bb4d81 100644
+--- a/lib/checkbox/src/interface.js
++++ b/lib/checkbox/src/interface.js
+@@ -0,0 +1,4 @@
++Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
++const require__utils_vue_create_injection_key = require("../../_utils/vue/create-injection-key.js");
++const checkboxGroupInjectionKey = require__utils_vue_create_injection_key.createInjectionKey("n-checkbox-group");
++exports.checkboxGroupInjectionKey = checkboxGroupInjectionKey;
+diff --git a/lib/dropdown/src/Dropdown.js b/lib/dropdown/src/Dropdown.js
+index 46b880ff91602ff4a5ac106420774dde11186d9d..e368d665bc9658ce882b7db8c7db55dc6ff8d9d6 100644
+--- a/lib/dropdown/src/Dropdown.js
++++ b/lib/dropdown/src/Dropdown.js
+@@ -132,6 +132,7 @@ var Dropdown_default = (0, vue.defineComponent)({
+ 		});
+ 		const themeRef = require__mixins_use_theme.default("Dropdown", "-dropdown", require_dropdown_src_styles_index_cssr, require_dropdown_styles_light.default, props, mergedClsPrefixRef);
+ 		(0, vue.provide)(require_dropdown_src_context.dropdownInjectionKey, {
++			DropdownMenu: require_dropdown_src_DropdownMenu,
+ 			labelFieldRef: (0, vue.toRef)(props, "labelField"),
+ 			childrenFieldRef: (0, vue.toRef)(props, "childrenField"),
+ 			renderLabelRef: (0, vue.toRef)(props, "renderLabel"),
+diff --git a/lib/dropdown/src/DropdownOption.js b/lib/dropdown/src/DropdownOption.js
+index c0538fcc080f120691a9b8ed2a3ececa55497173..a1b6f7663b89a3258c7db70dc41134486e47a7b5 100644
+--- a/lib/dropdown/src/DropdownOption.js
++++ b/lib/dropdown/src/DropdownOption.js
+@@ -6,7 +6,6 @@ const require__internal_icons_ChevronRight = require("../../_internal/icons/Chev
+ const require_dropdown_src_context = require("./context.js");
+ const require_icon_src_Icon = require("../../icon/src/Icon.js");
+ const require_dropdown_src_utils = require("./utils.js");
+-const require_dropdown_src_DropdownMenu = require("./DropdownMenu.js");
+ let seemly = require("seemly");
+ let vue = require("vue");
+ let vooks = require("vooks");
+@@ -36,7 +35,7 @@ var DropdownOption_default = (0, vue.defineComponent)({
+ 	},
+ 	setup(props) {
+ 		const NDropdown = (0, vue.inject)(require_dropdown_src_context.dropdownInjectionKey);
+-		const { hoverKeyRef, keyboardKeyRef, lastToggledSubmenuKeyRef, pendingKeyPathRef, activeKeyPathRef, animatedRef, mergedShowRef, renderLabelRef, renderIconRef, labelFieldRef, childrenFieldRef, renderOptionRef, nodePropsRef, menuPropsRef } = NDropdown;
++		const { hoverKeyRef, keyboardKeyRef, lastToggledSubmenuKeyRef, pendingKeyPathRef, activeKeyPathRef, animatedRef, mergedShowRef, renderLabelRef, renderIconRef, labelFieldRef, childrenFieldRef, renderOptionRef, nodePropsRef, menuPropsRef, DropdownMenu } = NDropdown;
+ 		const NDropdownOption = (0, vue.inject)(require_dropdown_src_context.dropdownOptionInjectionKey, null);
+ 		const NDropdownMenu = (0, vue.inject)(require_dropdown_src_context.dropdownMenuInjectionKey);
+ 		const NPopoverBody = (0, vue.inject)(require_popover_src_interface.popoverBodyInjectionKey);
+@@ -157,7 +156,7 @@ var DropdownOption_default = (0, vue.defineComponent)({
+ 		if (mergedShowSubmenu) {
+ 			const submenuNodeProps = this.menuProps?.(rawNode, rawNode.children);
+ 			submenuVNode = ((submenuVNode) => {
+-				return (0, vue.openBlock)(), (0, vue.createBlock)(require_dropdown_src_DropdownMenu, (0, vue.mergeProps)({ key: 1 }, submenuNodeProps, {
++				return (0, vue.openBlock)(), (0, vue.createBlock)(DropdownMenu, (0, vue.mergeProps)({ key: 1 }, submenuNodeProps, {
+ 					clsPrefix,
+ 					scrollable: this.scrollable,
+ 					tmNodes: this.tmNode.children,
+diff --git a/lib/menu/src/Menu.js b/lib/menu/src/Menu.js
+index 705cb094255fcb2603d220b2c32c36ee50dbdde6..d45d59ceedd36fc3dfa095161a54469f6d9f7b90 100644
+--- a/lib/menu/src/Menu.js
++++ b/lib/menu/src/Menu.js
+@@ -164,6 +164,7 @@ var Menu_default = (0, vue.defineComponent)({
+ 			return treeMateRef.value.getPath(mergedValueRef.value).keyPath;
+ 		});
+ 		(0, vue.provide)(require_menu_src_context.menuInjectionKey, {
++			itemRenderer: require_menu_src_utils.itemRenderer,
+ 			props,
+ 			mergedCollapsedRef,
+ 			mergedThemeRef: themeRef,
+diff --git a/lib/menu/src/MenuOptionGroup.js b/lib/menu/src/MenuOptionGroup.js
+index b915e97967dae6c922d29eb230797c7bcbe0bfb4..d31998097a12667164b58ae7754361d6a6088e63 100644
+--- a/lib/menu/src/MenuOptionGroup.js
++++ b/lib/menu/src/MenuOptionGroup.js
+@@ -5,7 +5,6 @@ const require_vdom = require("../../vue-jsx-vapor/vdom.js");
+ const require_menu_src_context = require("./context.js");
+ const require_menu_src_use_menu_child = require("./use-menu-child.js");
+ const require_menu_src_use_menu_child_props = require("./use-menu-child-props.js");
+-const require_menu_src_utils = require("./utils.js");
+ let vue = require("vue");
+ //#region src/menu/src/MenuOptionGroup.tsx
+ const menuItemGroupProps = {
+@@ -34,7 +33,7 @@ const NMenuOptionGroup = (0, vue.defineComponent)({
+ 			paddingLeftRef: MenuChild.paddingLeft,
+ 			mergedDisabledRef
+ 		});
+-		const { mergedClsPrefixRef, props: menuProps } = (0, vue.inject)(require_menu_src_context.menuInjectionKey);
++		const { mergedClsPrefixRef, props: menuProps, itemRenderer } = (0, vue.inject)(require_menu_src_context.menuInjectionKey);
+ 		return function() {
+ 			const { value: mergedClsPrefix } = mergedClsPrefixRef;
+ 			const paddingLeft = MenuChild.paddingLeft.value;
+@@ -48,7 +47,7 @@ const NMenuOptionGroup = (0, vue.defineComponent)({
+ 				}, [(0, vue.createElementVNode)("div", (0, vue.mergeProps)(attrs, {
+ 					class: [`${mergedClsPrefix}-menu-item-group-title`, attrs?.class],
+ 					style: [attrs?.style || "", paddingLeft !== void 0 ? `padding-left: ${paddingLeft}px;` : ""]
+-				}), [require_vdom.normalizeVNode(() => require__utils_vue_render.render(props.title)), props.extra ? ((0, vue.openBlock)(), (0, vue.createElementBlock)(vue.Fragment, { key: 0 }, [_cache[0] || (_cache[0] = require_vdom.normalizeVNode(" ", -1)), require_vdom.normalizeVNode(() => require__utils_vue_render.render(props.extra))], 64)) : require_vdom.normalizeVNode(() => null)], 16), (0, vue.createElementVNode)("div", null, [require_vdom.normalizeVNode(() => props.tmNodes.map((tmNode) => require_menu_src_utils.itemRenderer(tmNode, menuProps)))])], 2);
++				}), [require_vdom.normalizeVNode(() => require__utils_vue_render.render(props.title)), props.extra ? ((0, vue.openBlock)(), (0, vue.createElementBlock)(vue.Fragment, { key: 0 }, [_cache[0] || (_cache[0] = require_vdom.normalizeVNode(" ", -1)), require_vdom.normalizeVNode(() => require__utils_vue_render.render(props.extra))], 64)) : require_vdom.normalizeVNode(() => null)], 16), (0, vue.createElementVNode)("div", null, [require_vdom.normalizeVNode(() => props.tmNodes.map((tmNode) => itemRenderer(tmNode, menuProps)))])], 2);
+ 			})();
+ 		};
+ 	}
+diff --git a/lib/menu/src/Submenu.js b/lib/menu/src/Submenu.js
+index ea8df082480f982d8cd5a23af8d5c9aa2ff16ad3..9aaba46de654fe0c20cf53514255fd86098f2ddc 100644
+--- a/lib/menu/src/Submenu.js
++++ b/lib/menu/src/Submenu.js
+@@ -7,7 +7,6 @@ const require_menu_src_context = require("./context.js");
+ const require_menu_src_MenuOptionContent = require("./MenuOptionContent.js");
+ const require_menu_src_use_menu_child = require("./use-menu-child.js");
+ const require_menu_src_use_menu_child_props = require("./use-menu-child-props.js");
+-const require_menu_src_utils = require("./utils.js");
+ let vue = require("vue");
+ let vooks = require("vooks");
+ //#region src/menu/src/Submenu.tsx
+@@ -44,7 +43,7 @@ const NSubmenu = (0, vue.defineComponent)({
+ 	setup(props) {
+ 		const MenuChild = require_menu_src_use_menu_child.useMenuChild(props);
+ 		const { NMenu, NSubmenu } = MenuChild;
+-		const { props: menuProps, mergedCollapsedRef, mergedThemeRef } = NMenu;
++		const { props: menuProps, mergedCollapsedRef, mergedThemeRef, itemRenderer } = NMenu;
+ 		const mergedDisabledRef = (0, vue.computed)(() => {
+ 			const { disabled } = props;
+ 			if (NSubmenu?.mergedDisabledRef.value) return true;
+@@ -151,7 +150,7 @@ const NSubmenu = (0, vue.defineComponent)({
+ 					key: 1,
+ 					class: require_vdom.normalizeClass(`${mergedClsPrefix}-submenu-children`),
+ 					role: "menu"
+-				}, [require_vdom.normalizeVNode(() => tmNodes.map((item) => require_menu_src_utils.itemRenderer(item, this.menuProps)))], 2)) : null;
++				}, [require_vdom.normalizeVNode(() => tmNodes.map((item) => itemRenderer(item, this.menuProps)))], 2)) : null;
+ 			} }, 1024);
+ 		};
+ 		return this.root ? ((0, vue.openBlock)(), (0, vue.createBlock)(require_dropdown_src_Dropdown.default, (0, vue.mergeProps)({

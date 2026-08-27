@@ -20,6 +20,13 @@ import { useRealtimePush } from '@/hooks/thingsvis/useRealtimePush'
 import { useAlarmPush } from '@/hooks/thingsvis/useAlarmPush'
 import { getCachedDeviceTemplateDetail } from '@/utils/thingsvis/template-detail-cache'
 
+const getDeviceModelList = (payload: unknown): unknown[] => {
+  if (!payload || typeof payload !== 'object') return []
+
+  const list = (payload as { list?: unknown }).list
+  return Array.isArray(list) ? list : []
+}
+
 const TEMPLATE_PLATFORM_SOURCE_ID = '__platform___template____'
 const RUNTIME_PLATFORM_FIELD_IDS = new Set(['is_online', 'online_text', 'online_status_updated_at'])
 
@@ -280,26 +287,10 @@ const initTemplateData = async (deviceTemplateId: string) => {
         commandsApi({ page: 1, page_size: 1000, device_template_id: deviceTemplateId })
       ])
 
-      const telemetryList = Array.isArray(telemetryRes?.data?.list)
-        ? telemetryRes.data.list
-        : Array.isArray(telemetryRes?.data)
-          ? telemetryRes.data
-          : []
-      const attributesList = Array.isArray(attributesRes?.data?.list)
-        ? attributesRes.data.list
-        : Array.isArray(attributesRes?.data)
-          ? attributesRes.data
-          : []
-      const eventsList = Array.isArray(eventsRes?.data?.list)
-        ? eventsRes.data.list
-        : Array.isArray(eventsRes?.data)
-          ? eventsRes.data
-          : []
-      const commandsList = Array.isArray(commandsRes?.data?.list)
-        ? commandsRes.data.list
-        : Array.isArray(commandsRes?.data)
-          ? commandsRes.data
-          : []
+      const telemetryList = getDeviceModelList(telemetryRes.data)
+      const attributesList = getDeviceModelList(attributesRes.data)
+      const eventsList = getDeviceModelList(eventsRes.data)
+      const commandsList = getDeviceModelList(commandsRes.data)
 
       const platformSource = {
         telemetry: telemetryList,

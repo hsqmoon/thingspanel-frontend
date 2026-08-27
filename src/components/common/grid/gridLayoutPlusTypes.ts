@@ -7,6 +7,8 @@ import type { Component } from 'vue'
 
 // 基础网格项接口
 export interface GridLayoutPlusItem {
+  [key: string]: unknown
+
   /** 项目唯一标识符 */
   i: string
   /** X轴位置 (网格单位) */
@@ -150,9 +152,9 @@ export interface GridLayoutPlusConfig {
   /** 是否响应式 */
   responsive: boolean
   /** 响应式断点 */
-  breakpoints: Record<string, number>
+  breakpoints: GridBreakpoints
   /** 不同断点的列数 */
-  cols: Record<string, number>
+  cols: GridBreakpoints
   /** 是否防止碰撞 */
   preventCollision: boolean
   /** 是否使用样式光标 */
@@ -161,7 +163,11 @@ export interface GridLayoutPlusConfig {
   restoreOnDrag: boolean
   /** 是否为静态网格 */
   staticGrid?: boolean
+  /** 删除组件后是否自动压紧布局 */
+  autoArrange?: boolean
 }
+
+export type GridBreakpoints = Record<'lg' | 'md' | 'sm' | 'xs' | 'xxs', number> & Record<string, number>
 
 // 默认配置
 export const DEFAULT_GRID_LAYOUT_PLUS_CONFIG: GridLayoutPlusConfig = {
@@ -219,7 +225,11 @@ export const EXTENDED_GRID_LAYOUT_CONFIG: GridLayoutPlusConfig = {
 }
 
 // 🔥 超大网格工具函数
-export const GridSizePresets = {
+type GridSizePreset = Pick<GridLayoutPlusConfig, 'colNum' | 'rowHeight' | 'margin'>
+
+export const GridSizePresets: Record<'MINI' | 'STANDARD' | 'LARGE' | 'MEGA', GridSizePreset> & {
+  CUSTOM: (cols: number) => GridSizePreset
+} = {
   MINI: { colNum: 12, rowHeight: 100, margin: [10, 10] }, // 12列 - 标准小网格
   STANDARD: { colNum: 24, rowHeight: 60, margin: [8, 8] }, // 24列 - 标准网格
   LARGE: { colNum: 50, rowHeight: 40, margin: [5, 5] }, // 50列 - 大网格
@@ -272,8 +282,6 @@ export interface GridLayoutPlusEmits {
   (e: 'update:layout', layout: GridLayoutPlusItem[]): void
   /** 断点变化 */
   (e: 'breakpoint-changed', breakpoint: string, layout: GridLayoutPlusItem[]): void
-  /** 容器大小变化 */
-  (e: 'container-resized', i: string, newH: number, newW: number, newHPx: number, newWPx: number): void
   /** 项目调整大小中 */
   (e: 'item-resize', i: string, newH: number, newW: number, newHPx: number, newWPx: number): void
   /** 项目调整大小完成 */
@@ -296,6 +304,14 @@ export interface GridLayoutPlusEmits {
   (e: 'item-edit', item: GridLayoutPlusItem): void
   /** 项目数据更新 */
   (e: 'item-data-update', itemId: string, data: any): void
+  /** 外部拖拽进入 */
+  (e: 'drag-enter', event: DragEvent): void
+  /** 外部拖拽悬停 */
+  (e: 'drag-over', event: DragEvent): void
+  /** 外部拖拽离开 */
+  (e: 'drag-leave', event: DragEvent): void
+  /** 外部拖拽释放 */
+  (e: 'drop', event: DragEvent): void
 }
 
 // 响应式布局配置
@@ -369,6 +385,10 @@ export const DARK_THEME: GridTheme = {
 
 // 性能配置
 export interface PerformanceConfig {
+  /** 是否启用虚拟化 */
+  enableVirtualization: boolean
+  /** 启用虚拟化的项目数阈值 */
+  virtualizationThreshold: number
   /** 防抖延迟 */
   debounceDelay: number
   /** 节流延迟 */

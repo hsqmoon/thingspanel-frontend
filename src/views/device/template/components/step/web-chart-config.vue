@@ -5,7 +5,7 @@
  */
 
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import { NButton, NModal, NCard, NEmpty, NSelect, NSpace, NSpin, NIcon } from 'naive-ui'
+import { NButton, NModal, NCard, NEmpty, NSpace, NSpin, NIcon } from 'naive-ui'
 import { ExpandOutline, ContractOutline, CloseOutline } from '@vicons/ionicons5'
 import { $t } from '@/locales'
 import { getTemplat, putTemplat, telemetryApi, attributesApi, eventsApi, commandsApi } from '@/service/api'
@@ -71,14 +71,6 @@ const unwrapApiList = (payload: unknown): any[] => {
   }
   return Array.isArray(body) ? body : []
 }
-
-const refreshOptions = [
-  { label: '手动刷新', value: 0 },
-  { label: '5秒', value: 5000 },
-  { label: '10秒', value: 10000 },
-  { label: '30秒', value: 30000 },
-  { label: '1分钟', value: 60000 }
-]
 
 // 🎨 iframe 高度设为足够大，确保内容完整渲染
 const previewHeight = computed(() => {

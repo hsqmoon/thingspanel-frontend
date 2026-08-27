@@ -4,7 +4,7 @@
  * 支持无限滚动和搜索功能
  */
 
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { NEmpty, NFlex, NInfiniteScroll, NPopover, NSelect, NSpin } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
 
@@ -18,7 +18,7 @@ interface DeviceOption {
 
 // --- Props (Type-based) ---
 interface Props {
-  modelValue: string | null
+  modelValue?: string | null
   options: DeviceOption[]
   loading?: boolean
   hasMore?: boolean
@@ -56,18 +56,6 @@ const showPopover = ref(false)
 const searchKeyword = ref('')
 
 // --- 计算属性 ---
-/** 选中的设备选项 */
-const selectedOption = computed(() => {
-  if (!props.modelValue) return null
-  return props.options.find(opt => opt.device_id === props.modelValue) || null
-})
-
-/** 显示标签 */
-const displayLabel = computed(() => {
-  if (!selectedOption.value) return ''
-  return selectedOption.value.device_name
-})
-
 /** 根据搜索关键词过滤后的选项列表 */
 const filteredOptions = computed(() => {
   if (!searchKeyword.value.trim()) {
@@ -162,8 +150,10 @@ const handleClear = () => {
     <template #trigger>
       <div class="select-trigger-wrapper" :class="{ 'is-disabled': props.disabled }">
         <NSelect
-          :value="displayLabel"
-          :options="[]"
+          :value="props.modelValue"
+          :options="props.options"
+          label-field="device_name"
+          value-field="device_id"
           :placeholder="props.placeholder"
           :disabled="props.disabled"
           :show-arrow="true"
@@ -174,12 +164,7 @@ const handleClear = () => {
           class="select-input"
           @search="handleSearch"
           @clear="handleClear"
-        >
-          <template #value>
-            <span v-if="displayLabel" class="device-display-name">{{ displayLabel }}</span>
-            <span v-else class="placeholder-text">{{ props.placeholder }}</span>
-          </template>
-        </NSelect>
+        />
       </div>
     </template>
 
@@ -304,13 +289,4 @@ const handleClear = () => {
   font-size: 12px;
 }
 
-.device-display-name {
-  font-size: 14px;
-  color: var(--text-color);
-}
-
-.placeholder-text {
-  font-size: 14px;
-  color: var(--text-color-3);
-}
 </style>

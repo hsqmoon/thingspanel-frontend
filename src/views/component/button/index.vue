@@ -4,7 +4,7 @@ import { useLoading } from '@sa/hooks'
 import { $t } from '@/locales'
 
 interface ButtonDetail {
-  // eslint-disable-next-line
+  id: number
   props: ButtonProps & { href?: string; target?: string }
   label?: string
   icon?: string

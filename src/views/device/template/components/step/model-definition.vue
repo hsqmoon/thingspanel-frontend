@@ -1,6 +1,5 @@
 <script setup lang="tsx">
 import { computed, reactive, ref } from 'vue'
-import type { PaginationProps } from 'naive-ui'
 import { NButton, NPopconfirm, NSpace } from 'naive-ui'
 import { useLoading } from '@sa/hooks'
 import { $t } from '@/locales'
@@ -55,7 +54,7 @@ const comList: { id: string; components: any; title: string }[] = [
   { id: 'command', components: AddEditCommands, title: $t('device_template.addAndEditCommand') }
 ]
 const SwitchCom = computed<any>(() => {
-  // eslint-disable-next-line array-callback-return,consistent-return
+
   return comList.find(item => {
     if (item.id === tabsCurrent.value) {
       const objItem: any = item
@@ -118,22 +117,9 @@ const edit: (row: any) => void = row => {
   objItem = row
 }
 
-// 预设配置
-const configPreset = (row: any, type: 'telemetry' | 'attributes') => {
-  presetProperty.value = {
-    id: row.id,
-    name: row.data_name,
-    identifier: row.data_identifier,
-    dataType: row.data_type,
-    unit: row.unit
-  }
-  presetType.value = type
-  presetModalVisible.value = true
-}
-
 // 新增或者编辑成功后的回调函数
 const determine: () => void = () => {
-  // eslint-disable-next-line @typescript-eslint/no-use-before-define
+
   getTableData(tabsCurrent.value)
 }
 
@@ -148,7 +134,7 @@ const del: (id: string) => void = async id => {
   } else {
     await delCommands(id)
   }
-  // eslint-disable-next-line @typescript-eslint/no-use-before-define
+
   getTableData(tabsCurrent.value)
 }
 // 上一步
@@ -296,11 +282,11 @@ const columnsList: any = reactive([
         render: row => {
           return (
             <NSpace justify={'center'}>
-              {/* eslint-disable-next-line @typescript-eslint/no-use-before-define */}
+              { }
               <NButton quaternary type="primary" size={'small'} onClick={() => edit(row)}>
                 {$t('common.edit')}
               </NButton>
-              {/* eslint-disable-next-line @typescript-eslint/no-use-before-define */}
+              { }
               <NPopconfirm onPositiveClick={() => del(row.id)}>
                 {{
                   default: () => $t('common.confirmDelete'),
@@ -423,7 +409,7 @@ getTableData()
           :columns="item.col"
           :data="item.data"
           :loading="loading"
-          :pagination="getPagination(index)"
+          :pagination="getPagination(Number(index))"
           :remote="true"
           class="m-t9 flex-1-hidden"
         />

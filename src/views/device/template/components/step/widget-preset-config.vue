@@ -1,5 +1,5 @@
 <script setup lang="tsx">
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch } from 'vue'
 import { NModal, NButton } from 'naive-ui'
 import { $t } from '@/locales'
 import { getTemplat, putTemplat } from '@/service/api'
@@ -43,6 +43,14 @@ const saving = ref(false)
 const platformFields = ref<PlatformField[]>([])
 const initialConfig = ref<any>(null)
 
+const getPlatformFieldType = (dataType: string): PlatformField['type'] => {
+  const normalizedType = dataType.toLowerCase()
+  if (normalizedType.includes('bool')) return 'boolean'
+  if (normalizedType.includes('json') || normalizedType.includes('object') || normalizedType.includes('array')) return 'json'
+  if (/int|float|double|number/.test(normalizedType)) return 'number'
+  return 'string'
+}
+
 // Load preset data
 const loadPresetData = async () => {
   loading.value = true
@@ -54,7 +62,8 @@ const loadPresetData = async () => {
         {
           id: props.property.identifier,
           name: props.property.name,
-          dataType: props.propertyType,
+          type: getPlatformFieldType(props.property.dataType),
+          dataType: props.propertyType === 'attributes' ? 'attribute' : 'telemetry',
           unit: props.property.unit
         }
       ]

@@ -3,7 +3,6 @@ import vueParser from 'vue-eslint-parser'
 import tsParser from '@typescript-eslint/parser'
 import vuePlugin from 'eslint-plugin-vue'
 import tsPlugin from '@typescript-eslint/eslint-plugin'
-import prettierPlugin from 'eslint-plugin-prettier/recommended'
 
 /**
  * ESLint Flat Config 配置
@@ -13,7 +12,8 @@ export default [
   {
     ignores: [
       '**/dist/**', // 构建输出目录
-      '**/node_modules/**' // 依赖包目录
+      '**/node_modules/**', // 依赖包目录
+      'src/typings/elegant-router.d.ts' // elegant-router 每次构建生成
     ]
   },
 
@@ -40,27 +40,28 @@ export default [
     },
     rules: {
       // 应用 Vue 3 推荐规则
-      ...vuePlugin.configs['vue3-recommended'].rules,
+      ...vuePlugin.configs.recommended.rules,
       // 关闭 props 解构检查（Vue 3 Composition API 中常用）
       'vue/no-setup-props-destructure': 'off',
-      // 警告未定义的属性使用
-      'vue/no-undef-properties': 'warn',
+      // 由 vue-tsc 负责属性检查，避免宏和模板属性误报
+      'vue/no-undef-properties': 'off',
       // 关闭组件名必须多单词的限制
       'vue/multi-word-component-names': 'off',
       // 关闭模板中组件名大小写检查
       'vue/component-name-in-template-casing': 'off',
       // 关闭变量使用前定义检查（Vue文件中的 script setup 语法需要）
       '@typescript-eslint/no-use-before-define': 'off',
-      // 未使用变量改为警告而非错误
-      '@typescript-eslint/no-unused-vars': 'warn',
-      // 未使用变量改为警告而非错误（普通JS规则）
-      'no-unused-vars': 'warn'
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', ignoreRestSiblings: true }
+      ],
+      'no-unused-vars': 'off'
     }
   },
 
   // 专门针对 .ts 文件的 lint 配置
   {
-    files: ['**/*.ts'], // 匹配所有 .ts 文件
+    files: ['**/*.{ts,tsx}'], // 匹配所有 TypeScript 文件
     languageOptions: {
       parser: tsParser // 使用 TypeScript 解析器
     },
@@ -72,8 +73,11 @@ export default [
       ...tsPlugin.configs.recommended.rules,
       // 关闭变量使用前定义检查
       '@typescript-eslint/no-use-before-define': 'off',
-      // 未使用变量改为警告而非错误
-      '@typescript-eslint/no-unused-vars': 'warn',
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', ignoreRestSiblings: true }
+      ],
+      'no-unused-vars': 'off',
       // 允许使用 any 类型
       '@typescript-eslint/no-explicit-any': 'off',
       // 允许空接口声明
@@ -81,9 +85,6 @@ export default [
       '@typescript-eslint/no-empty-object-type': 'off'
     }
   },
-
-  // 集成 Prettier 代码格式化工具
-  prettierPlugin,
 
   // 应用于所有文件的通用规则设置
   {
@@ -98,31 +99,8 @@ export default [
       'no-console': 'off',
       // 关闭未定义变量检查（由 TypeScript 处理）
       'no-undef': 'off',
-      // 未使用变量改为警告而非错误
-      'no-unused-vars': 'warn',
-      // Prettier 格式化规则配置
-      'prettier/prettier': [
-        'warn',
-        {
-          printWidth: 120, // 每行最大字符数
-          tabWidth: 2, // 缩进空格数
-          useTabs: false, // 使用空格而非制表符
-          semi: false, // 不使用分号
-          singleQuote: true, // 使用单引号
-          quoteProps: 'as-needed', // 仅在需要时给对象属性加引号
-          jsxSingleQuote: false, // JSX 中使用双引号
-          trailingComma: 'none', // 不使用尾随逗号
-          bracketSpacing: true, // 对象字面量中括号前后加空格
-          bracketSameLine: false, // 多行元素的 > 放在新行
-          arrowParens: 'avoid', // 箭头函数单参数时不加括号
-          proseWrap: 'preserve', // 保持原有的换行
-          htmlWhitespaceSensitivity: 'ignore', // 忽略 HTML 空白敏感性
-          vueIndentScriptAndStyle: false, // Vue 文件中不缩进 <script> 和 <style>
-          endOfLine: 'lf', // 使用 LF 换行符
-          embeddedLanguageFormatting: 'auto', // 自动格式化嵌入的代码
-          singleAttributePerLine: false // 不强制单行单属性
-        }
-      ]
+      'no-unused-vars': 'off',
+      'no-empty': ['error', { allowEmptyCatch: true }]
     },
     // 模块解析设置
     settings: {
@@ -132,6 +110,13 @@ export default [
         '~icons/*', // 图标模块
         'virtual:svg-icons-register' // SVG 图标注册
       ]
+    }
+  },
+
+  {
+    files: ['**/*.{js,mjs,cjs}'],
+    rules: {
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', ignoreRestSiblings: true }]
     }
   },
 

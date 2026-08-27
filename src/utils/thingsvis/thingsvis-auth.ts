@@ -73,7 +73,7 @@ export class ThingsVisAuthService {
   private async waitForUserInfo(
     maxRetries: number = 5,
     intervalMs: number = 200
-  ): Promise<typeof localStg extends { get: (key: 'userInfo') => infer R } ? R : null> {
+  ): Promise<Api.Auth.UserInfo | null> {
     let userInfo = localStg.get('userInfo')
     let retries = 0
 

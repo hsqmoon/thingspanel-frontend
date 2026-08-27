@@ -257,9 +257,6 @@ if (authStore.userInfo.authority === 'SYS_ADMIN') {
 
 const { routerPushByKey } = useRouterPush()
 const goDeviceDetails = row => {
-  if (authStore.userInfo.authority === 'SYS_ADMIN' && !localStg.get('tenantScopeId') && row.tenant_id) {
-    localStg.set('tenantScopeId', row.tenant_id)
-  }
   routerPushByKey('device_details', {
     query: {
       d_id: row.id

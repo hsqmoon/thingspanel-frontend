@@ -3,6 +3,8 @@
  * Security Configuration Unified Exports
  */
 
+import { getRSAPublicKey, rsaConfig } from './rsa'
+
 // 导出 RSA 配置
 export { rsaPublicKey, rsaConfig, getRSAPublicKey, validateRSAPublicKey } from './rsa'
 

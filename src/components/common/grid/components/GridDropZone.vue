@@ -16,7 +16,7 @@
       <n-icon :size="24">
         <AddOutline />
       </n-icon>
-      <span>{{ $t('grid.dropHint', '拖拽组件到此处添加') }}</span>
+      <span>{{ t('grid.dropHint', '拖拽组件到此处添加') }}</span>
     </div>
   </div>
 </template>
@@ -28,6 +28,7 @@
  */
 
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { NIcon } from 'naive-ui'
 import { AddOutline } from '@vicons/ionicons5'
 
@@ -49,12 +50,13 @@ interface Emits {
   drop: [event: DragEvent]
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   readonly: false,
   showDropZone: false
 })
 
 const emit = defineEmits<Emits>()
+const { t } = useI18n()
 
 // 拖拽状态管理
 const isDragging = ref(false)

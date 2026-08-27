@@ -44,11 +44,7 @@ interface FormElement {
 
 const formElements = ref<FormElement[]>([])
 
-interface Emits {
-  (e: 'upDateConfig'): void
-}
-
-const emit = defineEmits<Emits>()
+const emit = defineEmits(['upDateConfig'])
 
 const typeOptions: any = ref([])
 const active: any = ref(false)
@@ -170,7 +166,7 @@ const handleDeleteTopicMapping = async (row: TopicMapping) => {
   try {
     await deleteTopicMapping(row.id)
     await fetchTopicMappings()
-  } catch (error) {
+  } catch {
     message.error(t('generate.topicMapping.message.deleteFailed'))
   }
 }
@@ -204,7 +200,7 @@ const fetchTopicMappings = async () => {
     })
     const list = res.data.list
     topicMappingList.value = list.map((item: any) => normalizeTopicMapping(item))
-  } catch (error) {
+  } catch {
     message.error(t('generate.topicMapping.message.fetchFailed'))
   } finally {
     topicMappingLoading.value = false
@@ -234,7 +230,7 @@ const handleSaveTopicMapping = async (data: TopicMapping) => {
     }
     currentEditTopicMapping.value = null
     await fetchTopicMappings()
-  } catch (error) {
+  } catch {
     message.error(t('generate.topicMapping.message.saveFailed'))
   }
 }

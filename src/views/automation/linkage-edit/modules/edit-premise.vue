@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, watch, onBeforeUpdate, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { NButton, NFlex, useMessage } from 'naive-ui'
+import { NButton, NFlex } from 'naive-ui'
 import type { FormInst } from 'naive-ui'
 import { IosAlert, IosRefresh } from '@vicons/ionicons4'
 import { repeat } from 'seemly'
@@ -197,7 +197,6 @@ const deviceGroupOptions = ref([] as any)
 const getGroup = async () => {
   deviceGroupOptions.value = []
   const res = await deviceGroupTree({})
-  // eslint-disable-next-line array-callback-return
   res.data.map((item: any) => {
     deviceGroupOptions.value.push(item.group)
   })
@@ -430,27 +429,6 @@ const statusData = computed(() => ({
   ]
 }))
 
-const message = useMessage()
-
-// 动作值标识
-const actionValueChange = (ifItem: any) => {
-  if (ifItem.trigger_param_type === 'event') {
-    try {
-      JSON.parse(ifItem.trigger_value)
-      if (typeof JSON.parse(ifItem.trigger_value) === 'object') {
-        ifItem.inputFeedback = ''
-        ifItem.inputValidationStatus = undefined
-      } else {
-        message.error($t('common.enterJson'))
-        ifItem.inputValidationStatus = 'error'
-      }
-    } catch (e) {
-      message.error($t('common.enterJson'))
-      ifItem.inputValidationStatus = 'error'
-    }
-  }
-}
-
 // 时间条件类型下选项2使用的下拉
 const getTimeConditionOptions = ifGroup => {
   return [
@@ -594,17 +572,6 @@ const determineOptions = computed(() => [
   }
 ])
 
-const eventExistsOptions = computed(() => [
-  {
-    label: '存在',
-    value: true
-  },
-  {
-    label: '不存在',
-    value: false
-  }
-])
-
 const createEventParamCondition = () => ({
   field: null,
   operator: '=',
@@ -737,7 +704,6 @@ const judgeItem = ref({
   weekTimeValue: null, // 时间值-选择周
   monthTimeValue: null, // 时间值-选择月
 
-  // eslint-disable-next-line no-bitwise
   weekChoseValue: [], // 星期多选值
   monthChoseValue: null, // 月份某一天
 
@@ -843,16 +809,12 @@ const triggerParamChange = (ifItem: any, data: any) => {
 }
 
 interface Props {
-  // eslint-disable-next-line vue/no-unused-properties
   conditionData?: object | any
-  // eslint-disable-next-line vue/no-unused-properties,vue/prop-name-casing
   device_id?: string | any
-  // eslint-disable-next-line vue/no-unused-properties,vue/prop-name-casing
   device_config_id?: string | any
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  // eslint-disable-next-line vue/require-valid-default-prop
   conditionData: [],
   device_id: '',
   device_config_id: ''
@@ -915,7 +877,6 @@ onMounted(() => {
       judgeItemData.ifType = '1'
       judgeItemData.trigger_conditions_type = '10'
       judgeItemData.trigger_source = props.device_id
-      // eslint-disable-next-line array-callback-return
     } else if (props.device_config_id) {
       judgeItemData.ifType = '1'
       judgeItemData.trigger_conditions_type = '11'
@@ -1010,15 +971,15 @@ watch(locale, () => {
                       :consistent-menu-width="false"
                       @click.prevent="
                         e => {
-                          onDeviceKeydownEnter(e, ifIndex)
+                          onDeviceKeydownEnter(e, Number(ifIndex))
                         }
                       "
                       @keydown.enter="
                         e => {
-                          onDeviceKeydownEnter(e, ifIndex)
+                          onDeviceKeydownEnter(e, Number(ifIndex))
                         }
                       "
-                      @update:value="() => triggerSourceChange(ifItem, ifIndex)"
+                      @update:value="() => triggerSourceChange(ifItem, Number(ifIndex))"
                     >
                       <template #header>
                         <NFlex align="center" class="w-500px">
@@ -1035,13 +996,13 @@ watch(locale, () => {
                             @update:value="data => getDevice(data, queryDevice.device_name)"
                           />
                           <NInput
-                            :ref="el => setQueryDeviceNameRef(el, ifIndex)"
+                            :ref="el => setQueryDeviceNameRef(el, Number(ifIndex))"
                             v-model:value="queryDevice.device_name"
                             class="flex-1"
                             clearable
                             :placeholder="$t('common.input')"
-                            @keydown.enter="onTapInput(queryDevice, ifIndex)"
-                            @click="handleFocus(ifIndex)"
+                            @keydown.enter="onTapInput(queryDevice, Number(ifIndex))"
+                            @click="handleFocus(Number(ifIndex))"
                           ></NInput>
                           <NButton
                             :disabled="!btnloading"
@@ -1072,7 +1033,7 @@ watch(locale, () => {
                       remote
                       filterable
                       @search="getDeviceConfig"
-                      @update:value="() => triggerSourceChange(ifItem, ifIndex)"
+                      @update:value="() => triggerSourceChange(ifItem, Number(ifIndex))"
                     />
                   </NFormItem>
                 </template>
@@ -1193,7 +1154,10 @@ watch(locale, () => {
                         </NFormItem>
                         <template v-if="condition.operator === 'exists'">
                           <NFormItem :show-label="false" class="max-w-30 w-full">
-                            <NSelect v-model:value="condition.value" :options="eventExistsOptions" />
+                            <NRadioGroup v-model:value="condition.value">
+                              <NRadio :value="true">存在</NRadio>
+                              <NRadio :value="false">不存在</NRadio>
+                            </NRadioGroup>
                           </NFormItem>
                         </template>
                         <template v-else-if="condition.operator === 'between'">
@@ -1214,7 +1178,11 @@ watch(locale, () => {
                             />
                           </NFormItem>
                         </template>
-                        <NButton quaternary type="error" @click="deleteEventParamCondition(ifItem, conditionIndex)">
+                        <NButton
+                          quaternary
+                          type="error"
+                          @click="deleteEventParamCondition(ifItem, Number(conditionIndex))"
+                        >
                           {{ $t('common.delete') }}
                         </NButton>
                       </NFlex>
@@ -1613,7 +1581,12 @@ watch(locale, () => {
             </NFlex>
           </NFlex>
         </NCard>
-        <NButton v-if="ifGroupIndex > 0" type="error" class="relative" @click="deleteIfGroupsItem(ifGroupIndex)">
+        <NButton
+          v-if="Number(ifGroupIndex) > 0"
+          type="error"
+          class="relative"
+          @click="deleteIfGroupsItem(Number(ifGroupIndex))"
+        >
           {{ $t('generate.delete-group') }}
         </NButton>
       </NFlex>

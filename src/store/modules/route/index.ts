@@ -2,31 +2,19 @@ import { computed, ref } from 'vue'
 import type { RouteRecordRaw } from 'vue-router'
 import { defineStore } from 'pinia'
 import { useBoolean } from '@sa/hooks'
-import type { CustomRoute, ElegantConstRoute, LastLevelRouteKey, RouteKey, RouteMap } from '@elegant-router/types'
-import { router } from '@/router'
+import type { ElegantConstRoute, LastLevelRouteKey, RouteKey } from '@elegant-router/types'
+import { router } from '@/router/instance'
 import { SetupStoreId } from '@/enum'
-import { ROOT_ROUTE, createRoutes, getAuthVueRoutes } from '@/router/routes'
-import { getRouteName, getRoutePath } from '@/router/elegant/transform'
-import { fetchGetUserRoutes, fetchIsRouteExist } from '@/service/api'
-import { isThingsVisEnabled } from '@/config/runtime-features'
-import { useAppStore } from '../app'
-import { useAuthStore } from '../auth'
-import { useTabStore } from '../tab'
+import { reloadPage } from '../app/reload'
 import {
-  filterAuthRoutesByRoles,
   getBreadcrumbsByRoute,
   getCacheRouteNames,
   getGlobalMenusByAuthRoutes,
   getSelectedMenuKeyPathByKey,
-  isRouteExistByRouteName,
-  sortRoutesByOrder,
   updateLocaleOfGlobalMenus
 } from './shared'
 
 export const useRouteStore = defineStore(SetupStoreId.Route, () => {
-  const appStore = useAppStore()
-  const authStore = useAuthStore()
-  const tabStore = useTabStore()
   const { bool: isInitAuthRoute, setBool: setIsInitAuthRoute } = useBoolean()
   const hasAuthRoutes = ref(false)
   const removeRouteFns: (() => void)[] = []
@@ -39,8 +27,6 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
    * "@elegant-router/vue"
    */
   const authRouteMode = ref(import.meta.env.VITE_AUTH_ROUTE_MODE)
-  if (process.env.NODE_ENV === 'development') {
-  }
   /** Home route key */
   const routeHome = ref(import.meta.env.VITE_ROUTE_HOME)
 
@@ -74,9 +60,7 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
    *
    * @param routes Vue routes
    */
-  function getCacheRoutes(routes: RouteRecordRaw[]) {
-    const { constantVueRoutes } = createRoutes()
-
+  function getCacheRoutes(routes: RouteRecordRaw[], constantVueRoutes: RouteRecordRaw[] = []) {
     cacheRoutes.value = getCacheRouteNames([...constantVueRoutes, ...routes])
   }
 
@@ -112,7 +96,7 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
   async function reCacheRoutesByKey(routeKey: RouteKey) {
     removeCacheRoutes(routeKey)
 
-    await appStore.reloadPage()
+    await reloadPage()
 
     addCacheRoutes(routeKey)
   }
@@ -146,121 +130,6 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
     removeRouteFns.length = 0
   }
 
-  /** Init auth route */
-  async function initAuthRoute(): Promise<boolean> {
-    let success = false
-    if (authRouteMode.value === 'static') {
-      success = await initStaticAuthRoute()
-    } else {
-      success = await initDynamicAuthRoute()
-    }
-
-    if (success && hasAuthRoutes.value) {
-      tabStore.initHomeTab()
-    }
-
-    return success
-  }
-
-  /** Init static auth route */
-  async function initStaticAuthRoute(): Promise<boolean> {
-    const { authRoutes } = createRoutes()
-
-    const filteredAuthRoutes = filterAuthRoutesByRoles(authRoutes, authStore?.userInfo?.roles as string[])
-    hasAuthRoutes.value = filteredAuthRoutes.length > 0
-
-    if (hasAuthRoutes.value) {
-      handleAuthRoutes(filteredAuthRoutes)
-    }
-
-    setIsInitAuthRoute(true)
-
-    return true // Indicate success
-  }
-
-  /** Init dynamic auth route */
-  async function initDynamicAuthRoute(): Promise<boolean> {
-    try {
-      const { data, error } = await fetchGetUserRoutes()
-
-      if (!error) {
-        const routes = data?.list || []
-        hasAuthRoutes.value = routes.length > 0
-
-        if (hasAuthRoutes.value) {
-          handleAuthRoutes(routes)
-
-          setRouteHome('home')
-
-          handleUpdateRootRouteRedirect('home')
-        }
-
-        setIsInitAuthRoute(true)
-
-        return true // Indicate success
-      }
-
-      hasAuthRoutes.value = false
-      return false // Indicate failure
-    } catch {
-      hasAuthRoutes.value = false
-      return false
-    }
-
-  }
-
-  /**
-   * Handle routes
-   *
-   * @param routes Auth routes
-   */
-  function handleAuthRoutes(routes: ElegantConstRoute[]) {
-    const runtimeRoutes = isThingsVisEnabled()
-      ? routes
-      : routes.flatMap(function removeThingsVisRoutes(route): ElegantConstRoute[] {
-          const name = String(route.name || '')
-          const path = String(route.path || '')
-          const component = String(route.component || '')
-          if (
-            name.startsWith('visualization') ||
-            name.startsWith('home_dashboard_') ||
-            path.startsWith('/visualization') ||
-            path.startsWith('/home/dashboard/') ||
-            component.toLowerCase().includes('thingsvis')
-          ) {
-            return []
-          }
-
-          return [
-            {
-              ...route,
-              ...(route.children ? { children: route.children.flatMap(removeThingsVisRoutes) } : {})
-            } as ElegantConstRoute
-          ]
-        })
-    const sortRoutes = sortRoutesByOrder(runtimeRoutes)
-
-    const vueRoutes = getAuthVueRoutes(sortRoutes)
-
-    addRoutesToVueRouter(vueRoutes)
-
-    getGlobalMenus(sortRoutes)
-
-    getCacheRoutes(vueRoutes)
-  }
-
-  /**
-   * Add routes to vue router
-   *
-   * @param routes Vue routes
-   */
-  function addRoutesToVueRouter(routes: RouteRecordRaw[]) {
-    routes.forEach(route => {
-      const removeFn = router.addRoute(route)
-      addRemoveRouteFn(removeFn)
-    })
-  }
-
   /**
    * Add remove route fn
    *
@@ -268,48 +137,6 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
    */
   function addRemoveRouteFn(fn: () => void) {
     removeRouteFns.push(fn)
-  }
-
-  /**
-   * Update root route redirect when auth route mode is dynamic
-   *
-   * @param redirectKey Redirect route key
-   */
-  function handleUpdateRootRouteRedirect(redirectKey: LastLevelRouteKey) {
-    const redirect = getRoutePath(redirectKey)
-
-    if (redirect) {
-      const rootRoute: CustomRoute = { ...ROOT_ROUTE, redirect }
-
-      router.removeRoute(rootRoute.name)
-
-      const [rootVueRoute] = getAuthVueRoutes([rootRoute])
-
-      router.addRoute(rootVueRoute)
-    }
-  }
-
-  /**
-   * Get is auth route exist
-   *
-   * @param routePath Route path
-   */
-  async function getIsAuthRouteExist(routePath: RouteMap[RouteKey]) {
-    const routeName = getRouteName(routePath)
-
-    if (!routeName) {
-      return false
-    }
-
-    if (authRouteMode.value === 'static') {
-      const { authRoutes } = createRoutes()
-
-      return isRouteExistByRouteName(routeName, authRoutes)
-    }
-
-    const data = fetchIsRouteExist(routeName)
-
-    return data
   }
 
   /**
@@ -323,18 +150,21 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
 
   return {
     resetStore,
+    authRouteMode,
     routeHome,
+    setRouteHome,
     menus,
+    getGlobalMenus,
     updateGlobalMenusByLocale,
     cacheRoutes,
+    getCacheRoutes,
     reCacheRoutesByKey,
     reCacheRoutesByKeys,
     breadcrumbs,
-    initAuthRoute,
     isInitAuthRoute,
     hasAuthRoutes,
     setIsInitAuthRoute,
-    getIsAuthRouteExist,
+    addRemoveRouteFn,
     getSelectedMenuKeyPath
   }
 })

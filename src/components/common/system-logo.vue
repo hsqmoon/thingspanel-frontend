@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 defineOptions({ name: 'SystemLogo' })
 export interface Props {
-  width: string
+  width?: string
 }
 
 withDefaults(defineProps<Props>(), {

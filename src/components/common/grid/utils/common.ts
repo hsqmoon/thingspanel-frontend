@@ -76,8 +76,8 @@ export function getLayoutStats(
     const averageSize = totalItems > 0 ? occupiedCells / totalItems : 0
 
     // 找到最大和最小的项目
-    let largestItem = null
-    let smallestItem = null
+    let largestItem: { id: string; area: number } | null = null
+    let smallestItem: { id: string; area: number } | null = null
     let maxArea = 0
     let minArea = Infinity
 
@@ -437,7 +437,7 @@ export function parseNumber(value: any, defaultValue = 0): number {
     }
 
     return defaultValue
-  } catch (error) {
+  } catch {
     return defaultValue
   }
 }
@@ -461,7 +461,7 @@ export function formatFileSize(bytes: number): string {
     const size = bytes / Math.pow(1024, i)
 
     return `${size.toFixed(1)} ${sizes[i]}`
-  } catch (error) {
+  } catch {
     return '0 B'
   }
 }
@@ -482,7 +482,7 @@ export function formatDuration(milliseconds: number): string {
 
     const minutes = seconds / 60
     return `${minutes.toFixed(1)}m`
-  } catch (error) {
+  } catch {
     return '0ms'
   }
 }

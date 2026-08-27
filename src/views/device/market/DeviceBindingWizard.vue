@@ -38,7 +38,7 @@ const props = withDefaults(
   defineProps<{
     modelValue: boolean
     allowSkip?: boolean
-    bindingDefinitions: BindingDefinition[]
+    bindingDefinitions?: BindingDefinition[]
     initialBindings?: Array<{ bindingKey: string; deviceId: string }>
   }>(),
   {
@@ -59,13 +59,11 @@ const emit = defineEmits<{
 const {
   isLoading,
   bindings,
-  error,
   boundCount,
   unboundCount,
   skippedCount,
   hasRequiredUnbound,
   canProceed,
-  bindingSummary,
   loadAllCompatibleDevices,
   selectDevice,
   skipBinding,
@@ -96,9 +94,6 @@ const expandedDashboards = ref<string[]>([])
 const isInitialized = ref(false)
 
 // ========== Computed ==========
-
-/** 所有必填项是否已绑定 */
-const allRequiredBound = computed(() => !hasRequiredUnbound.value)
 
 /** 绑定进度 */
 const bindingProgress = computed(() => {
@@ -162,7 +157,7 @@ function initializeSelections() {
 /**
  * 查找父看板
  */
-function findParentDashboard(bindingKey: string): DashboardSelection | undefined {
+function findParentDashboard(_bindingKey: string): DashboardSelection | undefined {
   // 这里假设 bindings 包含对 dashboardSelections 的引用
   // 实际实现中可能需要通过其他方式关联
   return undefined
@@ -261,41 +256,10 @@ function getDeviceStatusText(online: boolean): string {
   return online ? $t('device.online') : $t('device.offline')
 }
 
-/**
- * 获取设备选择选项
- */
-function getDeviceOptions(binding: DeviceBinding) {
-  const devices = getFilteredDevices(binding)
-  return devices.map(device => ({
-    label: device.name,
-    value: device.id,
-    disabled: false
-  }))
-}
-
-/**
- * 获取绑定状态图标
- */
-function getBindingStatusIcon(binding: DeviceBinding): string {
-  if (binding.skipped) return 'skip'
-  if (binding.selectedDeviceId) return 'bound'
-  return 'unbound'
-}
-
-/**
- * 获取绑定状态颜色
- */
-function getBindingStatusColor(binding: DeviceBinding): string {
-  if (binding.skipped) return 'warning'
-  if (binding.selectedDeviceId) return 'success'
-  if (binding.required) return 'error'
-  return 'default'
-}
-
 // ========== Expose ==========
 
 defineExpose({
-  open: (params: BindingWizardParams) => {
+  open: (_params: BindingWizardParams) => {
     visible.value = true
   },
   close: handleClose

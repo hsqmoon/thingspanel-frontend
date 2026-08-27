@@ -21,8 +21,6 @@ const queryParams = reactive({
   send_time_start: '',
   send_time_end: ''
 })
-const total = ref(0)
-
 const tableData = ref<Api.Alarm.NotificationHistoryList[]>([])
 
 function setTableData(data: Api.Alarm.NotificationHistoryList[] | []) {

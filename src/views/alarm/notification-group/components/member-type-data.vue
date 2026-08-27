@@ -33,7 +33,7 @@ const rules: Record<keyof FormModel, FormItemRule | FormItemRule[]> = {
 
 const props = withDefaults(
   defineProps<{
-    index: number
+    index?: number
     selectedNotificationType: string[]
   }>(),
   {

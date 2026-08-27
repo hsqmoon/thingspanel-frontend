@@ -8,7 +8,7 @@ declare namespace Env {
   type RouterHistoryMode = 'hash' | 'history' | 'memory'
 
   /** Interface for import. Meta */
-  interface ImportMeta extends ImportMetaEnv {
+  interface ImportMeta {
     /** The base url of the application */
     readonly VITE_BASE_URL: string
     /** The title of the application */
@@ -69,6 +69,11 @@ declare namespace Env {
     readonly VITE_AUTO_LOGIN_PASSWORD?: string
     /** Public registration portal for the ThingsPanel resource center */
     readonly VITE_MARKET_PORTAL_URL?: string
-    readonly globEager: <T = any>(globPattern: string) => Record<string, T>
+    /** ThingsVis API proxy target */
+    readonly VITE_THINGSVIS_API_URL?: string
+    /** ThingsVis Studio proxy target */
+    readonly VITE_THINGSVIS_STUDIO_URL?: string
+    /** Account service proxy target */
+    readonly VITE_ACCOUNT_SERVICE_URL?: string
   }
 }

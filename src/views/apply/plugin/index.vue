@@ -38,13 +38,11 @@ const queryInfo = ref<any>({
   itemCount: 0,
   onChange: (page: number) => {
     queryInfo.value.page = page
-    // eslint-disable-next-line @typescript-eslint/no-use-before-define
     getList()
   },
   onUpdatePageSize: (pageSize: number) => {
     queryInfo.value.page_size = pageSize
     queryInfo.value.page = 1
-    // eslint-disable-next-line @typescript-eslint/no-use-before-define
     getList()
   }
 })

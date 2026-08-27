@@ -12,7 +12,7 @@ defineOptions({
 })
 
 const auth = useAuthStore()
-const { formRef, validate } = useNaiveForm()
+const { setFormRef, validate } = useNaiveForm()
 
 interface FormModel {
   userName: string
@@ -115,7 +115,7 @@ async function handleSubmit() {
     window.location.href = '/'
   } catch (error: any) {
     const msg = error?.error?.message || error?.response?.data?.message
-    window.$message.error(msg || error?.message || '本地初始化失败，请检查邮箱和密码后重试')
+    window.$message?.error(msg || error?.message || '本地初始化失败，请检查邮箱和密码后重试')
     console.error('Initialization failed:', error)
   } finally {
     submitting.value = false
@@ -124,7 +124,14 @@ async function handleSubmit() {
 </script>
 
 <template>
-  <NForm ref="formRef" :model="model" :rules="rules" size="large" :show-label="false" autocomplete="off">
+  <NForm
+    :ref="setFormRef"
+    :model="model"
+    :rules="rules"
+    size="large"
+    :show-label="false"
+    autocomplete="off"
+  >
     <NFormItem path="userName">
       <NAutoComplete
         v-model:value="model.userName"

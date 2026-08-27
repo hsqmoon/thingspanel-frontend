@@ -4,7 +4,7 @@
 
 import { computed, reactive } from 'vue'
 import { useMarketAuth } from './use-market-auth'
-import type { PrecheckResult, PublishDraftResponse, PublishedBundle, InstallBundleRequest } from '@/service/api/market-bundle'
+import type { PrecheckResult, PublishedBundle, InstallBundleRequest } from '@/service/api/market-bundle'
 import {
   createPublishDraft,
   getErrorDisplayMessage,
@@ -14,7 +14,8 @@ import {
   mapPrecheckReportToResults,
   type MarketApiError
 } from '@/service/api/market-bundle'
-import type { Locale } from '~/src/locales/locale'
+
+type MarketLocale = 'zh' | 'en'
 
 export interface BundleMetadata {
   name: string
@@ -59,7 +60,7 @@ const initialWizardState: PublishWizardState = {
 }
 
 export function useMarketBundle() {
-  const { isLoggedIn, getToken } = useMarketAuth()
+  const { getToken } = useMarketAuth()
   const wizardState = reactive<PublishWizardState>({ ...initialWizardState })
 
   const hasSelectedResources = computed(() => {
@@ -132,7 +133,7 @@ export function useMarketBundle() {
   }
 
   /** 单步发布：publish-draft 直接完成发布 */
-  async function createDraft(locale: Locale = 'zh'): Promise<boolean> {
+  async function createDraft(locale: MarketLocale = 'zh'): Promise<boolean> {
     const marketToken = getToken()
     if (!marketToken) {
       wizardState.error = {
@@ -193,7 +194,7 @@ export function useMarketBundle() {
   }
 
   /** 发布已在 createDraft 一步完成，此方法仅用于向导步骤跳转 */
-  async function confirmPublishAction(_locale: Locale = 'zh'): Promise<boolean> {
+  async function confirmPublishAction(_locale: MarketLocale = 'zh'): Promise<boolean> {
     if (wizardState.publishResult) {
       wizardState.step = 'result'
       return true
@@ -207,7 +208,7 @@ export function useMarketBundle() {
 
   async function install(
     params: Pick<InstallBundleRequest, 'bundleKey' | 'version' | 'deviceBindings' | 'marketToken'>,
-    locale: Locale = 'zh'
+    locale: MarketLocale = 'zh'
   ) {
     if (!params.marketToken) {
       return {
@@ -300,14 +301,14 @@ const PRECHECK_CODE_TITLES: Record<string, { zh: string; en: string }> = {
   BUNDLE_VERSION_CONFLICT: { zh: '版本冲突', en: 'Version Conflict' }
 }
 
-const LEVEL_ICONS: Record<string, string> = {
+const LEVEL_ICONS: Record<string, PrecheckDisplayItem['level']> = {
   PASS: 'success',
   FAIL: 'error',
   WARN: 'warning',
   INFO: 'info'
 }
 
-export function formatPrecheckResults(results: PrecheckResult[], locale: Locale = 'zh'): PrecheckDisplayItem[] {
+export function formatPrecheckResults(results: PrecheckResult[], locale: MarketLocale = 'zh'): PrecheckDisplayItem[] {
   return results.map(result => {
     const titles = PRECHECK_CODE_TITLES[result.code] || { zh: result.code, en: result.code }
     return {

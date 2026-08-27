@@ -9,7 +9,6 @@ import {
   deviceDetail,
   deviceGroupRelation,
   deviceGroupTree,
-  deviceLocation,
   deviceUpdateConfig,
   getDeviceConfigList,
   getDeviceGroupRelation
@@ -26,7 +25,6 @@ const props = defineProps<{
 const valueRef = ref<Array<string | number>>([])
 const device_coding = ref<string>('')
 const emit = defineEmits(['change'])
-const is_online = ref<string>('')
 const treeData = ref()
 type Option = {
   label: string
@@ -105,13 +103,6 @@ function flattenTree(list: undefined | Option[]): Option[] {
   return result
 }
 
-const handleUpdateValue = async () => {
-  const { error }: any = await deviceLocation({
-    id: props.id,
-    is_online: Number(is_online.value)
-  })
-  !error && emit('change')
-}
 const renderSourceList: TransferRenderSourceList = ({ pattern }) => {
   return (
     <NTree

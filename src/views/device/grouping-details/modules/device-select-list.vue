@@ -1,16 +1,16 @@
 <script setup lang="ts">
-import { defineEmits, onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import type { DataTableColumns, DataTableRowKey, PaginationProps } from 'naive-ui'
 import { NDataTable } from 'naive-ui'
 import { deviceGroupRelation, deviceList } from '@/service/api/device'
 import { createDeviceColumns } from '@/views/device/modules/all-columns'
 import { $t } from '@/locales'
 
-// eslint-disable-next-line vue/define-emits-declaration
+
 const emit = defineEmits(['closed_modal', 'refresh_data'])
 
 interface TProps {
-  // eslint-disable-next-line vue/prop-name-casing
+
   group_id: string
 }
 
@@ -66,12 +66,12 @@ const handleReset = () => {
 // 定义 emit 函数，指定可能发出的事件类型
 
 const closeModal = () => {
-  // eslint-disable-next-line vue/custom-event-name-casing
+
   emit('closed_modal', false)
 }
 
 const reload = () => {
-  // eslint-disable-next-line vue/custom-event-name-casing
+
   emit('refresh_data', true)
 }
 

@@ -1,7 +1,6 @@
 import { computed, effectScope, nextTick, onScopeDispose, ref, watch } from 'vue'
 import * as echarts from 'echarts/core'
 import { createEChartsInstance } from '@/utils/echarts/echarts-manager'
-import { BarChart, GaugeChart, LineChart, PictorialBarChart, PieChart, RadarChart, ScatterChart } from 'echarts/charts'
 import type {
   BarSeriesOption,
   GaugeSeriesOption,
@@ -11,15 +10,6 @@ import type {
   RadarSeriesOption,
   ScatterSeriesOption
 } from 'echarts/charts'
-import {
-  DatasetComponent,
-  GridComponent,
-  LegendComponent,
-  TitleComponent,
-  ToolboxComponent,
-  TooltipComponent,
-  TransformComponent
-} from 'echarts/components'
 import type {
   DatasetComponentOption,
   GridComponentOption,
@@ -28,8 +18,6 @@ import type {
   ToolboxComponentOption,
   TooltipComponentOption
 } from 'echarts/components'
-import { LabelLayout, UniversalTransition } from 'echarts/features'
-import { CanvasRenderer } from 'echarts/renderers'
 import type { MaybeComputedElementRef, MaybeElement } from '@vueuse/core'
 import { useElementSize } from '@vueuse/core'
 import { useThemeStore } from '@/store/modules/theme'
@@ -49,27 +37,6 @@ export type ECOption = echarts.ComposeOption<
   | ToolboxComponentOption
   | DatasetComponentOption
 >
-
-// ECharts 组件注册已移至 echarts-manager 统一管理
-// echarts.use([
-//   TitleComponent,
-//   LegendComponent,
-//   TooltipComponent,
-//   GridComponent,
-//   DatasetComponent,
-//   TransformComponent,
-//   ToolboxComponent,
-//   BarChart,
-//   LineChart,
-//   PieChart,
-//   ScatterChart,
-//   PictorialBarChart,
-//   RadarChart,
-//   GaugeChart,
-//   LabelLayout,
-//   UniversalTransition,
-//   CanvasRenderer
-// ])
 
 interface ChartHooks {
   onRender?: (chart: echarts.ECharts) => void | Promise<void>

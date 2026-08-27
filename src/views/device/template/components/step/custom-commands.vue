@@ -1,5 +1,5 @@
 <script setup lang="tsx">
-import { computed, defineProps, getCurrentInstance, nextTick, onMounted, reactive, ref } from 'vue'
+import { computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
 import { NButton, NDataTable, NForm, NFormItem, NInput, NModal, NPagination, NPopconfirm, NTag } from 'naive-ui'
 import CodeMirror from 'vue-codemirror6'
 import { javascript } from '@codemirror/lang-javascript'
@@ -53,13 +53,6 @@ const getCommandList = (page: number = 1) => {
   deviceCustomCommandsList(queryjson).then(({ data }) => {
     commandjson.listData = data.list || []
     commandjson.total = data.total
-  })
-}
-const cmRef = ref()
-
-const setupEditor = () => {
-  nextTick(() => {
-    // CodeMirror 6 会自动处理，不需要手动聚焦
   })
 }
 const openCommandDialog = () => {
@@ -189,7 +182,6 @@ onMounted(() => {
       v-model:show="commandjson.configForm"
       :title="$t('generate.customCommand')"
       :class="getPlatform ? 'w-90%' : 'custom-command-modal'"
-      @after-enter="setupEditor"
     >
       <n-card>
         <NForm
@@ -208,7 +200,6 @@ onMounted(() => {
           </NFormItem>
           <NFormItem :label="$t('generate.commandConetnt')" path="instruct">
             <CodeMirror
-              ref="cmRef"
               v-model="commandjson.formjson.instruct"
               basic
               :dark="themeStore.darkMode"

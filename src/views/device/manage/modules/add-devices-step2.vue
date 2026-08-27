@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { defineProps, onMounted, reactive, ref, watchEffect } from 'vue'
+import { onMounted, reactive, ref, watchEffect } from 'vue'
 import type { FormInst, FormRules } from 'naive-ui'
 import { NButton, NForm, NFormItem, NInput, NSelect } from 'naive-ui'
 import type { SelectMixedOption } from 'naive-ui/es/select/src/interface'
@@ -45,7 +45,7 @@ const props = defineProps<{
   setIsSuccess: (flag: boolean) => void
 }>()
 
-// eslint-disable-next-line vue/no-dupe-keys
+
 const formData = reactive({})
 const connectInfo = ref<object>({})
 const feachConnectInfo = async () => {
@@ -73,7 +73,7 @@ watchEffect(() => {
 })
 
 const handleSubmit = async () => {
-  // eslint-disable-next-line consistent-return
+
   await formRef.value?.validate()
 
   const res = await updateDeviceVoucher({

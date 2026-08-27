@@ -8,7 +8,7 @@
  * - 允许更新绑定
  * - 显示关联的设备和看板
  */
-import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   NCard,
@@ -21,9 +21,6 @@ import {
   NGrid,
   NGi,
   NIcon,
-  NDescriptions,
-  NDescriptionsItem,
-  NDivider,
   NTooltip,
   useMessage
 } from 'naive-ui'
@@ -33,8 +30,7 @@ import {
   RefreshOutline,
   LinkOutline,
   AlertCircleOutline,
-  CheckmarkCircleOutline,
-  CloudDownloadOutline
+  CheckmarkCircleOutline
 } from '@vicons/ionicons5'
 import { $t } from '@/locales'
 import {
@@ -42,9 +38,7 @@ import {
   updateInstallationBindings,
   retryInstallation,
   compensateInstallation,
-  type InstalledBundle,
-  type MarketApiError,
-  getErrorDisplayMessage
+  type InstalledBundle
 } from '@/service/api/market-bundle'
 import DeviceBindingWizard from './DeviceBindingWizard.vue'
 import type { BindingDefinition } from './composables/use-device-binding'
@@ -180,9 +174,10 @@ async function fetchInstallationDetail(id: string) {
     }
 
     installation.value = result.data
-  } catch (err: any) {
-    error.value = err.message || 'Failed to load installation detail'
-    message.error(error.value)
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : 'Failed to load installation detail'
+    error.value = errorMessage
+    message.error(errorMessage)
   } finally {
     loading.value = false
   }

@@ -1,4 +1,5 @@
 import { createApp, watch } from 'vue'
+import type { LocationQuery } from 'vue-router'
 import 'gridstack/dist/gridstack.css'
 import 'gridstack/dist/gridstack-extra.css'
 import './plugins/assets'
@@ -13,20 +14,29 @@ import App from './App.vue'
 const RECENTLY_VISITED_ROUTES_KEY = 'RECENTLY_VISITED_ROUTES'
 const MAX_RECENT_ROUTES = 8
 
+interface RecentRoute {
+  path: string
+  name: string
+  title: string
+  i18nKey?: unknown
+  icon?: unknown
+  query: LocationQuery
+}
+
 // --- 更新排除路径列表，支持通配符 ---
 const excludedPaths = ['/login/*', '/404', '/home']
 
 // 防抖函数 - 减少频繁的 localStorage 操作
-function debounce<T extends () => any>(func: T, wait: number): T {
-  let timeout: NodeJS.Timeout | null = null
-  return ((...args: any[]) => {
+function debounce<TArgs extends unknown[]>(func: (...args: TArgs) => void, wait: number) {
+  let timeout: ReturnType<typeof setTimeout> | null = null
+  return (...args: TArgs) => {
     if (timeout) clearTimeout(timeout)
     timeout = setTimeout(() => func(...args), wait)
-  }) as T
+  }
 }
 
 // 内存缓存最近访问的路由，减少 localStorage 读取
-let recentRoutesCache: any[] | null = null
+let recentRoutesCache: RecentRoute[] | null = null
 
 async function setupApp() {
   await initRuntimeFeatures()
@@ -81,18 +91,28 @@ async function setupApp() {
   await setupRouter(app)
 
   // 路由记录功能
-  const debouncedSaveRoutes = debounce((routes: any[]) => {
+  const debouncedSaveRoutes = debounce((routes: RecentRoute[]) => {
     try {
       localStorage.setItem(RECENTLY_VISITED_ROUTES_KEY, JSON.stringify(routes))
       recentRoutesCache = routes
-    } catch (error) {}
+    } catch {
+      return
+    }
   }, 1000)
 
   // 初始化缓存
   try {
     const routesRaw = localStorage.getItem(RECENTLY_VISITED_ROUTES_KEY)
-    recentRoutesCache = routesRaw ? JSON.parse(routesRaw) : []
-  } catch (error) {
+    const parsed: unknown = routesRaw ? JSON.parse(routesRaw) : []
+    recentRoutesCache = Array.isArray(parsed)
+      ? parsed.filter(
+          (route): route is RecentRoute =>
+            typeof route === 'object' &&
+            route !== null &&
+            typeof (route as { path?: unknown }).path === 'string'
+        )
+      : []
+  } catch {
     recentRoutesCache = []
   }
 
@@ -144,8 +164,8 @@ async function setupApp() {
       // 添加新路由到列表开头
       const newRoute = {
         path: to.path,
-        name: to.name,
-        title: to.meta.title,
+        name: String(to.name),
+        title: String(to.meta.title),
         i18nKey: to.meta.i18nKey,
         icon: to.meta.icon,
         query: to.query // 保存 query 参数
@@ -160,7 +180,9 @@ async function setupApp() {
 
       // 使用防抖保存，减少 localStorage 写入频率
       debouncedSaveRoutes(recentRoutes)
-    } catch (error) {}
+    } catch {
+      return
+    }
   })
 
   app.config.globalProperties.getPlatform = () => {

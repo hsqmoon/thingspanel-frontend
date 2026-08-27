@@ -4,7 +4,6 @@
 
 import type {
   GridLayoutPlusItem,
-  GridLayoutPlusConfig,
   LayoutOperationResult,
   ResponsiveLayout,
   PerformanceConfig
@@ -304,7 +303,7 @@ export function searchLayout(
 /**
  * 布局统计信息
  */
-export function getLayoutStats(layout: GridLayoutPlusItem[], colNum: number = 12) {
+export function getLayoutStats(layout: GridLayoutPlusItem[], _colNum: number = 12) {
   const bounds = getLayoutBounds(layout)
   const totalCells = bounds.width * bounds.height
   const usedCells = layout.reduce((sum, item) => sum + item.w * item.h, 0)
@@ -401,9 +400,12 @@ export function optimizeLayoutPerformance(
 /**
  * 防抖函数
  */
-export function debounce<T extends (...args: any[]) => any>(func: T, delay: number): (...args: Parameters<T>) => void {
-  let timeoutId: NodeJS.Timeout
-  return (...args: Parameters<T>) => {
+export function debounce<TThis, TArgs extends unknown[]>(
+  func: (this: TThis, ...args: TArgs) => unknown,
+  delay: number
+): (this: TThis, ...args: TArgs) => void {
+  let timeoutId: ReturnType<typeof setTimeout>
+  return function (this: TThis, ...args: TArgs) {
     clearTimeout(timeoutId)
     timeoutId = setTimeout(() => func.apply(this, args), delay)
   }
@@ -412,9 +414,12 @@ export function debounce<T extends (...args: any[]) => any>(func: T, delay: numb
 /**
  * 节流函数
  */
-export function throttle<T extends (...args: any[]) => any>(func: T, delay: number): (...args: Parameters<T>) => void {
+export function throttle<TThis, TArgs extends unknown[]>(
+  func: (this: TThis, ...args: TArgs) => unknown,
+  delay: number
+): (this: TThis, ...args: TArgs) => void {
   let lastCall = 0
-  return (...args: Parameters<T>) => {
+  return function (this: TThis, ...args: TArgs) {
     const now = Date.now()
     if (now - lastCall >= delay) {
       lastCall = now
@@ -471,7 +476,7 @@ export function importLayout(data: string, format: 'json' | 'csv' = 'json'): Gri
       default:
         return JSON.parse(data)
     }
-  } catch (error) {
+  } catch {
     return []
   }
 }

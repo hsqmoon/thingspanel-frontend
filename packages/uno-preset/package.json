@@ -6,7 +6,13 @@
   },
   "typesVersions": {
     "*": {
-      "*": ["./src/*"]
+      "*": [
+        "./src/*"
+      ]
     }
+  },
+  "peerDependencies": {
+    "@unocss/core": "66.8.1",
+    "@unocss/preset-uno": "66.8.1"
   }
 }

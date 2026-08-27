@@ -102,7 +102,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { NButton, NSpace, NCard, NStatistic, NIcon, NUpload, useMessage } from 'naive-ui'
 import { Menu } from '@vicons/ionicons5'
 import {
@@ -165,7 +165,6 @@ const {
   canRedo,
   hasSelectedItems,
   addItem,
-  removeItem,
   clearLayout,
   selectAllItems,
   clearSelection,
@@ -180,7 +179,7 @@ const {
   config: gridConfig,
   enableHistory: true,
   autoSave: true,
-  onSave: layout => {}
+  onSave: _layout => {}
 })
 
 // 组件状态
@@ -202,7 +201,7 @@ const addRandomItem = () => {
   if (result.success) {
     message.success('项目添加成功')
   } else {
-    message.error(result.message)
+    message.error(result.message ?? '项目添加失败')
   }
 }
 
@@ -234,7 +233,7 @@ const selectAll = () => {
 const deleteSelected = () => {
   const result = deleteSelectedItems()
   if (result.success) {
-    message.success(result.message)
+    message.success(result.message ?? '所选项目已删除')
   }
 }
 
@@ -262,9 +261,9 @@ const importLayout = (options: any) => {
       if (result.success) {
         message.success('布局导入成功')
       } else {
-        message.error(result.message)
+        message.error(result.message ?? '布局导入失败')
       }
-    } catch (error) {
+    } catch {
       message.error('布局导入失败')
     }
   }
@@ -274,7 +273,7 @@ const importLayout = (options: any) => {
 }
 
 // 事件处理
-const handleLayoutChange = (newLayout: GridLayoutPlusItem[]) => {}
+const handleLayoutChange = (_newLayout: GridLayoutPlusItem[]) => {}
 
 const handleItemAdd = (item: GridLayoutPlusItem) => {
   message.success(`添加了项目: ${item.title || item.i}`)
@@ -288,9 +287,9 @@ const handleItemEdit = (item: GridLayoutPlusItem) => {
   message.info(`编辑项目: ${item.title || item.i}`)
 }
 
-const handleItemMove = (itemId: string, x: number, y: number) => {}
+const handleItemMove = (_itemId: string, _x: number, _y: number) => {}
 
-const handleItemResize = (itemId: string, w: number, h: number) => {}
+const handleItemResize = (_itemId: string, _w: number, _h: number) => {}
 
 const handleBreakpointChange = (breakpoint: string) => {
   message.info(`断点切换到: ${breakpoint}`)

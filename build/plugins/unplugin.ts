@@ -6,7 +6,7 @@ import IconsResolver from 'unplugin-icons/resolver'
 import Components from 'unplugin-vue-components/vite'
 import { AntDesignVueResolver, NaiveUiResolver } from 'unplugin-vue-components/resolvers'
 import { FileSystemIconLoader } from 'unplugin-icons/loaders'
-import { createSvgIconsPlugin } from 'vite-plugin-svg-icons'
+import { createSvgSpritePlugin } from './svg-sprite'
 
 export function setupUnplugin(viteEnv: Env.ImportMeta) {
   const { VITE_ICON_PREFIX, VITE_ICON_LOCAL_PREFIX } = viteEnv
@@ -29,6 +29,7 @@ export function setupUnplugin(viteEnv: Env.ImportMeta) {
     }),
     Components({
       dts: 'src/typings/components.d.ts',
+      dtsTsx: false,
       types: [{ from: 'vue-router', names: ['RouterLink', 'RouterView'] }],
       resolvers: [
         AntDesignVueResolver({
@@ -38,12 +39,7 @@ export function setupUnplugin(viteEnv: Env.ImportMeta) {
         IconsResolver({ customCollections: [collectionName], componentPrefix: VITE_ICON_PREFIX })
       ]
     }),
-    createSvgIconsPlugin({
-      iconDirs: [localIconPath],
-      symbolId: `${VITE_ICON_LOCAL_PREFIX}-[dir]-[name]`,
-      inject: 'body-last',
-      customDomId: '__SVG_ICON_LOCAL__'
-    })
+    createSvgSpritePlugin(localIconPath, VITE_ICON_LOCAL_PREFIX, '__SVG_ICON_LOCAL__')
   ]
 
   return plugins

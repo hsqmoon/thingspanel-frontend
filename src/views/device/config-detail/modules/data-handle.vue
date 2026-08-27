@@ -20,7 +20,7 @@ import { useI18n } from 'vue-i18n'
 const { t } = useI18n()
 // const message = useMessage();
 const dialog = useDialog()
-const MonacoEditor = defineAsyncComponent(() => import('monaco-editor-vue3'))
+const LuaEditor = defineAsyncComponent(() => import('./components/lua-editor.vue'))
 
 interface Props {
   configInfo?: object | any
@@ -121,13 +121,10 @@ const editorOptions = ref({
   renderWhitespace: 'selection',
   renderControlCharacters: false,
   fontLigatures: true,
-  suggestOnTriggerCharacters: true,
+  suggestOnTriggerCharacters: false,
   acceptSuggestionOnEnter: 'on',
   tabCompletion: 'on',
-  wordBasedSuggestions: true,
-  parameterHints: {
-    enabled: true
-  },
+  wordBasedSuggestions: 'currentDocument',
   quickSuggestions: {
     other: true,
     comments: false,
@@ -139,21 +136,10 @@ const editorOptions = ref({
   guides: {
     bracketPairs: true,
     indentation: true
-  },
-  formatOnPaste: true,
-  formatOnType: true
+  }
 })
 
-// 编辑器实例引用
-const editorRef = ref(null)
-
 // 编辑器工具栏功能
-const formatCode = () => {
-  if (editorRef.value) {
-    editorRef.value.getAction('editor.action.formatDocument').run()
-  }
-}
-
 const toggleMinimap = () => {
   editorOptions.value.minimap.enabled = !editorOptions.value.minimap.enabled
 }
@@ -241,6 +227,20 @@ interface DataScriptItem {
   enable_flag: string
   script_type: string
 }
+
+interface DataScriptQuizResponse {
+  code: number | string
+  message?: string
+  data: unknown
+}
+
+const isDataScriptQuizResponse = (value: unknown): value is DataScriptQuizResponse => {
+  if (!value || typeof value !== 'object') return false
+
+  const response = value as Record<string, unknown>
+  return (typeof response.code === 'number' || typeof response.code === 'string') && 'data' in response
+}
+
 const dataScriptList = ref<Array<DataScriptItem>>([])
 const dataScriptTotal = ref(0)
 const queryDataScriptList = async () => {
@@ -309,31 +309,21 @@ const doQuiz = async () => {
 
   try {
     const response = await dataScriptQuiz(configForm.value)
-    // 添加详细调试信息
-    // 检查是否是错误响应结构 {data: null, error: {...}}
-    if (response.error && response.data === null) {
-      // if (process.env.NODE_ENV === 'development') {
-      // }
-      // 处理网络错误或后端错误
+    if (response.error) {
       const errorInfo = response.error
       const errorMessage = errorInfo.message || t('page.dataForward.requestFailed')
       configForm.value.resolt_analog_input = `${t('page.dataForward.debugFailed')}\n${t('page.dataForward.errorType')}: ${errorInfo.name || 'Unknown'}\n${t('page.dataForward.errorCode')}: ${errorInfo.code || 'N/A'}\n${t('page.dataForward.errorMessage')}: ${errorMessage}`
       return
     }
 
-    // 检查响应结构，可能是嵌套的
-    let actualResponse = response
-    // 如果response.data存在且包含code属性，说明真正的响应在response.data中
-    if (response.data && typeof response.data === 'object' && 'code' in response.data) {
-      actualResponse = response.data
-      // if (process.env.NODE_ENV === 'development') {
-      // }
+    // needMessage 会保留后端的 { code, message, data } 响应信封。
+    if (!isDataScriptQuizResponse(response.data)) {
+      configForm.value.resolt_analog_input = `${t('page.dataForward.debugFailed')}\nmessage: ${t('page.dataForward.noErrorMessage')}`
+      return
     }
-    // if (process.env.NODE_ENV === 'development') {
-    // }
-    // 根据返回的code值决定显示内容
-    // 使用宽松比较，因为code可能是字符串"200"
-    if (actualResponse.code == 200 || actualResponse.code === '200') {
+
+    const actualResponse = response.data
+    if (actualResponse.code === 200 || actualResponse.code === '200') {
       // code为200时显示data的值
       if (typeof actualResponse.data === 'string') {
         // 如果data是字符串，直接显示（包括"null"字符串）
@@ -355,8 +345,9 @@ const doQuiz = async () => {
   } catch (error) {
     // 处理请求异常
     console.error('调试请求异常:', error)
+    const errorMessage = error instanceof Error ? error.message : t('page.dataForward.unknownError')
     configForm.value.resolt_analog_input =
-      t('page.dataForward.debugRequestFailed') + ': ' + (error.message || t('page.dataForward.unknownError'))
+      t('page.dataForward.debugRequestFailed') + ': ' + errorMessage
   }
 }
 watch(
@@ -493,19 +484,6 @@ watch(
           <!-- 编辑器工具栏 -->
           <div class="editor-toolbar">
             <div class="toolbar-left">
-              <NButton size="small" tertiary @click="formatCode">
-                <template #icon>
-                  <n-icon>
-                    <svg viewBox="0 0 24 24">
-                      <path
-                        fill="currentColor"
-                        d="M9.5 15.5L4.5 10.5L9.5 5.5L8.09 4.09L1.5 10.68L8.09 17.27L9.5 15.5ZM14.5 8.5L19.5 13.5L14.5 18.5L15.91 19.91L22.5 13.32L15.91 6.73L14.5 8.5Z"
-                      />
-                    </svg>
-                  </n-icon>
-                </template>
-                格式化
-              </NButton>
               <NButton size="small" tertiary @click="toggleWordWrap">
                 <template #icon>
                   <n-icon>
@@ -553,8 +531,7 @@ watch(
           </div>
           <!-- Monaco Editor -->
           <div class="editor-wrapper">
-            <MonacoEditor
-              ref="editorRef"
+            <LuaEditor
               v-model:value="configForm.content"
               :options="editorOptions"
               height="300"

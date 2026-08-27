@@ -1,6 +1,6 @@
 import type { ElegantRoute } from '@elegant-router/types'
 import type { ElegantConstRoute } from '@elegant-router/vue'
-import { layouts, views } from '@/router/elegant/imports'
+import { generatedRoutes } from '@/router/elegant/routes'
 import { getRouteName } from '@/router/elegant/transform'
 
 /**
@@ -30,6 +30,30 @@ export function adapterOfFetchRouterList(data: Api.Route.Data): Api.Route.MenuRo
 const LAYOUT_PREFIX = 'layout.'
 const VIEW_PREFIX = 'view.'
 const FIRST_LEVEL_ROUTE_COMPONENT_SPLIT = '$'
+
+const knownLayouts = new Set<string>()
+const knownViews = new Set<string>()
+
+interface RouteComponentNode {
+  component?: unknown
+  children?: RouteComponentNode[]
+}
+
+function collectKnownRouteComponents(routes: readonly RouteComponentNode[]) {
+  routes.forEach(route => {
+    const component = String(route.component || '')
+    component.split(FIRST_LEVEL_ROUTE_COMPONENT_SPLIT).forEach(part => {
+      if (part.startsWith(LAYOUT_PREFIX)) knownLayouts.add(part.slice(LAYOUT_PREFIX.length))
+      if (part.startsWith(VIEW_PREFIX)) knownViews.add(part.slice(VIEW_PREFIX.length))
+    })
+
+    if (route.children?.length) {
+      collectKnownRouteComponents(route.children)
+    }
+  })
+}
+
+collectKnownRouteComponents(generatedRoutes as unknown as RouteComponentNode[])
 
 /** 浏览器显示路径，与 build/plugins/router.ts 的 routePathTransformer 保持一致 */
 const ROUTE_DISPLAY_PATH_MAP: Record<string, string> = {
@@ -77,13 +101,13 @@ function normalizePath(path?: string | null) {
 function isKnownLayout(layoutName?: string | null) {
   if (!layoutName) return false
 
-  return Object.prototype.hasOwnProperty.call(layouts, layoutName)
+  return knownLayouts.has(layoutName)
 }
 
 function isKnownView(viewName?: string | null) {
   if (!viewName) return false
 
-  return Object.prototype.hasOwnProperty.call(views, viewName)
+  return knownViews.has(viewName)
 }
 
 function resolveViewName(rawViewName?: string | null) {
@@ -220,7 +244,7 @@ function replaceKeys(data: ElegantConstRoute[]): ElegantRoute[] {
     const elementCode = item.element_code.trim().replace(/\s/g, '_')
     const path = ROUTE_DISPLAY_PATH_MAP[elementCode] ?? normalizePath(item.param1)
 
-    const route: Partial<ElegantRoute> = {
+    const route = {
       name: elementCode,
       path,
       ...(component && { component }),

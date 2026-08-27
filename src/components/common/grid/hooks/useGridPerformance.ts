@@ -3,7 +3,7 @@
  * 提供性能指标监控和优化功能
  */
 
-import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import type { GridLayoutPlusItem, PerformanceConfig } from '../gridLayoutPlusTypes'
 import { debounce, throttle } from '../gridLayoutPlusUtils'
 
@@ -42,6 +42,8 @@ export function useGridPerformance(options: UseGridPerformanceOptions = {}) {
 
   // 性能配置
   const config = ref<PerformanceConfig>({
+    enableVirtualization: false,
+    virtualizationThreshold: 100,
     debounceDelay: 100,
     throttleDelay: 16,
     enableLazyLoading: false,

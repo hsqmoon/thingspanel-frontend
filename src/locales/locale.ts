@@ -35,7 +35,6 @@ function getLangMessages(modules: Record<string, any>, lang: 'zh-cn' | 'en-us') 
         'test',
         'theme',
         'time',
-        'visual-editor',
         'widget-library',
         'market'
       ]
@@ -52,9 +51,9 @@ function getLangMessages(modules: Record<string, any>, lang: 'zh-cn' | 'en-us') 
   return messages
 }
 
-const locales: Record<I18n.LangType, I18n.Schema> = {
-  'zh-CN': getLangMessages(modules, 'zh-cn') as unknown as I18n.Schema,
-  'en-US': getLangMessages(modules, 'en-us') as unknown as I18n.Schema
+const locales: Record<App.I18n.LangType, App.I18n.Schema> = {
+  'zh-CN': getLangMessages(modules, 'zh-cn') as unknown as App.I18n.Schema,
+  'en-US': getLangMessages(modules, 'en-us') as unknown as App.I18n.Schema
 }
 
 export default locales

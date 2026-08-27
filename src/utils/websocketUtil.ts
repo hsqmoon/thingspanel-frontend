@@ -29,7 +29,7 @@ export interface ICardRender {
 export function useWebsocketUtil(cr: Ref<ICardRender | undefined>, token: string | string[]) {
   const socketMap = new Map<string, WebSocket>() // from device id to socket
 
-  /* eslint-disable max-params */
+
   const setComponentsValue = (
     layout: Ref<ICardView[] | undefined>,
     deviceId: string | undefined,
@@ -58,7 +58,7 @@ export function useWebsocketUtil(cr: Ref<ICardRender | undefined>, token: string
       cardComponent?.updateData && cardComponent.updateData(deviceId, metricsId, payload)
     }
   }
-  /* eslint-enable max-params */
+
 
   const updateComponentsData = async (layout: Ref<ICardView[] | undefined>) => {
     if (!layout || !layout.value) {
@@ -87,8 +87,6 @@ export function useWebsocketUtil(cr: Ref<ICardRender | undefined>, token: string
 
     for (const [deviceMetricsId, socket] of socketMap.entries()) {
       if (!uniqueDeviceMetricsIds.includes(deviceMetricsId)) {
-        if (process.env.NODE_ENV === 'development') {
-        }
         socket.close()
         socketMap.delete(deviceMetricsId)
       }
@@ -102,9 +100,7 @@ export function useWebsocketUtil(cr: Ref<ICardRender | undefined>, token: string
       }
 
       if (!socketMap.has(deviceMetricsId)) {
-        if (process.env.NODE_ENV === 'development') {
-        }
-        const { ws, send, close, status } = useWebSocket(wsUrl, {
+        const { send, close, status } = useWebSocket(wsUrl, {
           autoReconnect: {
             retries: 3,
             delay: 1000,
@@ -132,8 +128,6 @@ export function useWebsocketUtil(cr: Ref<ICardRender | undefined>, token: string
             }
           },
           onConnected(wsInstance: WebSocket) {
-            if (process.env.NODE_ENV === 'development') {
-            }
             if (!deviceId || !metricsId) {
               console.error('onConnected: deviceId or metricsId is undefined before send for', deviceMetricsId)
               close() // Close the connection if vital info is missing
@@ -161,8 +155,6 @@ export function useWebsocketUtil(cr: Ref<ICardRender | undefined>, token: string
   }
 
   const closeAllSockets = () => {
-    if (process.env.NODE_ENV === 'development') {
-    }
     socketMap.forEach((socket, key) => {
       socket.close()
       socketMap.delete(key)

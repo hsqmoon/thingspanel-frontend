@@ -147,7 +147,7 @@ const fetchData = async () => {
       total.value = data.total ?? 0
       pagination.itemCount = total.value
     }
-  } catch (error) {
+  } catch {
   } finally {
     endLoading()
   }

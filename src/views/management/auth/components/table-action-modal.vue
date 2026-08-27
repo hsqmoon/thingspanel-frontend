@@ -73,14 +73,12 @@ async function getTableData() {
 
 getTableData()
 
-/* eslint-disable logical-assignment-operators */
 // const parentOptions = computed(() => {
 //   return props.tableList.map((item: CustomRoute.Route) => {
 //     return JSON.parse(JSON.stringify(item));
 //   });
 // });
 
-/* eslint-disable logical-assignment-operators */
 const formRef = ref<HTMLElement & FormInst>()
 
 type FormModel = Pick<

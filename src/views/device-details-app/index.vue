@@ -13,6 +13,13 @@ import { useRealtimePush } from '@/hooks/thingsvis/useRealtimePush'
 import { useAlarmPush } from '@/hooks/thingsvis/useAlarmPush'
 import { bootstrapAppEmbedSession } from '@/utils/app-embed-auth'
 
+const getDeviceModelList = (payload: unknown): unknown[] => {
+  if (!payload || typeof payload !== 'object') return []
+
+  const list = (payload as { list?: unknown }).list
+  return Array.isArray(list) ? list : []
+}
+
 const route = useRoute()
 const router = useRouter()
 const { d_id, token, lang } = route.query
@@ -75,7 +82,7 @@ const fetchDeviceData = async () => {
   if (!showAppChart.value) return
 
   try {
-    const hasAttributes = platformFields.value.some(f => f.dataType === 'attribute')
+    const hasAttributes = platformFields.value.some((f) => f.dataType === 'attribute')
 
     const [telemetryRes, attributeRes] = await Promise.all([
       telemetryDataCurrent(d_id as string),
@@ -98,7 +105,7 @@ const fetchDeviceData = async () => {
     if (Array.isArray(attributeList)) attributeList.forEach(processItem)
 
     const dataMap: Record<string, any> = {}
-    platformFields.value.forEach(field => {
+    platformFields.value.forEach((field) => {
       const val = kvMap[field.id] ?? kvMap[field.name]
       if (val !== undefined) {
         dataMap[field.id] = val
@@ -153,29 +160,10 @@ const getDeviceDetail = async () => {
     commandsApi({ page: 1, page_size: 1000, device_template_id: templateId })
   ])
 
-  const telemetryList = Array.isArray(telemetryRes?.data?.list)
-    ? telemetryRes.data.list
-    : Array.isArray(telemetryRes?.data)
-      ? telemetryRes.data
-      : []
-
-  const attributesList = Array.isArray(attributesRes?.data?.list)
-    ? attributesRes.data.list
-    : Array.isArray(attributesRes?.data)
-      ? attributesRes.data
-      : []
-
-  const eventsList = Array.isArray(eventsRes?.data?.list)
-    ? eventsRes.data.list
-    : Array.isArray(eventsRes?.data)
-      ? eventsRes.data
-      : []
-
-  const commandsList = Array.isArray(commandsRes?.data?.list)
-    ? commandsRes.data.list
-    : Array.isArray(commandsRes?.data)
-      ? commandsRes.data
-      : []
+  const telemetryList = getDeviceModelList(telemetryRes.data)
+  const attributesList = getDeviceModelList(attributesRes.data)
+  const eventsList = getDeviceModelList(eventsRes.data)
+  const commandsList = getDeviceModelList(commandsRes.data)
 
   const platformSource = {
     telemetry: telemetryList,
@@ -253,7 +241,7 @@ onBeforeUnmount(() => {
   <div class="device-details-app bg-gray-50">
     <div class="mb-6 flex items-center justify-between">
       <h1 class="text-2xl text-gray-900 font-semibold">{{ deviceData?.name || '--' }}</h1>
-      <div class="flex items-center" style="min-width:60px">
+      <div class="flex items-center" style="min-width: 60px">
         <SvgIcon
           local-icon="CellTowerRound"
           style="margin-right: 5px"

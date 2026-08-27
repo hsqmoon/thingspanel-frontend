@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref, watch, computed } from 'vue'
+import { onMounted, onUnmounted, ref, watch, computed } from 'vue'
 import { debounce } from 'lodash'
 import { router } from '@/router'
-import { useWebsocketUtil } from '@/utils/websocketUtil'
+import { useWebsocketUtil, type ICardRender } from '@/utils/websocketUtil'
 import { fetchHomeData } from '@/service/api'
 import { getThingsVisHomeDashboard, type ThingsVisHomeDashboard } from '@/service/api/thingsvis'
-import type { ICardRender, ICardView } from '@/components/panel/card'
+import type { ICardView } from '@/components/panel/card'
 import { localStg } from '@/utils/storage'
 import ThingsVisAppFrame from '@/components/thingsvis/ThingsVisAppFrame.vue'
 import { useAuthStore } from '@/store/modules/auth'
@@ -30,7 +30,9 @@ const useThingsVis = ref(false)
 const isThingsVisLoading = ref(false)
 const isHomeResolving = computed(() => !layoutFetched.value || isThingsVisLoading.value)
 
-function isCompleteThingsVisDashboard(dashboard?: ThingsVisHomeDashboard | null): boolean {
+function isCompleteThingsVisDashboard(
+  dashboard?: ThingsVisHomeDashboard | null
+): dashboard is ThingsVisHomeDashboard {
   if (!dashboard || !dashboard.canvasConfig || typeof dashboard.canvasConfig !== 'object') return false
   if (!Array.isArray(dashboard.nodes)) return false
   if (!Array.isArray(dashboard.dataSources)) return false
@@ -254,11 +256,6 @@ function updateConfigData(configJson: ICardView[]) {
   }
 }
 
-const breakpointChanged = (_newBreakpoint: any, newLayout: any) => {
-  setTimeout(() => {
-    layout.value = newLayout
-  }, 300)
-}
 </script>
 
 <template>

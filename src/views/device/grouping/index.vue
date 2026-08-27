@@ -45,7 +45,7 @@ const debouncedSearch = debounce(async () => {
   data.value = res.data.list
   totalPages.value = Math.ceil(res.data.total / 10)
   loading.value = false
-  // eslint-disable-next-line require-atomic-updates
+
   isRequestPending.value = false
 }, 500) // 设置延迟为 500 毫秒
 

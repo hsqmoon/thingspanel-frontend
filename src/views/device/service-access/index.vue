@@ -27,7 +27,7 @@ const getData = async () => {
   })
   if (!res.error) {
     deviceTemplateList.value = res.data.list
-    // eslint-disable-next-line require-atomic-updates
+
     pagination.pageCount = Math.ceil(res.data.total / 12)
   }
   loading.value = false

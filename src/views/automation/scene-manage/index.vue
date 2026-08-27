@@ -46,7 +46,6 @@ const sceneActivation = async (item: any) => {
   // });
   const res = await sceneActive(item.id)
   if (!res.error) {
-    // eslint-disable-next-line @typescript-eslint/no-use-before-define
     await getData()
   }
 }
@@ -192,7 +191,6 @@ const execution_result_options = ref([
 
 const queryLog = () => {
   logQuery.value.page = 1
-  // eslint-disable-next-line @typescript-eslint/no-use-before-define
   getLogList()
 }
 

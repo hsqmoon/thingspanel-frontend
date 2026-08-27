@@ -9,9 +9,12 @@ export default defineConfig({
     }
   },
   test: {
-    environment: 'jsdom',
+    environment: 'happy-dom',
     include: ['src/**/*.test.ts'],
     clearMocks: true,
-    restoreMocks: true
+    restoreMocks: true,
+    onConsoleLog(log, type) {
+      if (type === 'stderr') throw new Error(`Unexpected console warning or error: ${log}`)
+    }
   }
 })

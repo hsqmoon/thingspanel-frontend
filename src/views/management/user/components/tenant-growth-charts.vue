@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import type { ComponentPublicInstance } from 'vue'
+import type { TopLevelFormatterParams } from 'echarts/types/dist/shared'
 import dayjs from 'dayjs'
 import { $t } from '@/locales'
 import { useAppStore } from '@/store/modules/app'
-import { useEcharts } from '@/hooks/chart/use-echarts'
+import { type ECOption, useEcharts } from '@/hooks/chart/use-echarts'
 
 defineOptions({ name: 'TenantGrowthCharts' })
 
@@ -21,13 +23,17 @@ function dateLabels(data: Api.UserManagement.TenantDailyGrowth[]) {
   return data.map(item => dayjs(item.date).format('MM-DD'))
 }
 
-function lineOptions() {
+function tooltipDataIndex(params: TopLevelFormatterParams) {
+  const first = Array.isArray(params) ? params[0] : params
+  return typeof first?.dataIndex === 'number' ? first.dataIndex : 0
+}
+
+function lineOptions(): ECOption {
   return {
     tooltip: {
-      trigger: 'axis' as const,
-      formatter: (params: any[]) => {
-        const index = params?.[0]?.dataIndex ?? 0
-        const item = props.trend[index]
+      trigger: 'axis',
+      formatter: params => {
+        const item = props.trend[tooltipDataIndex(params)]
         if (!item) return ''
         return [
           item.date,
@@ -59,15 +65,14 @@ function lineOptions() {
   }
 }
 
-function barOptions() {
+function barOptions(): ECOption {
   const data = barTrend.value
   return {
     tooltip: {
-      trigger: 'axis' as const,
-      axisPointer: { type: 'shadow' as const },
-      formatter: (params: any[]) => {
-        const index = params?.[0]?.dataIndex ?? 0
-        const item = data[index]
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      formatter: params => {
+        const item = data[tooltipDataIndex(params)]
         if (!item) return ''
         return `${item.date}<br/>${$t('page.manage.user.statistics.dailyNew')}: ${item.new_total}`
       }
@@ -99,6 +104,14 @@ function barOptions() {
 const { domRef: lineRef, updateOptions: updateLineOptions } = useEcharts(lineOptions)
 const { domRef: barRef, updateOptions: updateBarOptions } = useEcharts(barOptions)
 
+function setLineRef(element: Element | ComponentPublicInstance | null) {
+  lineRef.value = element instanceof HTMLElement ? element : null
+}
+
+function setBarRef(element: Element | ComponentPublicInstance | null) {
+  barRef.value = element instanceof HTMLElement ? element : null
+}
+
 watch(
   [() => props.trend, () => appStore.locale, barRange],
   async () => {
@@ -116,7 +129,7 @@ watch(
           <span class="text-14px font-600">{{ $t('page.manage.user.statistics.cumulativeTitle') }}</span>
         </template>
         <NSpin :show="loading">
-          <div ref="lineRef" class="h-300px w-full"></div>
+          <div :ref="setLineRef" class="h-300px w-full"></div>
         </NSpin>
       </NCard>
     </NGridItem>
@@ -133,7 +146,7 @@ watch(
           </NRadioGroup>
         </template>
         <NSpin :show="loading">
-          <div ref="barRef" class="h-300px w-full"></div>
+          <div :ref="setBarRef" class="h-300px w-full"></div>
         </NSpin>
       </NCard>
     </NGridItem>

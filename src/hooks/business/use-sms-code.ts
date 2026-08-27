@@ -58,8 +58,6 @@ export default function useSmsCode() {
     startLoading()
     try {
       const { error, data } = await fetchSmsCode(phone)
-      if (process.env.NODE_ENV === 'development') {
-      }
       if (!error && data) {
         start() // 只有在发送成功时才启动倒计时
         window.$message?.success($t('page.login.common.codeSent'))
@@ -67,7 +65,7 @@ export default function useSmsCode() {
         // 接口返回错误时不显示成功提示
         window.$message?.error($t('page.login.common.codeError'))
       }
-    } catch (err) {
+    } catch {
       // 接口调用失败时不显示成功提示
       window.$message?.error($t('page.login.common.codeError'))
     } finally {
@@ -108,7 +106,7 @@ export default function useSmsCode() {
         // Fallback for unexpected scenarios (e.g., no error, no data)
         window.$message?.error($t('page.login.common.codeError'))
       }
-    } catch (err) {
+    } catch {
       // Catch exceptions during the API call itself (e.g., network error)
       window.$message?.error($t('page.login.common.codeError'))
     } finally {

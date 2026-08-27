@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { computed, h, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { NTooltip } from 'naive-ui'
 import type { MentionOption, MenuProps } from 'naive-ui'
 import { SimpleScrollbar } from '@sa/materials'
 import type { RouteKey } from '@elegant-router/types'
@@ -9,7 +8,6 @@ import { useAppStore } from '@/store/modules/app'
 import { useThemeStore } from '@/store/modules/theme'
 import { useRouteStore } from '@/store/modules/route'
 import { useRouterPush } from '@/hooks/common/router'
-import { $t } from '@/locales'
 
 defineOptions({
   name: 'BaseMenu'

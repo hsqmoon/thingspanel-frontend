@@ -15,7 +15,7 @@ interface Emits {
 
 const emit = defineEmits<Emits>()
 
-const { formRef, validate, restoreValidation } = useNaiveForm()
+const { validate, restoreValidation } = useNaiveForm()
 
 const model = defineModel<Api.SystemManage.UserSearchParams>('model', { required: true })
 
@@ -43,7 +43,7 @@ async function search() {
 
 <template>
   <NCard :title="$t('common.search')" :bordered="false" size="small" class="card-wrapper">
-    <NForm ref="formRef" :model="model" :rules="rules" label-placement="left">
+    <NForm :model="model" :rules="rules" label-placement="left">
       <NGrid responsive="screen" item-responsive>
         <NFormItemGi span="24 s:12 m:6" :label="$t('page.manage.user.userName')" path="userName" class="pr-24px">
           <NInput v-model:value="model.userName" :placeholder="$t('page.manage.user.form.userName')" />

@@ -96,7 +96,7 @@ const { status, send, close } = useWebSocket(wsUrl, {
     interval: 8000,
     pongTimeout: 3000
   },
-  // eslint-disable-next-line
+
   onMessage(ws: WebSocket, event: MessageEvent) {
     if (event.data && event.data !== 'pong') {
       if (!isJSON(event.data)) return
@@ -269,7 +269,7 @@ const fetchTelemetry = async () => {
     initTelemetryData.value = data[0] || {} // 存储一份模板
     initTelemetryData.value.device_id = props.id
     const dataw = {
-      // eslint-disable-next-line no-constant-binary-expression
+
       device_id: props.id,
       token
     }
@@ -325,15 +325,9 @@ const handleSelect = (key, item) => {
     handleDeleteTable()
   }
 }
-const copy = event => {
-  const input = event.target
-  input.select()
-  document.execCommand('copy')
-  window.$message?.success($t('theme.configOperation.copySuccess'))
-}
 const handlePositiveClick = async () => {
   if (isJSON(formValue.value)) {
-    let res: any = {}
+    let res: any
     if (form.expected) {
       // 新增期望消息
       const expiry = new Date().getTime() + (form.time ? form.time * 60 * 60 * 1000 : 0)

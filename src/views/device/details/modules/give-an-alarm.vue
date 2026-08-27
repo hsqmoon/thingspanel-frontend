@@ -2,7 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { NButton, NCard, NFlex, NInput } from 'naive-ui'
 import { EyeOutline, Refresh, TrashOutline } from '@vicons/ionicons5'
-import moment from 'moment/moment'
+import moment from 'moment'
 import Heart from '@vicons/fa/Heart'
 import HeartBroken from '@vicons/fa/HeartBroken'
 import { Edit } from '@vicons/carbon'
@@ -148,7 +148,7 @@ const handleDelete = async (item: any) => {
           alarmHistory.value.splice(index, 1)
           alarmHistoryTotal.value -= 1
         }
-      } catch (error) {
+      } catch {
         window.$message?.error($t('common.deleteFail'))
       }
     }
@@ -305,7 +305,7 @@ onMounted(() => {
               </thead>
               <tbody>
                 <tr v-for="(device, index) in infoData.alarm_device_list" :key="index">
-                  <td class="min-w-100px">{{ index + 1 }}</td>
+                  <td class="min-w-100px">{{ Number(index) + 1 }}</td>
                   <td>{{ device.id }}</td>
                   <td>{{ device['name'] }}</td>
                 </tr>

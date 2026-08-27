@@ -166,7 +166,7 @@ defineExpose({
 const deviceCountUpdate = v => {
   state.data.dataSource.deviceCount = v
   if (state.data.dataSource.deviceSource.length < v) {
-    // eslint-disable-next-line no-plusplus
+
     for (let i = 0; i <= v - state.data.dataSource.deviceSource.length + 1; i++) {
       state.data.dataSource.deviceSource.push({})
     }
@@ -306,7 +306,7 @@ const isNoAggregate = computed(() => state.data.dataSource.dataAggregateRange ==
                 class="mb-4 flex flex-wrap space-x-2"
               >
                 <NSelect
-                  v-if="i <= deviceCount - 1"
+                  v-if="Number(i) <= deviceCount - 1"
                   v-model:value="item.deviceId"
                   clearable
                   :disabled="props?.deviceWebChartConfig?.length !== 0"
@@ -323,7 +323,7 @@ const isNoAggregate = computed(() => state.data.dataSource.dataAggregateRange ==
                 </NSelect>
 
                 <NSelect
-                  v-if="i <= deviceCount - 1"
+                  v-if="Number(i) <= deviceCount - 1"
                   v-model:value="item.metricsId"
                   clearable
                   filterable
@@ -337,13 +337,13 @@ const isNoAggregate = computed(() => state.data.dataSource.dataAggregateRange ==
                   @update:show="show => updateDropdownShow(show, item)"
                 ></NSelect>
                 <NInput
-                  v-if="i <= deviceCount - 1"
+                  v-if="Number(i) <= deviceCount - 1"
                   v-model:value="item.metricsName"
                   class="metrics-name-input"
                   :placeholder="$t('common.enterName')"
                 />
                 <NSelect
-                  v-if="i <= deviceCount - 1 && state.data.dataSource.isSupportAggregate"
+                  v-if="Number(i) <= deviceCount - 1 && state.data.dataSource.isSupportAggregate"
                   v-model:value="item.aggregate_function"
                   clearable
                   filterable

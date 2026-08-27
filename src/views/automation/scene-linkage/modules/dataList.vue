@@ -20,17 +20,13 @@ const dialog = useDialog()
 const { routerPushByKey } = useRouterPush()
 
 interface Props {
-  // eslint-disable-next-line vue/prop-name-casing,prettier/prettier
   device_id?: string
-  // eslint-disable-next-line vue/prop-name-casing
   device_config_id?: string
   isAlarm?: boolean
-  // eslint-disable-next-line vue/no-unused-properties
   backType?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  // eslint-disable-next-line vue/require-valid-default-prop
   device_id: '',
   device_config_id: '',
   isAlarm: false,
@@ -80,12 +76,9 @@ const dataTotal = ref(0)
 const getData = async () => {
   queryData.value.device_id = props.device_id
   queryData.value.device_config_id = props.device_config_id
-  let res: any = null
-  if (props.isAlarm) {
-    res = await deviceAlarmList(queryData.value)
-  } else {
-    res = await sceneAutomationsGet(queryData.value)
-  }
+  const res = props.isAlarm
+    ? await deviceAlarmList(queryData.value)
+    : await sceneAutomationsGet(queryData.value)
   if (res && !res.error) {
     sceneLinkageList.value = res.data.list || []
     dataTotal.value = res.data.total

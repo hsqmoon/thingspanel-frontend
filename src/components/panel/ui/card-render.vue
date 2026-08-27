@@ -50,9 +50,9 @@ function calcNewCardPos(
   }
 
   // Iterate through the grid to find an available position
-  // eslint-disable-next-line no-plusplus
+
   for (let y = 0; y <= highestY + newCardSize.h; y++) {
-    // eslint-disable-next-line no-plusplus
+
     for (let x = 0; x <= colNum - new_viewToBeAdd_W_colNum; x++) {
       if (isPositionAvailable(x, y)) {
         return { x, y }

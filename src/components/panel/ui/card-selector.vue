@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { computed, onMounted, onUpdated, reactive, ref } from 'vue'
-// eslint-disable-next-line vue/prefer-import-from-vue
+
 import type { UnwrapRefSimple } from '@vue/reactivity'
 import type { ICardData, ICardDefine } from '@/components/panel/card'
 import { PanelCards } from '@/components/panel'
@@ -134,8 +134,6 @@ const handleTabUpdate = (value: string) => {
   webChartConfig.value = []
   deviceSelectId.value = null
   tabValue.value = value
-  if (process.env.NODE_ENV === 'development') {
-  }
 }
 
 const getDeviceOptions = async () => {
@@ -169,15 +167,10 @@ onMounted(() => {
   const initialDeviceId = props?.data?.dataSource?.deviceSource?.[0]?.deviceId
   if (initialDeviceId) {
     deviceSelectId.value = initialDeviceId
-    if (process.env.NODE_ENV === 'development') {
-    }
     collectData(
       deviceSelectId.value,
       deviceOptions.value?.find(item => item.device_id === deviceSelectId.value)
     )
-  } else {
-    if (process.env.NODE_ENV === 'development') {
-    }
   }
   if (!deviceSelectId.value) {
     availableCardIds.value = []

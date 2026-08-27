@@ -149,7 +149,7 @@ watch(
   () => appStore.locale,
   () => {
     let temporary: any
-    // eslint-disable-next-line prefer-const
+
     temporary = tabValue.value
     tabValue.value = ''
     setTimeout(() => {

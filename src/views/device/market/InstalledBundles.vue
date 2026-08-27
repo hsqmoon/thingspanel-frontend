@@ -15,18 +15,14 @@ import {
   NButton,
   NTag,
   NSpace,
-  NCard,
   NEmpty,
-  NPagination,
   NIcon,
-  NGrid,
-  NGi,
   NTooltip,
   NDropdown
 } from 'naive-ui'
+import type { DataTableColumns } from 'naive-ui'
 import { h } from 'vue'
 import {
-  ArrowForwardIos,
   RefreshOutline,
   OpenOutline,
   LinkOutline,
@@ -34,7 +30,7 @@ import {
   EllipsisHorizontal
 } from '@vicons/ionicons5'
 import { $t } from '@/locales'
-import { getInstalledBundles, type InstalledBundle, type MarketApiError } from '@/service/api/market-bundle'
+import { getInstalledBundles, type InstalledBundle } from '@/service/api/market-bundle'
 import MarketBrowse from './MarketBrowse.vue'
 
 // ========== Router ==========
@@ -64,7 +60,7 @@ const activeTab = ref<'installed' | 'browse'>('installed')
 // ========== Computed ==========
 
 /** 表格列定义 */
-const columns = computed(() => [
+const columns = computed<DataTableColumns<InstalledBundle>>(() => [
   {
     title: $t('market.install.bundleName'),
     key: 'bundleName',

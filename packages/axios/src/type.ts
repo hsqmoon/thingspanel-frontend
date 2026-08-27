@@ -68,6 +68,9 @@ export type MappedType<R extends ResponseType, JsonType = any> = R extends keyof
 
 export type CustomAxiosRequestConfig<R extends ResponseType = 'json'> = Omit<AxiosRequestConfig, 'responseType'> & {
   responseType?: R
+  needMessage?: boolean
+  silentError?: boolean
+  skipTenantScope?: boolean
 }
 
 /** The requestTs instance */

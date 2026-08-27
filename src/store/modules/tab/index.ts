@@ -1,14 +1,10 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { defineStore } from 'pinia'
-import { useEventListener } from '@vueuse/core'
 import type { RouteKey } from '@elegant-router/types'
 import { SetupStoreId } from '@/enum'
 import { useRouterPush } from '@/hooks/common/router'
-import { localStg } from '@/utils/storage'
-import { useThemeStore } from '../theme'
 import {
-  filterTabsByAllRoutes,
   filterTabsById,
   filterTabsByIds,
   findTabByRouteName,
@@ -23,7 +19,6 @@ import {
 
 export const useTabStore = defineStore(SetupStoreId.Tab, () => {
   const router = useRouter()
-  const themeStore = useThemeStore()
   const { routerPush } = useRouterPush(false)
 
   /** Tabs */
@@ -58,14 +53,6 @@ export const useTabStore = defineStore(SetupStoreId.Tab, () => {
    * @param currentRoute Current route
    */
   function initTabStore(currentRoute: App.Global.TabRoute) {
-    // 🧹 禁用localStorage缓存，直接初始化
-    // const storageTabs = localStg.get('globalTabs')
-
-    // if (themeStore.tab.cache && storageTabs) {
-    //   const filteredTabs = filterTabsByAllRoutes(router, storageTabs)
-    //   tabs.value = updateTabsByI18nKey(filteredTabs)
-    // }
-
     addTab(currentRoute)
   }
 
@@ -252,19 +239,6 @@ export const useTabStore = defineStore(SetupStoreId.Tab, () => {
       homeTab.value = updateTabByI18nKey(homeTab.value)
     }
   }
-
-  /** Cache tabs */
-  function cacheTabs() {
-    // 🧹 禁用localStorage缓存
-    // if (!themeStore.tab.cache) return
-    // localStg.set('globalTabs', tabs.value)
-    return
-  }
-
-  // cache tabs when page is closed or refreshed
-  useEventListener(window, 'beforeunload', () => {
-    cacheTabs()
-  })
 
   return {
     /** All tabs */

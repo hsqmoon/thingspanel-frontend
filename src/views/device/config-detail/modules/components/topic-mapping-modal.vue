@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, watch, computed, h, nextTick } from 'vue'
+import { Fragment, computed, defineComponent, h, nextTick, ref, watch } from 'vue'
+import type { VNodeChild } from 'vue'
 import { NModal, NForm, NFormItem, NInput, NSelect, NButton, NPopover, useMessage, NText } from 'naive-ui'
 import type { FormInst, FormRules, SelectRenderLabel, SelectRenderTag } from 'naive-ui'
 import { useI18n } from 'vue-i18n'
@@ -17,7 +18,7 @@ interface TopicMapping {
 }
 
 interface Props {
-  visible: boolean
+  visible?: boolean
   editData?: TopicMapping | null
 }
 
@@ -341,7 +342,7 @@ const handleSave = async () => {
     await formRef.value?.validate()
     emit('save', { ...formData.value })
     modalVisible.value = false
-  } catch (error) {
+  } catch {
     message.error(t('generate.topicMapping.message.validateForm'))
   }
 }
@@ -351,32 +352,45 @@ const handleCancel = () => {
   modalVisible.value = false
 }
 
-// 格式化 Markdown 文本
-const formatMarkdown = (text: string): string => {
-  if (!text) return ''
-  // 首先转义所有花括号，防止被 Vue 当作插值表达式解析
-  let result = text.replace(/\{/g, '&#123;').replace(/\}/g, '&#125;')
+// 仅将受支持的 Markdown 标记转换为 VNode，所有内容都由 Vue 作为文本转义。
+const renderMarkdown = (text: string): VNodeChild[] => {
+  const normalizedText = text.replaceAll('&#123;', '{').replaceAll('&#125;', '}')
+  const nodes: VNodeChild[] = []
+  const tokenPattern = /```([\s\S]*?)```|\*\*(.*?)\*\*|`([^`\n]+)`|(\n)/g
+  let lastIndex = 0
+  let match: RegExpExecArray | null
 
-  // 处理代码块（```...```），避免被其他规则影响
-  const codeBlockPlaceholder = '__CODE_BLOCK_PLACEHOLDER__'
-  const codeBlocks: string[] = []
-  result = result.replace(/```([\s\S]*?)```/g, (match, code) => {
-    const placeholder = `${codeBlockPlaceholder}${codeBlocks.length}`
-    codeBlocks.push(code.trim())
-    return placeholder
-  })
-  // 处理加粗文本
-  result = result.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-  // 处理行内代码（不在代码块内的）
-  result = result.replace(/`([^`]+)`/g, '<code>$1</code>')
-  // 处理换行
-  result = result.replace(/\n/g, '<br>')
-  // 恢复代码块
-  codeBlocks.forEach((code, index) => {
-    result = result.replace(`${codeBlockPlaceholder}${index}`, `<pre class="code-block"><code>${code}</code></pre>`)
-  })
-  return result
+  while ((match = tokenPattern.exec(normalizedText)) !== null) {
+    if (match.index > lastIndex) nodes.push(normalizedText.slice(lastIndex, match.index))
+
+    if (match[1] !== undefined) {
+      nodes.push(h('pre', { class: 'code-block' }, [h('code', match[1].trim())]))
+    } else if (match[2] !== undefined) {
+      nodes.push(h('strong', match[2]))
+    } else if (match[3] !== undefined) {
+      nodes.push(h('code', match[3]))
+    } else {
+      nodes.push(h('br'))
+    }
+
+    lastIndex = tokenPattern.lastIndex
+  }
+
+  if (lastIndex < normalizedText.length) nodes.push(normalizedText.slice(lastIndex))
+  return nodes
 }
+
+const SafeMarkdown = defineComponent({
+  props: {
+    text: {
+      type: String,
+      default: ''
+    }
+  },
+  setup(componentProps) {
+    return () => h(Fragment, null, renderMarkdown(componentProps.text))
+  }
+})
 
 // 渲染系统主题标签（下拉选项中的显示）
 const renderTopicLabel: SelectRenderLabel = option => {
@@ -476,28 +490,24 @@ const renderTopicTag: SelectRenderTag = ({ option }) => {
                   <div class="tip-content">
                     <div class="tip-section">
                       <div class="tip-label">{{ t('generate.topicMapping.tips.definitionLabel') }}</div>
-                      <div
-                        class="tip-text"
-                        v-html="formatMarkdown(t('generate.topicMapping.tips.uplink.definition'))"
-                      ></div>
+                      <div class="tip-text">
+                        <SafeMarkdown :text="t('generate.topicMapping.tips.uplink.definition')" />
+                      </div>
                     </div>
                     <div class="tip-section">
                       <div class="tip-label">{{ t('generate.topicMapping.tips.exampleLabel') }}</div>
-                      <div
-                        class="tip-text"
-                        v-html="formatMarkdown(t('generate.topicMapping.tips.uplink.example'))"
-                      ></div>
+                      <div class="tip-text">
+                        <SafeMarkdown :text="t('generate.topicMapping.tips.uplink.example')" />
+                      </div>
                     </div>
                     <div class="tip-section">
                       <div class="tip-label">{{ t('generate.topicMapping.tips.messageIdLabel') }}</div>
-                      <div
-                        class="tip-text"
-                        v-html="formatMarkdown(t('generate.topicMapping.tips.uplink.messageIdLine1'))"
-                      ></div>
-                      <div
-                        class="tip-text"
-                        v-html="formatMarkdown(t('generate.topicMapping.tips.uplink.messageIdLine2'))"
-                      ></div>
+                      <div class="tip-text">
+                        <SafeMarkdown :text="t('generate.topicMapping.tips.uplink.messageIdLine1')" />
+                      </div>
+                      <div class="tip-text">
+                        <SafeMarkdown :text="t('generate.topicMapping.tips.uplink.messageIdLine2')" />
+                      </div>
                     </div>
                   </div>
                 </template>
@@ -506,32 +516,27 @@ const renderTopicTag: SelectRenderTag = ({ option }) => {
                   <div class="tip-content">
                     <div class="tip-section">
                       <div class="tip-label">{{ t('generate.topicMapping.tips.definitionLabel') }}</div>
-                      <div
-                        class="tip-text"
-                        v-html="formatMarkdown(t('generate.topicMapping.tips.downlink.definition'))"
-                      ></div>
+                      <div class="tip-text">
+                        <SafeMarkdown :text="t('generate.topicMapping.tips.downlink.definition')" />
+                      </div>
                     </div>
                     <div class="tip-section">
                       <div class="tip-label">{{ t('generate.topicMapping.tips.exampleLabel') }}</div>
-                      <div
-                        class="tip-text"
-                        v-html="formatMarkdown(t('generate.topicMapping.tips.downlink.example'))"
-                      ></div>
+                      <div class="tip-text">
+                        <SafeMarkdown :text="t('generate.topicMapping.tips.downlink.example')" />
+                      </div>
                     </div>
                     <div class="tip-section">
                       <div class="tip-label">{{ t('generate.topicMapping.tips.multiMappingLabel') }}</div>
-                      <div
-                        class="tip-text"
-                        v-html="formatMarkdown(t('generate.topicMapping.tips.downlink.multiMapping'))"
-                      ></div>
-                      <div
-                        class="tip-text"
-                        v-html="formatMarkdown(t('generate.topicMapping.tips.downlink.multiMappingConfig'))"
-                      ></div>
-                      <div
-                        class="tip-text"
-                        v-html="formatMarkdown(t('generate.topicMapping.tips.downlink.multiMappingProcess'))"
-                      ></div>
+                      <div class="tip-text">
+                        <SafeMarkdown :text="t('generate.topicMapping.tips.downlink.multiMapping')" />
+                      </div>
+                      <div class="tip-text">
+                        <SafeMarkdown :text="t('generate.topicMapping.tips.downlink.multiMappingConfig')" />
+                      </div>
+                      <div class="tip-text">
+                        <SafeMarkdown :text="t('generate.topicMapping.tips.downlink.multiMappingProcess')" />
+                      </div>
                     </div>
                   </div>
                 </template>

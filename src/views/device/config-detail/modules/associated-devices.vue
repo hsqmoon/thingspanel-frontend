@@ -3,8 +3,9 @@ import type { Ref } from 'vue'
 import { computed, getCurrentInstance, h, onMounted, ref } from 'vue'
 import type { DataTableColumns, FormInst } from 'naive-ui'
 import { NButton, NDataTable, NFlex, NForm, NFormItem, NModal, NPagination, NPopconfirm, useMessage } from 'naive-ui'
-import moment from 'moment/moment'
-import { deviceConfigBatch, deviceDelete, deviceList, getDeviceListForSelect } from '@/service/api'
+import moment from 'moment'
+import { deviceConfigBatch, deviceDelete, deviceList } from '@/service/api'
+import { getDeviceListForSelect } from '@/service/api/device-template-model'
 import { useRouterPush } from '@/hooks/common/router'
 import { $t } from '@/locales'
 import DeviceSelectWithScroll from './DeviceSelectWithScroll.vue'
@@ -123,25 +124,25 @@ const getDeviceOptions = async (isInitialLoad = false) => {
       deviceOptions.value.push(...data.list)
 
       if (data.list.length < queryDevice.value.page_size) {
-        // eslint-disable-next-line require-atomic-updates
+
         hasMoreDevices.value = false
       } else {
-        // eslint-disable-next-line require-atomic-updates
+
         hasMoreDevices.value = true
       }
     } else {
-      // eslint-disable-next-line require-atomic-updates
+
       hasMoreDevices.value = false
       if (error) {
         message.error($t('common.fetchDataFailed'))
       }
     }
-  } catch (apiError) {
+  } catch {
     message.error($t('common.networkError'))
-    // eslint-disable-next-line require-atomic-updates
+
     hasMoreDevices.value = false
   } finally {
-    // eslint-disable-next-line require-atomic-updates
+
     loadingMore.value = false
   }
 }

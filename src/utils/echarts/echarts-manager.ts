@@ -153,16 +153,12 @@ export function registerEChartsExtensions(componentTypes: string[]) {
     if (!registeredExtensions.has(type) && EXTENDED_COMPONENTS_MAP[type]) {
       newComponents.push(...EXTENDED_COMPONENTS_MAP[type])
       registeredExtensions.add(type)
-      if (process.env.NODE_ENV === 'development') {
-      }
     }
   })
 
   if (newComponents.length > 0) {
     try {
       echarts.use(newComponents)
-      if (process.env.NODE_ENV === 'development') {
-      }
     } catch (error) {
       console.error('⚠️ ECharts 扩展组件注册警告:', error)
     }
@@ -215,8 +211,6 @@ export function useEChartsInstance() {
  */
 export function resetEChartsRegistration() {
   isEChartsRegistered = false
-  if (process.env.NODE_ENV === 'development') {
-  }
 }
 
 // 移除自动初始化，改为延迟加载

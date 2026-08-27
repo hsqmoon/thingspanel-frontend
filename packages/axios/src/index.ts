@@ -221,15 +221,22 @@ export function createFlatRequest<ResponseData = any>(
 
       return Promise.resolve({ data: response.data as MappedType<R, T>, error: null })
     } catch (error) {
+      const requestError =
+        typeof error === 'object' && error !== null
+          ? (error as { response?: { data?: unknown; status?: number }; code?: string; message?: string })
+          : {}
+      const responseData = requestError.response?.data
+
       // 如果是后端业务错误，应该将错误信息放在error字段中
-      if (error?.response?.data && typeof error.response.data === 'object') {
+      if (responseData && typeof responseData === 'object') {
+        const backendError = responseData as { message?: string; msg?: string }
         return Promise.reject({
           data: null,
           error: {
-            message: error.response.data.message || error.response.data.msg || '请求失败',
-            status: error?.response?.status,
-            code: error?.code,
-            data: error.response.data
+            message: backendError.message || backendError.msg || '请求失败',
+            status: requestError.response?.status,
+            code: requestError.code,
+            data: responseData
           }
         })
       }
@@ -238,9 +245,9 @@ export function createFlatRequest<ResponseData = any>(
       return Promise.reject({
         data: null,
         error: {
-          message: error?.message || '请求失败',
-          status: error?.response?.status,
-          code: error?.code
+          message: requestError.message || '请求失败',
+          status: requestError.response?.status,
+          code: requestError.code
         }
       })
     }

@@ -69,20 +69,28 @@ const GENERATED_HOST_DATA_SOURCE_ID_RE = /^(?:__platform_.+__|thingspanel_.+)$/
 const DATA_SOURCE_EXPRESSION_RE = /ds\.([^\s.}]+)\./g
 const PLATFORM_DEVICE_DATA_SOURCE_ID_RE = /^__platform_(.+)__$/
 
+interface ThingsVisDashboardSchema {
+  id?: string
+  name?: string
+  thumbnail?: string | null
+  canvasConfig?: Record<string, unknown>
+  nodes?: unknown[]
+  dataSources?: unknown[]
+  variables?: unknown[]
+}
+
+type CompleteThingsVisDashboardSchema = ThingsVisDashboardSchema & {
+  canvasConfig: Record<string, unknown>
+  nodes: unknown[]
+  dataSources: unknown[]
+}
+
 const props = defineProps<{
   id: string
   mode?: string
   /** Resize iframe to reported content height (home embed uses outer page scroll) */
   autoHeight?: boolean
-  schema?: {
-    id?: string
-    name?: string
-    thumbnail?: string | null
-    canvasConfig?: Record<string, unknown>
-    nodes?: unknown[]
-    dataSources?: unknown[]
-    variables?: unknown[]
-  } | null
+  schema?: ThingsVisDashboardSchema | null
 }>()
 const emit = defineEmits<{
   hostSaveSuccess: [payload: { id: string; name?: string }]
@@ -533,13 +541,8 @@ function normalizeDashboardConfig<T>(config: T): T {
 }
 
 function hasCompleteDashboardSchema(
-  schema?: {
-    canvasConfig?: Record<string, unknown>
-    nodes?: unknown[]
-    dataSources?: unknown[]
-    variables?: unknown[]
-  } | null
-): boolean {
+  schema?: ThingsVisDashboardSchema | null
+): schema is CompleteThingsVisDashboardSchema {
   if (!schema || !schema.canvasConfig || typeof schema.canvasConfig !== 'object') return false
   if (!Array.isArray(schema.nodes)) return false
   if (!Array.isArray(schema.dataSources)) return false
@@ -713,9 +716,12 @@ const FIELD_BINDING_EXPR_RE = /\{\{\s*ds\.([^.\s}]+)\.([^}]+?)\s*\}\}/g
 
 function collectRequestedFieldsFromValue(value: unknown, requests: Map<string, Set<string>>) {
   if (typeof value === 'string') {
-    let match: RegExpExecArray | null = null
     FIELD_BINDING_EXPR_RE.lastIndex = 0
-    while ((match = FIELD_BINDING_EXPR_RE.exec(value)) !== null) {
+    for (
+      let match = FIELD_BINDING_EXPR_RE.exec(value);
+      match !== null;
+      match = FIELD_BINDING_EXPR_RE.exec(value)
+    ) {
       const dataSourceId = match[1]
       const fieldPath = match[2]?.trim()
       if (!dataSourceId || !fieldPath) continue
@@ -1846,13 +1852,6 @@ async function buildFallbackPlatformDevicesForDefaultGroup(
   return mapPlatformDevicesForGroup(rawDevices, normalizedGroupId, groupName, groups)
 }
 
-async function buildUngroupedPlatformDevices(): Promise<PlatformDeviceEntry[]> {
-  const deviceRes = await deviceList({ page: 1, page_size: EDITOR_GROUP_DEVICE_PAGE_SIZE })
-  const rawDevices = unwrapList(deviceRes?.data)
-
-  return mapPlatformDevicesForGroup(rawDevices, '', '')
-}
-
 async function buildPlatformDeviceById(deviceId: string): Promise<PlatformDeviceEntry | null> {
   const normalizedDeviceId = firstString(deviceId)
   if (!normalizedDeviceId) return null
@@ -2287,14 +2286,15 @@ const handleMessage = async (event: MessageEvent) => {
   }
 
   if (type === 'thingsvis:requestDeviceFields') {
-    const deviceId = typeof (payload as any).deviceId === 'string' ? (payload as any).deviceId : undefined
-    const directTemplateId = typeof (payload as any).templateId === 'string' ? (payload as any).templateId : undefined
+    const request = payload as { deviceId?: unknown; templateId?: unknown; deviceConfigId?: unknown }
+    const deviceId = typeof request.deviceId === 'string' ? request.deviceId : undefined
+    const directTemplateId = typeof request.templateId === 'string' ? request.templateId : undefined
     const deviceConfigId =
-      typeof (payload as any).deviceConfigId === 'string' ? (payload as any).deviceConfigId : undefined
+      typeof request.deviceConfigId === 'string' ? request.deviceConfigId : undefined
     if (!iframeRef.value?.contentWindow || !deviceId) return
 
+    let templateId = directTemplateId
     try {
-      let templateId = directTemplateId
       if (!templateId && deviceConfigId) {
         templateId = (await loadDeviceConfigTemplateMap()).get(deviceConfigId)
       }

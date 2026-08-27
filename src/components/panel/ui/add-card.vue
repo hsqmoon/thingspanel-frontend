@@ -2,7 +2,7 @@
 import { onMounted, onUpdated, reactive, ref, watch } from 'vue'
 import { useMessage } from 'naive-ui'
 import { InformationCircleSharp } from '@vicons/ionicons5'
-// eslint-disable-next-line vue/prefer-import-from-vue
+
 import type { UnwrapRefSimple } from '@vue/reactivity'
 import type { ICardData, ICardDefine, ICardFormIns } from '@/components/panel/card'
 import { PanelCards } from '@/components/panel'

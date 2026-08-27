@@ -13,6 +13,7 @@ export function setupUnocss(viteEnv: Env.ImportMeta) {
   const collectionName = VITE_ICON_LOCAL_PREFIX.replace(`${VITE_ICON_PREFIX}-`, '')
 
   return unocss({
+    blocklist: ['icon-select', 'icon-local-'],
     presets: [
       presetIcons({
         prefix: `${VITE_ICON_PREFIX}-`,

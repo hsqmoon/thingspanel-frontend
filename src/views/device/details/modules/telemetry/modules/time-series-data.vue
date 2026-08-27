@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { defineProps, onMounted, reactive, ref, watch } from 'vue'
+import { onMounted, reactive, ref, watch } from 'vue'
 import { NDatePicker, NSelect, NSpace } from 'naive-ui'
 import { useFullscreen } from '@vueuse/core'
 import dayjs from 'dayjs'
@@ -24,8 +24,18 @@ interface Created {
   theUnit: string
 }
 
+interface TelemetryHistoryQuery {
+  device_id: string
+  key: string
+  aggregate_window: string
+  time_range: string
+  start_time?: number
+  end_time?: number
+  aggregate_function?: string
+}
+
 const props = defineProps<Created>()
-const selectedOption = ref({
+const selectedOption = ref<TelemetryHistoryQuery>({
   device_id: props.deviceId,
   key: props.theKey,
   aggregate_window: 'no_aggregate',
@@ -321,19 +331,15 @@ watch(
       tableData.value = sortedData
       if (data.length > 0) {
         let sumValue = 0
-        minValue.value = data[0].y || Number.NEGATIVE_INFINITY
-        maxValue.value = data[0].y || Number.POSITIVE_INFINITY
+        let minimum = data[0].y
+        let maximum = data[0].y
         data.forEach(item => {
-          if (item.y) {
-            sumValue += item.y
-            if (item.y < minValue.value) {
-              minValue.value = item.y
-            }
-            if (item.y > maxValue.value) {
-              maxValue.value = item.y
-            }
-          }
+          sumValue += item.y
+          minimum = Math.min(minimum, item.y)
+          maximum = Math.max(maximum, item.y)
         })
+        minValue.value = minimum
+        maxValue.value = maximum
         avgValue.value = sumValue / data.length
         // 这里是当 通过接口改变 initialOptions的数据
 

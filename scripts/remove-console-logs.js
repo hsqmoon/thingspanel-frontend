@@ -102,12 +102,10 @@ function analyzeConsoleLogContext(code, start, end) {
   const hasArrowBefore = /=>\s*$/.test(beforeCode.trim())
 
   // 检查是否整行只有 console.log
-  const lines = code.split('\n')
   let lineStart = code.lastIndexOf('\n', start - 1) + 1
   let lineEnd = code.indexOf('\n', end)
   if (lineEnd === -1) lineEnd = code.length
 
-  const currentLine = code.substring(lineStart, lineEnd)
   const beforeLogInLine = code.substring(lineStart, start)
   const afterLogInLine = code.substring(end, lineEnd)
 
@@ -310,20 +308,10 @@ function main() {
   // 获取所有需要处理的文件
   const files = getAllFiles(projectRoot)
 
-  let totalRemoved = 0
-  let processedFiles = 0
-
   // 处理每个文件
   files.forEach(filePath => {
-    const removed = processFile(filePath)
-    if (removed > 0) {
-      totalRemoved += removed
-      processedFiles++
-    }
+    processFile(filePath)
   })
-
-  if (totalRemoved === 0) {
-  }
 }
 
 // 运行脚本

@@ -10,7 +10,7 @@ defineOptions({
 
 const appStore = useAppStore()
 
-const { domRef, updateOptions } = useEcharts(() => ({
+const { setDomRef, updateOptions } = useEcharts(() => ({
   tooltip: {
     trigger: 'item'
   },
@@ -101,7 +101,7 @@ init()
 </script>
 
 <template>
-  <div ref="domRef" class="h-360px w-full"></div>
+  <div :ref="setDomRef" class="h-360px w-full"></div>
 </template>
 
 <style scoped></style>

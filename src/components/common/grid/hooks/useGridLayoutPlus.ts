@@ -3,7 +3,7 @@
  * 提供网格布局的状态管理和工具方法
  */
 
-import { ref, computed, watch, nextTick, type Ref } from 'vue'
+import { ref, computed, watch } from 'vue'
 import type {
   GridLayoutPlusItem,
   GridLayoutPlusConfig,
@@ -24,7 +24,6 @@ import {
   searchLayout,
   getLayoutStats,
   createResponsiveLayout,
-  transformLayoutForBreakpoint,
   optimizeLayoutPerformance,
   debounce,
   throttle
@@ -152,7 +151,7 @@ export function useGridLayoutPlus(options: UseGridLayoutPlusOptions = {}) {
 
       const validation = validateGridItem(newItem)
       if (!validation.success) {
-        return validation
+        return { success: false, error: validation.error, message: validation.message }
       }
 
       saveToHistory()
@@ -225,7 +224,7 @@ export function useGridLayoutPlus(options: UseGridLayoutPlusOptions = {}) {
 
       const validation = validateGridItem(item)
       if (!validation.success) {
-        return validation
+        return { success: false, error: validation.error, message: validation.message }
       }
 
       autoSave()
@@ -476,7 +475,7 @@ export function useGridLayoutPlus(options: UseGridLayoutPlusOptions = {}) {
   }
 
   // 导入导出
-  const exportCurrentLayout = (format: 'json' | 'csv' = 'json'): string => {
+  const exportCurrentLayout = (_format: 'json' | 'csv' = 'json'): string => {
     return JSON.stringify(layout.value, null, 2) // 简化实现
   }
 

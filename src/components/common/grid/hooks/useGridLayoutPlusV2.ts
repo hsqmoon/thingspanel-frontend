@@ -3,13 +3,8 @@
  * 采用模块化架构，集成所有网格功能
  */
 
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import type {
-  GridLayoutPlusItem,
-  GridLayoutPlusConfig,
-  PerformanceConfig,
-  ResponsiveLayout
-} from '../gridLayoutPlusTypes'
+import { computed, watch, onMounted, onUnmounted } from 'vue'
+import type { GridLayoutPlusItem, GridLayoutPlusConfig } from '../gridLayoutPlusTypes'
 import { useGridCore, type UseGridCoreOptions } from './useGridCore'
 import { useGridHistory, type UseGridHistoryOptions } from './useGridHistory'
 import { useGridPerformance, type UseGridPerformanceOptions } from './useGridPerformance'
@@ -188,12 +183,7 @@ export function useGridLayoutPlusV2(options: UseGridLayoutPlusV2Options = {}) {
 
   // 性能优化操作
   const optimizePerformance = () => {
-    const wasOptimized = gridPerformance.applyAutoOptimizations()
-    if (wasOptimized) {
-      if (process.env.NODE_ENV === 'development') {
-      }
-    }
-    return wasOptimized
+    return gridPerformance.applyAutoOptimizations()
   }
 
   const measureLayoutPerformance = async (operation: () => Promise<void> | void) => {
@@ -262,8 +252,6 @@ export function useGridLayoutPlusV2(options: UseGridLayoutPlusV2Options = {}) {
       fps: 60,
       lastUpdated: Date.now()
     }
-    if (process.env.NODE_ENV === 'development') {
-    }
   }
 
   // 监听布局变化以更新性能指标
@@ -288,8 +276,6 @@ export function useGridLayoutPlusV2(options: UseGridLayoutPlusV2Options = {}) {
       startAutoSave()
     }
 
-    if (process.env.NODE_ENV === 'development') {
-    }
   })
 
   // 清理
@@ -297,8 +283,6 @@ export function useGridLayoutPlusV2(options: UseGridLayoutPlusV2Options = {}) {
     stopAutoSave()
     gridPerformance.stopMonitoring()
     gridResponsive.unobserveContainer()
-    if (process.env.NODE_ENV === 'development') {
-    }
   })
 
   return {

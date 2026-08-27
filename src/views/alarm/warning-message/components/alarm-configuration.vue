@@ -63,7 +63,6 @@ const columns: Ref<DataTableColumns<ColumnsData>> = ref([
     align: 'left',
     minWidth: '120px',
     render(row: any) {
-      // eslint-disable-next-line @typescript-eslint/no-use-before-define
       return alarmStatusOptions.value.find(data => data.value === row.alarm_status)?.label || ''
     }
   },
@@ -96,7 +95,6 @@ const columns: Ref<DataTableColumns<ColumnsData>> = ref([
           <NButton type="primary" size={'small'} onClick={() => getInfo(row)}>
             {$t('custom.devicePage.details')}
           </NButton>
-          {/* eslint-disable-next-line @typescript-eslint/no-use-before-define */}
           <NButton type="warning" size={'small'} onClick={() => maintenance(row)}>
             {$t('common.maintenance')}
           </NButton>
@@ -124,13 +122,11 @@ const pagination: PaginationProps = reactive({
   pageSizes: [10, 15, 20, 25, 30],
   onChange: (page: number) => {
     pagination.page = page
-    // eslint-disable-next-line @typescript-eslint/no-use-before-define
     getAlarmHistory()
   },
   onUpdatePageSize: (pageSize: number) => {
     pagination.pageSize = pageSize
     pagination.page = 1
-    // eslint-disable-next-line @typescript-eslint/no-use-before-define
     getAlarmHistory()
   }
 })
@@ -139,7 +135,6 @@ const getAlarmHistory = async () => {
   queryData.value.page_size = pagination.pageSize as number
   const { data } = await alarmHistory(queryData.value)
   if (data) {
-    // eslint-disable-next-line require-atomic-updates
     pagination.itemCount = data.total
     tableData.value = data.list
     loading.value = false
@@ -295,7 +290,7 @@ const submitCallback = async () => {
             </thead>
             <tbody>
               <tr v-for="(device, index) in infoData.alarm_device_list" :key="index">
-                <td class="min-w-100px">{{ index + 1 }}</td>
+                <td class="min-w-100px">{{ Number(index) + 1 }}</td>
                 <td>{{ device.id }}</td>
                 <td>{{ device['name'] }}</td>
               </tr>

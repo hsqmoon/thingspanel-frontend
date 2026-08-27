@@ -15,15 +15,13 @@ import MenuOperateDrawer, { type OperateType } from './modules/menu-operate-draw
 const appStore = useAppStore()
 const { bool: drawerVisible, setTrue: openDrawer } = useBoolean()
 
-const wrapperRef = ref<HTMLElement | null>(null)
-
 const { columns, filteredColumns, data, loading, pagination, getData } = useTable<
   Api.SystemManage.Menu,
   typeof fetchGetMenuList,
   'index' | 'operate'
 >({
   apiFn: fetchGetMenuList,
-  transformer: res => {
+  transformer: (res) => {
     const menus = res.data || []
 
     return {
@@ -50,7 +48,7 @@ const { columns, filteredColumns, data, loading, pagination, getData } = useTabl
       title: $t('page.manage.menu.menuType'),
       align: 'center',
       minWidth: '140px',
-      render: row => {
+      render: (row) => {
         const tagMap: Record<Api.Common.EnableStatus, NaiveUI.ThemeColor> = {
           1: 'default',
           2: 'primary'
@@ -66,7 +64,7 @@ const { columns, filteredColumns, data, loading, pagination, getData } = useTabl
       title: $t('page.manage.menu.menuName'),
       align: 'center',
       minWidth: '140px',
-      render: row => {
+      render: (row) => {
         const { i18nKey, menuName } = row
 
         const label = resolveRouteLabel(i18nKey, menuName)
@@ -79,7 +77,7 @@ const { columns, filteredColumns, data, loading, pagination, getData } = useTabl
       title: $t('page.manage.menu.icon'),
       align: 'center',
       minWidth: '140px',
-      render: row => {
+      render: (row) => {
         const icon = row.iconType === '1' ? row.icon : undefined
 
         const localIcon = row.iconType === '2' ? row.icon : undefined
@@ -108,7 +106,7 @@ const { columns, filteredColumns, data, loading, pagination, getData } = useTabl
       title: $t('page.manage.menu.menuStatus'),
       align: 'center',
       minWidth: '140px',
-      render: row => {
+      render: (row) => {
         if (row.status === null) {
           return null
         }
@@ -128,7 +126,7 @@ const { columns, filteredColumns, data, loading, pagination, getData } = useTabl
       title: $t('page.manage.menu.hideInMenu'),
       align: 'center',
       minWidth: '140px',
-      render: row => {
+      render: (row) => {
         const hide: CommonType.YesOrNo = row.hideInMenu ? 'Y' : 'N'
 
         const tagMap: Record<CommonType.YesOrNo, NaiveUI.ThemeColor> = {
@@ -158,7 +156,7 @@ const { columns, filteredColumns, data, loading, pagination, getData } = useTabl
       title: $t('common.actions'),
       align: 'center',
       minWidth: '140px',
-      render: row => (
+      render: (row) => (
         <div class="flex-center justify-end gap-8px">
           {row.menuType === '1' && (
             <NButton type="primary" ghost size="small" onClick={() => handleAddChildMenu(row.id)}>
@@ -212,7 +210,7 @@ const editingData = ref<Api.SystemManage.Menu | null>(null)
 
 function handleEdit(id: number) {
   operateType.value = 'edit'
-  editingData.value = data.value.find(item => item.id === id) || null
+  editingData.value = data.value.find((item) => item.id === id) || null
   openDrawer()
 }
 // eslint-disable-next-line
@@ -225,7 +223,7 @@ async function handleDelete(id: number) {
 </script>
 
 <template>
-  <div ref="wrapperRef" class="flex-vertical-stretch gap-16px overflow-hidden <sm:overflow-auto">
+  <div class="flex-vertical-stretch gap-16px overflow-hidden <sm:overflow-auto">
     <NCard :title="$t('page.manage.menu.title')" :bordered="false" size="small" class="sm:flex-1-hidden card-wrapper">
       <template #header-extra>
         <TableHeaderOperation
@@ -246,7 +244,7 @@ async function handleDelete(id: number) {
         :scroll-x="1088"
         :loading="loading"
         :pagination="pagination"
-        :row-key="item => item.id"
+        :row-key="(item) => item.id"
         class="flex-1-hidden"
       />
       <MenuOperateDrawer

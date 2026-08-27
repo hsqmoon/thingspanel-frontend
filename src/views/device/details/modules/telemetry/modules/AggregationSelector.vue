@@ -164,9 +164,7 @@ const checkDateRange = value => {
     const diffHours = differenceInHours(end, start)
     const diffDays = differenceInDays(end, start)
     const diffMonths = differenceInMonths(end, start)
-    let weight = 0
-
-    weight = getWeightNumber(diffHours, diffDays, diffMonths)
+    const weight = getWeightNumber(diffHours, diffDays, diffMonths)
     aggregationTtemToFalse(weight)
   }
 }

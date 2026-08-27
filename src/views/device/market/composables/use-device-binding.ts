@@ -525,12 +525,8 @@ export function useInstallWizard() {
   const wizardState = reactive<InstallWizardState>({ ...initialWizardState })
 
   const {
-    loadLocalDevices,
-    loadLocalTemplates,
     initializeBindings,
     loadAllCompatibleDevices,
-    validateBindings,
-    generateDashboardSelections,
     reset: resetBindingState
   } = useDeviceBinding()
 

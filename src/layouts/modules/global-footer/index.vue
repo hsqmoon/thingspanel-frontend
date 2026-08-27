@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { $t } from '@/locales'
 import useVersionInfo from '@/hooks/business/use-version-info'
-import { useSysSettingStore } from '@/store/modules/sys-setting'
 
 defineOptions({
   name: 'GlobalFooter'
 })
 
-const sysSettingStore = useSysSettingStore()
 const { currentVersion, latestVersion } = useVersionInfo()
 </script>
 

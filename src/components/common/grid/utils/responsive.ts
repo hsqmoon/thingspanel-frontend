@@ -244,7 +244,7 @@ export function adaptItemSizeForBreakpoint(
   item: GridLayoutPlusItem,
   breakpoint: string,
   cols: number,
-  containerWidth: number
+  _containerWidth: number
 ): GridLayoutPlusItem {
   try {
     const adapted = { ...item }

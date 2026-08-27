@@ -13,7 +13,7 @@ export const useDeviceDataStore = defineStore(SetupStoreId.Device, () => {
       } else {
         deviceData.value = {}
       }
-    } catch (error) {
+    } catch {
       deviceData.value = {}
     }
   }

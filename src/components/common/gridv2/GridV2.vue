@@ -30,7 +30,7 @@
 import 'gridstack/dist/dd-gridstack'
 import 'gridstack/dist/gridstack.min.css'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { GridStack, type GridItemHTMLElement, type GridStackNode, type GridStackOptions } from 'gridstack'
+import { GridStack, type GridStackNode, type GridStackOptions } from 'gridstack'
 import type {
   GridLayoutPlusConfig,
   GridLayoutPlusEmits,
@@ -56,22 +56,20 @@ const idKey = computed(() => (props.idKey && props.idKey.length > 0 ? props.idKe
 const gridStyle = computed(() => {
   const { cellHeight, verticalGap, horizontalGap } = resolveConfig()
   const minRowsFromConfig = Number(props.config?.minRows) || 0
-  const minHeightFromConfig = Number(props.config?.minH) || 0
   const layoutRows = props.layout.length
     ? Math.max(...props.layout.map(item => Number(item.y) + Number(item.h) || 0))
     : 0
   const rows = Math.max(layoutRows, minRowsFromConfig, 1)
   const totalHeight = rows * cellHeight + Math.max(rows - 1, 0) * verticalGap
-  const minHeightPx = Math.max(totalHeight, minHeightFromConfig)
   return {
-    minHeight: `${minHeightPx}px`,
+    minHeight: `${totalHeight}px`,
     '--grid-v-gap': `${verticalGap}px`,
     '--grid-h-gap': `${horizontalGap}px`
   }
 })
 
 function itemKey(item: GridLayoutPlusItem): string {
-  const raw = (item as Record<string, unknown>)[idKey.value]
+  const raw = item[idKey.value]
   if (raw !== undefined && raw !== null && raw !== '') return String(raw)
   if (item.i !== undefined) return String(item.i)
   return ''
@@ -86,8 +84,8 @@ function hashLayout(layout: GridLayoutPlusItem[]): string {
       w: Number(item.w) || 0,
       h: Number(item.h) || 0,
       // ✅ 添加锁定状态到hash中，使得锁定变化能触发更新
-      locked: (item as any).locked || false,
-      static: (item as any).static || false
+      locked: Boolean(item.locked),
+      static: Boolean(item.static)
     }))
   )
 }
@@ -100,7 +98,7 @@ function resolveConfig(): {
   margin: string
   rawConfig: Partial<GridLayoutPlusConfig>
 } {
-  const rawConfig = props.config ?? ({} as Partial<GridLayoutPlusConfig>)
+  const rawConfig: Partial<GridLayoutPlusConfig> = props.config ?? {}
   const column = Number.isFinite(Number(rawConfig.colNum)) ? Math.max(1, Number(rawConfig.colNum)) : 12
   const cellHeight = Number.isFinite(Number(rawConfig.rowHeight)) ? Math.max(1, Number(rawConfig.rowHeight)) : 80
 
@@ -156,28 +154,22 @@ function createOptions(resolved: ReturnType<typeof resolveConfig>): GridStackOpt
 
 function ensureColumnStyles(column: number): void {
   if (column <= 12 || injectedColumns.has(column)) return
-  const css = GridStack.generateStyles?.(column)
-  let text = Array.isArray(css) ? css.join('\n') : typeof css === 'string' ? css : ''
-  if (!text || !text.trim()) {
-    const lines: string[] = []
-    for (let i = 1; i <= column; i++) {
-      const width = ((i / column) * 100).toFixed(4)
-      lines.push(
-        `.grid-stack.grid-stack-${column} > .grid-stack-item[gs-w="${i}"], .grid-stack.gs-${column} > .grid-stack-item[gs-w="${i}"] { width: ${width}% }`
-      )
-    }
-    for (let x = 0; x < column; x++) {
-      const left = ((x / column) * 100).toFixed(4)
-      lines.push(
-        `.grid-stack.grid-stack-${column} > .grid-stack-item[gs-x="${x}"], .grid-stack.gs-${column} > .grid-stack-item[gs-x="${x}"] { left: ${left}% }`
-      )
-    }
-    text = lines.join('\n')
+  const lines: string[] = []
+  for (let i = 1; i <= column; i++) {
+    const width = ((i / column) * 100).toFixed(4)
+    lines.push(
+      `.grid-stack.grid-stack-${column} > .grid-stack-item[gs-w="${i}"], .grid-stack.gs-${column} > .grid-stack-item[gs-w="${i}"] { width: ${width}% }`
+    )
   }
-  if (!text.trim()) return
+  for (let x = 0; x < column; x++) {
+    const left = ((x / column) * 100).toFixed(4)
+    lines.push(
+      `.grid-stack.grid-stack-${column} > .grid-stack-item[gs-x="${x}"], .grid-stack.gs-${column} > .grid-stack-item[gs-x="${x}"] { left: ${left}% }`
+    )
+  }
   const style = document.createElement('style')
   style.dataset.gridstackColumn = String(column)
-  style.textContent = text
+  style.textContent = lines.join('\n')
   document.head.appendChild(style)
   injectedColumns.add(column)
 }
@@ -196,7 +188,7 @@ function runAutoArrange(): void {
   isAutoArranging = true
   try {
     grid.batchUpdate()
-    grid.compact(true)
+    grid.compact('compact')
     grid.batchUpdate(false)
   } finally {
     isAutoArranging = false
@@ -343,7 +335,7 @@ function collectLayoutFromGrid(): GridLayoutPlusItem[] {
         w: node.w ?? 1,
         h: node.h ?? 1
       }
-      if (idKey.value !== 'i') (item as Record<string, unknown>)[idKey.value] = id
+      if (idKey.value !== 'i') item[idKey.value] = id
       if (node.minW) item.minW = node.minW
       if (node.minH) item.minH = node.minH
       if (node.maxW) item.maxW = node.maxW

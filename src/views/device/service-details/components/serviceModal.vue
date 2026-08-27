@@ -88,9 +88,8 @@ const submitSevice: () => void = async () => {
           page: 1,
           page_size: 10
         })
-      } catch (error) {
-        if (process.env.NODE_ENV === 'development') {
-        }
+      } catch {
+        // 设备列表预取失败不影响已成功创建的服务和后续配置。
       }
 
       // 关闭当前弹窗，并打开配置弹窗

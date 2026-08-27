@@ -26,16 +26,23 @@ import Camera from '@/assets/imgs/camera.png'
 import CameraBg from '@/assets/imgs/camera-bg.png'
 
 const url = ref(new URL(getDemoServerUrl()))
-const { formRef, validate } = useNaiveForm()
+const { validate } = useNaiveForm()
 const currentIndex = ref(0)
 const editType = ref(false)
 const header = ref(false)
 const headUrl = ref('')
-const userInfoData = ref({
+const userInfoData = ref<{
+  additional_info: string
+  name: string
+  email: string
+  phone_num: string
+  authority: string
+}>({
   additional_info: '',
   name: '',
   email: '',
-  phone_num: ''
+  phone_num: '',
+  authority: ''
 })
 /** 初始from数据 */
 const formData = ref({
@@ -110,9 +117,6 @@ function changeBtnType(btn: any) {
 }
 /** 更新用户信息 */
 async function updataUserInfo() {
-  if (process.env.NODE_ENV === 'development') {
-  }
-
   const { error } = await changeInformation(userInfoData.value)
   if (!error) {
     window.$message?.success($t('custom.grouping_details.operationSuccess'))
@@ -127,8 +131,9 @@ const resetPass = async () => {
 /** 修改密码 */
 const submitPass = async () => {
   await validate()
-  const data = localStorage.getItem('enableZcAndYzm') ? JSON.parse(localStorage.getItem('enableZcAndYzm')) : []
-  let salt: any = null
+  const storedSettings = localStorage.getItem('enableZcAndYzm')
+  const data = storedSettings ? JSON.parse(storedSettings) : []
+  let salt = ''
   let password1 = formData.value.password
   if (data.find(v => v.name === 'frontend_res')?.enable_flag === 'enable') {
     salt = generateRandomHexString(16)
@@ -158,6 +163,10 @@ async function handleFinish({ event }: { event?: ProgressEvent }) {
     window.$message?.success($t('custom.grouping_details.operationSuccess'))
   }
 }
+
+function handleUploadFinish(payload: { event?: ProgressEvent }) {
+  void handleFinish(payload)
+}
 onMounted(async () => {
   const { data } = await fetchUserInfo()
   userInfoData.value = data
@@ -184,7 +193,7 @@ onMounted(async () => {
         :data="{
           type: 'user_icon'
         }"
-        @finish="handleFinish"
+        @finish="handleUploadFinish"
       >
         <div style="">
           <SvgIcon v-if="!header" local-icon="avatar" style="width: 80px; height: 80px" />
@@ -305,7 +314,6 @@ onMounted(async () => {
 
                 <NForm
                   v-if="currentIndex === 1"
-                  ref="formRef"
                   label-placement="left"
                   :model="formData"
                   :rules="passRules"

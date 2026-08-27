@@ -10,7 +10,7 @@ import Complete from './step/complete.vue'
 
 export interface Props {
   visible: boolean
-  type: 'add' | 'edit'
+  type?: 'add' | 'edit'
   templateId: string
   getTableData: () => void
 }
@@ -36,7 +36,7 @@ const SwitchComponents = computed<any>(() => {
 export type ModalType = NonNullable<Props['type']>
 
 interface Emits {
-  // eslint-disable-next-line no-unused-vars
+
   (e: 'update:visible', visible: boolean): void
 }
 
@@ -44,7 +44,7 @@ const emit = defineEmits<Emits>()
 
 const modalVisible = computed({
   get() {
-    // eslint-disable-next-line vue/no-side-effects-in-computed-properties
+
     stepCurrent.value = 1
     if (!props.visible) {
       templateInfoData.value = { ...initTemplateInfoData }

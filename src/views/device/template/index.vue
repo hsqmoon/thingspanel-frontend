@@ -55,7 +55,7 @@ const templateId = ref<string>('')
 const getData = async () => {
   startLoading()
   try {
-    const res = await deviceTemplate({ page: queryParams.page, ...queryParams })
+    const res = await deviceTemplate({ ...queryParams })
     if (!res.error) {
       deviceTemplateList.value = res.data.list
       dataTotal.value = res.data.total

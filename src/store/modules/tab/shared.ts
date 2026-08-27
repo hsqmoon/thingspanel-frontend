@@ -1,6 +1,7 @@
 import type { Router } from 'vue-router'
 import type { LastLevelRouteKey, RouteKey, RouteMap } from '@elegant-router/types'
 import { getRoutePath } from '@/router/elegant/transform'
+import { $t } from '@/locales'
 import { resolveRouteLabel } from '@/utils/router/resolve-route-label'
 
 /**

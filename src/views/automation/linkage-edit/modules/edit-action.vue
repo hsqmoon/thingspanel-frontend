@@ -17,7 +17,6 @@ import { $t } from '@/locales'
 const route = useRoute()
 
 interface Props {
-  // eslint-disable-next-line vue/no-unused-properties
   conditionsType?: object | any
   actionData?: any
 }
@@ -139,7 +138,6 @@ const actionOptions = ref([
 
 // 动作选择action值改变时
 const actionChange = (actionGroupItem: any, actionGroupIndex: any, data: any) => {
-  // eslint-disable-next-line array-callback-return
   actionOptions.value.map(item => {
     item.disabled = false
   })
@@ -160,7 +158,6 @@ const actionChange = (actionGroupItem: any, actionGroupIndex: any, data: any) =>
   actionGroupItem.action_target = null
 
   if (data === '1') {
-    // eslint-disable-next-line array-callback-return
     actionOptions.value.map(item => {
       if (item.value === '1') {
         // item.disabled = true;
@@ -202,7 +199,6 @@ const deviceGroupOptions = ref([] as any)
 const getGroup = async () => {
   deviceGroupOptions.value = []
   const res = await deviceGroupTree({})
-  // eslint-disable-next-line array-callback-return
   res.data.map((item: any) => {
     deviceGroupOptions.value.push(item.group)
   })
@@ -264,22 +260,17 @@ const actionParamShow = async (instructItem: any) => {
         device_config_id: instructItem.action_target
       })
     }
-    // eslint-disable-next-line array-callback-return
     if (res.data) {
-      // eslint-disable-next-line array-callback-return
       res.data.map((item: any) => {
         item.value = item.data_source_type
         item.label = `${item.data_source_type}${item.label ? `(${item.label})` : ''}`
 
-        // eslint-disable-next-line array-callback-return
         item.options.map((subItem: any) => {
           subItem.value = subItem.key
           subItem.label = `${subItem.key}${subItem.label ? `(${subItem.label})` : ''}`
         })
       })
-      // eslint-disable-next-line require-atomic-updates
       instructItem.actionParamOptionsData = res.data
-      // eslint-disable-next-line require-atomic-updates
       instructItem.actionParamTypeOptions = res.data.map((item: any) => {
         return {
           label: item.label,
@@ -378,7 +369,7 @@ const actionValueChange = (instructItem: any) => {
         message.error($t('common.enterJson'))
         instructItem.inputValidationStatus = 'error'
       }
-    } catch (e) {
+    } catch {
       message.error($t('common.enterJson'))
       // instructItem.inputFeedback=$t('common.enterJson')
       instructItem.inputValidationStatus = 'error'
@@ -778,7 +769,11 @@ onMounted(() => {
                   </NButton>
                 </NFlex>
               </template>
-              <NButton v-if="actionGroupIndex > 0" type="error" @click="deleteActionGroupItem(actionGroupIndex)">
+              <NButton
+                v-if="Number(actionGroupIndex) > 0"
+                type="error"
+                @click="deleteActionGroupItem(Number(actionGroupIndex))"
+              >
                 {{ $t('generate.delete-execution-action') }}
               </NButton>
             </NFlex>

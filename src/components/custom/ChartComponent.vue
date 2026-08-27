@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { watch } from 'vue'
+import type { ComponentPublicInstance } from 'vue'
 import type { EChartsCoreOption } from 'echarts/core'
 import { useTpECharts } from '@/hooks/tp-chart/use-tp-echarts'
 defineOptions({
@@ -10,6 +11,9 @@ const props = defineProps<{
   initialOptions: EChartsCoreOption
 }>()
 const { domRef, updateOptions } = useTpECharts(() => props.initialOptions)
+const setDomRef = (element: Element | ComponentPublicInstance | null) => {
+  domRef.value = element instanceof HTMLElement ? element : null
+}
 watch(
   () => props.initialOptions,
   newOptions => {
@@ -25,7 +29,7 @@ watch(
 </script>
 
 <template>
-  <div ref="domRef" class="chart-container"></div>
+  <div :ref="setDomRef" class="chart-container"></div>
 </template>
 
 <style scoped>

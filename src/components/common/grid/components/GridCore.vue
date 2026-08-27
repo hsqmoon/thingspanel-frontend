@@ -27,7 +27,6 @@
     @layout-ready="handleLayoutReady"
     @update:layout="handleLayoutChange"
     @breakpoint-changed="handleBreakpointChanged"
-    @container-resized="handleContainerResized"
     @item-resize="handleItemResize"
     @item-resized="handleItemResized"
     @item-move="handleItemMove"
@@ -77,7 +76,7 @@
  * 专注于网格布局的核心功能和事件处理
  */
 
-import { computed, shallowRef, watch } from 'vue'
+import { shallowRef, watch } from 'vue'
 import { GridLayout, GridItem } from 'grid-layout-plus'
 import GridItemContent from './GridItemContent.vue'
 import type { GridLayoutPlusConfig, GridLayoutPlusItem, GridLayoutPlusEmits } from '../gridLayoutPlusTypes'
@@ -142,10 +141,6 @@ const handleLayoutChange = (newLayout: GridLayoutPlusItem[]) => {
 
 const handleBreakpointChanged = (breakpoint: string, layout: GridLayoutPlusItem[]) => {
   emit('breakpoint-changed', breakpoint, layout)
-}
-
-const handleContainerResized = (width: number, height: number, cols: number) => {
-  emit('container-resized', width, height, cols)
 }
 
 const handleItemResize = (i: string, newH: number, newW: number, newHPx: number, newWPx: number) => {

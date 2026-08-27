@@ -2,7 +2,7 @@
 import { computed, getCurrentInstance, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import type { FormInst } from 'naive-ui'
-import { NButton, NSpace, useMessage, NInputNumber, NTooltip, NIcon, NInput, NSelect, NSwitch } from 'naive-ui'
+import { NButton, NSpace, useMessage, NInputNumber, NTooltip, NInput, NSelect, NSwitch } from 'naive-ui'
 import { deviceConfigInfo, deviceDetail, deviceLocation } from '@/service/api'
 import { $t } from '@/locales'
 import TencentMap from './public/tencent-map.vue'
@@ -19,15 +19,22 @@ const isShow = ref(false)
 const additionInfo = ref([] as ExtensionInfo[])
 const extensionFormRef = ref<HTMLElement & FormInst>()
 
-interface ExtensionInfo {
+interface ExtensionInfoBase {
   name: string
-  type: 'String' | 'Number' | 'Boolean' | 'Enum'
   default_value: string
-  value?: string | number | boolean | null
   desc?: string
   enable: boolean
-  options?: Array<{ label: string; value: string }>
 }
+
+type ExtensionInfo =
+  | (ExtensionInfoBase & { type: 'String'; value?: string | null })
+  | (ExtensionInfoBase & { type: 'Number'; value?: number | null })
+  | (ExtensionInfoBase & { type: 'Boolean'; value?: boolean })
+  | (ExtensionInfoBase & {
+      type: 'Enum'
+      value?: string | null
+      options?: Array<{ label: string; value: string }>
+    })
 
 const safeParseJSON = <T,>(payload: string | null | undefined, fallback: T): T => {
   if (!payload) return fallback
@@ -40,13 +47,16 @@ const safeParseJSON = <T,>(payload: string | null | undefined, fallback: T): T =
   }
 }
 
-const normalizeExtendedInfo = (payload: unknown): Array<{ name: string; value: any }> => {
+const normalizeExtendedInfo = (payload: unknown): Array<{ name: string; value: unknown }> => {
   if (Array.isArray(payload)) {
-    return payload as Array<{ name: string; value: any }>
+    return payload.filter(
+      (item): item is { name: string; value: unknown } =>
+        Boolean(item) && typeof item === 'object' && typeof (item as Record<string, unknown>).name === 'string'
+    )
   }
 
   if (payload && typeof payload === 'object') {
-    return Object.entries(payload as Record<string, any>).map(([name, value]) => ({
+    return Object.entries(payload as Record<string, unknown>).map(([name, value]) => ({
       name,
       value
     }))
@@ -55,25 +65,29 @@ const normalizeExtendedInfo = (payload: unknown): Array<{ name: string; value: a
   return []
 }
 
-const coerceValueByType = (value: unknown, type: ExtensionInfo['type']) => {
+const resolveExtensionInfo = (item: ExtensionInfo, value: unknown): ExtensionInfo => {
   if (value === null || value === undefined || value === '') {
-    return undefined
+    return { ...item, value: undefined }
   }
 
-  switch (type) {
+  switch (item.type) {
     case 'Number': {
       const numberValue = Number(value)
-      return Number.isNaN(numberValue) ? undefined : numberValue
+      return {
+        ...item,
+        value: value === null || value === undefined || value === '' || Number.isNaN(numberValue) ? undefined : numberValue
+      }
     }
     case 'Boolean': {
-      if (typeof value === 'boolean') return value
-      if (value === 'true' || value === 'false') {
-        return value === 'true'
-      }
-      return Boolean(value)
+      const booleanValue = typeof value === 'boolean' ? value : value === 'true' || (value !== 'false' && Boolean(value))
+      return { ...item, value: booleanValue }
     }
-    default:
-      return String(value)
+    case 'Enum':
+    case 'String':
+      return {
+        ...item,
+        value: value === null || value === undefined || value === '' ? undefined : String(value)
+      }
   }
 }
 
@@ -137,7 +151,7 @@ const openMapAndGetPosition = () => {
 const getConfigInfo = async () => {
   const result = await deviceDetail(query.d_id as string)
   const location = result?.data?.location || ''
-  const deviceAdditionalInfo = safeParseJSON<Record<string, any>>(result?.data?.additional_info, {})
+  const deviceAdditionalInfo = safeParseJSON<Record<string, unknown>>(result?.data?.additional_info, {})
   const locationData = location?.split(',') || []
   latitude.value = locationData[1] || ''
   longitude.value = locationData[0] || ''
@@ -152,11 +166,7 @@ const getConfigInfo = async () => {
     additionInfo.value = parsedAdditionalInfo.map(item => {
       const resolvedValue = extendedInfoMap.has(item.name) ? extendedInfoMap.get(item.name) : item.default_value
 
-      return {
-        ...item,
-        value: coerceValueByType(resolvedValue, item.type),
-        options: item.options || []
-      }
+      return resolveExtensionInfo(item, resolvedValue)
     })
   }
 }
@@ -229,11 +239,6 @@ onMounted(getConfigInfo)
                   v-else-if="item.type === 'Enum'"
                   v-model:value="item.value"
                   :options="item.options || []"
-                  :placeholder="`${$t('generate.extensionPlaceholderDefault')} ${item.default_value || ''}`"
-                />
-                <NInput
-                  v-else
-                  v-model:value="item.value"
                   :placeholder="`${$t('generate.extensionPlaceholderDefault')} ${item.default_value || ''}`"
                 />
               </div>

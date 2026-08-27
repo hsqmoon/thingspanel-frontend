@@ -17,7 +17,6 @@ const checkedRowKeys = ref<any>([])
 const selectedDeviceDrafts = ref<Map<string, any>>(new Map())
 const boundDeviceKeys = ref<Set<string>>(new Set())
 const device_config_id = ref<any>('')
-const NTableRef = ref<any>(null)
 const accessPointContext = ref<{
   voucher: string
   row: any
@@ -56,13 +55,13 @@ const queryInfo = ref<any>({
   },
   onUpdatePage: (page: number) => {
     queryInfo.value.page = page
-    // eslint-disable-next-line @typescript-eslint/no-use-before-define
+
     getLists()
   },
   onUpdatePageSize: (pageSize: number) => {
     queryInfo.value.pageSize = pageSize
     queryInfo.value.page = 1
-    // eslint-disable-next-line @typescript-eslint/no-use-before-define
+
     getLists()
   }
 })
@@ -274,20 +273,7 @@ const submitSevice: () => void = async () => {
   } catch (error: any) {
     console.error('Error submitting service config:', error) // Keep this log
 
-    // Attempt to get a specific error message
-    let errorMessage = '' // Initialize as empty
-    if (error?.response?.data?.message) {
-      errorMessage = error.response.data.message
-    } else if (error?.message) {
-      errorMessage = error.message
-    } else {
-      // Fallback to template error if available, otherwise leave empty
-      errorMessage = $t('card.someDevicesNotSetTemplate') // Use template error as primary fallback
-      if (!errorMessage) {
-        // If even template error key doesn't exist, truly empty
-        errorMessage = ''
-      }
-    }
+    const errorMessage = error?.response?.data?.message || error?.message || $t('card.someDevicesNotSetTemplate') || ''
 
     // Only show error message if we found a specific one or the template fallback
     if (errorMessage) {

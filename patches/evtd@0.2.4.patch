@@ -1,0 +1,57 @@
+diff --git a/es/traps.js b/es/traps.js
+index 0d0d19f02c4980e6bfebeb6a16be91db7db6dbc4..8f2c1ec0114bc16b7888358cf599d75ec768ca80 100644
+--- a/es/traps.js
++++ b/es/traps.js
+@@ -1,4 +1,3 @@
+-import { on, off } from './delegate';
+ import { getEventTarget } from './utils';
+ const traps = {
+     mousemoveoutside: new WeakMap(),
+@@ -56,7 +55,7 @@ function trapOn(name, el, handler, options) {
+     if (name === 'mousemoveoutside' || name === 'clickoutside') {
+         const trapHandlers = ensureTrapHandlers(name, el, handler);
+         Object.keys(trapHandlers).forEach((key) => {
+-            on(key, document, trapHandlers[key], options);
++            document.addEventListener(key, trapHandlers[key], options);
+         });
+         return true;
+     }
+@@ -66,7 +65,7 @@ function trapOff(name, el, handler, options) {
+     if (name === 'mousemoveoutside' || name === 'clickoutside') {
+         const trapHandlers = ensureTrapHandlers(name, el, handler);
+         Object.keys(trapHandlers).forEach((key) => {
+-            off(key, document, trapHandlers[key], options);
++            document.removeEventListener(key, trapHandlers[key], options);
+         });
+         return true;
+     }
+diff --git a/lib/traps.js b/lib/traps.js
+index 0126ad8791c2776bb14be3b538e97a22a6466f61..02dc44e8507c53a4c61550ba347e408b7987a000 100644
+--- a/lib/traps.js
++++ b/lib/traps.js
+@@ -1,7 +1,6 @@
+ "use strict";
+ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.trapOn = exports.trapOff = void 0;
+-const delegate_1 = require("./delegate");
+ const utils_1 = require("./utils");
+ const traps = {
+     mousemoveoutside: new WeakMap(),
+@@ -59,7 +58,7 @@ function trapOn(name, el, handler, options) {
+     if (name === 'mousemoveoutside' || name === 'clickoutside') {
+         const trapHandlers = ensureTrapHandlers(name, el, handler);
+         Object.keys(trapHandlers).forEach((key) => {
+-            (0, delegate_1.on)(key, document, trapHandlers[key], options);
++            document.addEventListener(key, trapHandlers[key], options);
+         });
+         return true;
+     }
+@@ -70,7 +69,7 @@ function trapOff(name, el, handler, options) {
+     if (name === 'mousemoveoutside' || name === 'clickoutside') {
+         const trapHandlers = ensureTrapHandlers(name, el, handler);
+         Object.keys(trapHandlers).forEach((key) => {
+-            (0, delegate_1.off)(key, document, trapHandlers[key], options);
++            document.removeEventListener(key, trapHandlers[key], options);
+         });
+         return true;
+     }

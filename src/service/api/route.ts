@@ -17,7 +17,7 @@ export const fetchElementList = async (params: any = {}) => {
   const data = await request.get<Api.Route.Data>('/ui_elements', {
     params
   })
-  // eslint-disable-next-line no-unused-expressions,@typescript-eslint/no-unused-expressions
+  // eslint-disable-next-line @typescript-eslint/no-unused-expressions
   data && data.data && (data.data.list = adapterOfFetchRouterList(data.data))
   return data
 }

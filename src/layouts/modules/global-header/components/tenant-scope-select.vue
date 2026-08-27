@@ -17,7 +17,7 @@ async function loadTenants() {
 
   loading.value = true
   try {
-    const { data } = await fetchUserList({ page: 1, page_size: 1000 })
+    const { data } = await fetchUserList({ page: 1, page_size: 1000 }, true)
     const tenants = data?.list || []
     options.value = [
       { label: '全部租户', value: allTenants },
@@ -30,7 +30,10 @@ async function loadTenants() {
     if (value.value !== allTenants && !options.value.some(option => option.value === value.value)) {
       value.value = allTenants
       localStg.remove('tenantScopeId')
+      window.location.reload()
     }
+  } catch {
+    window.$message?.error('租户列表加载失败，请稍后重试。')
   } finally {
     loading.value = false
   }

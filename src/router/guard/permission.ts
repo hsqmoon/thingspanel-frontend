@@ -3,6 +3,7 @@ import type { RouteKey, RoutePath } from '@elegant-router/types'
 import { useAuthStore } from '@/store/modules/auth'
 import { useRouteStore } from '@/store/modules/route'
 import { localStg } from '@/utils/storage'
+import { getIsAuthRouteExist, initAuthRoute } from '../auth-route-manager'
 
 export function createPermissionGuard(router: Router) {
   router.beforeEach(async (to, from, next) => {
@@ -103,7 +104,7 @@ async function createAuthRouteGuard(
 
   // 3. If the route is initialized, check whether the route exists.
   if (routeStore.isInitAuthRoute && isNotFoundRoute) {
-    const exist = await routeStore.getIsAuthRouteExist(to.path as RoutePath)
+    const exist = await getIsAuthRouteExist(to.path as RoutePath)
 
     if (exist) {
       const noPermissionRoute: RouteKey = '403'
@@ -128,7 +129,13 @@ async function createAuthRouteGuard(
   }
 
   // 5. init auth route
-  const initSuccess = await routeStore.initAuthRoute()
+  let initSuccess: boolean
+  try {
+    initSuccess = await initAuthRoute()
+  } catch {
+    next(false)
+    return false
+  }
 
   // If init failed, clear the stale session and explicitly finish this pending
   // navigation. Relying on resetStore's current-route check can leave the guard

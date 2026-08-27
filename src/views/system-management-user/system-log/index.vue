@@ -154,8 +154,6 @@ function pickerChange(value: [number, number] | null) {
   if (value && value.length === 2) {
     const startDate = moment(value[0])
     const endDateMoment = moment(value[1])
-    if (process.env.NODE_ENV === 'development') {
-    }
 
     // 检查用户是否可能只选了日期（时间部分为 00:00:00）
     // 如果是，则将结束时间调整到 23:59:59.999
@@ -168,28 +166,18 @@ function pickerChange(value: [number, number] | null) {
       endDateMoment.millisecond() === 0
     ) {
       adjustedEndDateMoment = endDateMoment.endOf('day')
-      if (process.env.NODE_ENV === 'development') {
-      }
     } else {
       adjustedEndDateMoment = endDateMoment // 用户选择了具体时间，保持不变
-      if (process.env.NODE_ENV === 'development') {
-      }
     }
 
     queryParams.start_time = startDate.format('YYYY-MM-DDTHH:mm:ssZ')
     queryParams.end_time = adjustedEndDateMoment.format('YYYY-MM-DDTHH:mm:ssZ')
-    if (process.env.NODE_ENV === 'development') {
-    }
 
-    // 尝试更新 range ref 本身以改变输入框显示
-    // 注意：这可能会触发组件更新，需要测试
-    // @ts-ignore // 忽略类型检查，因为我们在可变元组中修改元素
+    // 同步日期选择器显示的结束时间
     range.value[1] = adjustedEndDateMoment.valueOf()
   } else {
     queryParams.start_time = ''
     queryParams.end_time = ''
-    if (process.env.NODE_ENV === 'development') {
-    }
   }
 }
 const getPlatform = computed(() => {

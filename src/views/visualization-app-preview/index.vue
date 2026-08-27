@@ -7,12 +7,16 @@ import { bootstrapAppEmbedSession } from '@/utils/app-embed-auth'
 import { getThingsVisDashboard, type ThingsVisDashboard } from '@/service/api/thingsvis'
 import EmbedNavBar from '@/views/visualization-app/EmbedNavBar.vue'
 
+type PreviewDashboard = Omit<ThingsVisDashboard, 'canvasConfig'> & {
+  canvasConfig: ThingsVisDashboard['canvasConfig'] & { previewAlignY: 'top' }
+}
+
 const route = useRoute()
 const router = useRouter()
 
 const loading = ref(false)
 const authReady = ref(false)
-const dashboardSchema = ref<ThingsVisDashboard | null>(null)
+const dashboardSchema = ref<PreviewDashboard | null>(null)
 
 const dashboardId = computed(() => String(route.query.dashboardId || ''))
 const pageTitle = computed(() => dashboardSchema.value?.name || String(route.query.dashboardName || '看板预览'))

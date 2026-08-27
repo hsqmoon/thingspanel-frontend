@@ -8,10 +8,13 @@ import type { GridLayoutPlusItem, PerformanceConfig } from '../gridLayoutPlusTyp
 /**
  * 防抖函数
  */
-export function debounce<T extends (...args: any[]) => any>(func: T, delay: number): (...args: Parameters<T>) => void {
-  let timeoutId: NodeJS.Timeout | null = null
+export function debounce<TThis, TArgs extends unknown[]>(
+  func: (this: TThis, ...args: TArgs) => unknown,
+  delay: number
+): (this: TThis, ...args: TArgs) => void {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
 
-  return function (...args: Parameters<T>) {
+  return function (this: TThis, ...args: TArgs) {
     if (timeoutId) {
       clearTimeout(timeoutId)
     }
@@ -26,11 +29,14 @@ export function debounce<T extends (...args: any[]) => any>(func: T, delay: numb
 /**
  * 节流函数
  */
-export function throttle<T extends (...args: any[]) => any>(func: T, delay: number): (...args: Parameters<T>) => void {
+export function throttle<TThis, TArgs extends unknown[]>(
+  func: (this: TThis, ...args: TArgs) => unknown,
+  delay: number
+): (this: TThis, ...args: TArgs) => void {
   let lastTime = 0
-  let timeoutId: NodeJS.Timeout | null = null
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
 
-  return function (...args: Parameters<T>) {
+  return function (this: TThis, ...args: TArgs) {
     const now = Date.now()
 
     if (now - lastTime >= delay) {

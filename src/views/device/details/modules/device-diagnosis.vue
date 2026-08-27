@@ -161,7 +161,7 @@ const fetchDiagnostics = async () => {
         failureRecords.value = []
       }
     }
-  } catch (error) {}
+  } catch {}
 }
 
 // 刷新数据
@@ -209,7 +209,7 @@ const fetchLogs = async () => {
       // 倒序排列，最新的在下面，符合控制台习惯
       const list = res.data.list.reverse()
       debugLogs.value = list.map((item: any) => {
-         const time = item.ts ? dayjs(item.ts).format('YYYY-MM-DD HH:mm:ss.SSS') : '' // eslint-disable-line
+         const time = item.ts ? dayjs(item.ts).format('YYYY-MM-DD HH:mm:ss.SSS') : ''
         return `[${time}] ${JSON.stringify(item)}`
       })
 

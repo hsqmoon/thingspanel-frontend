@@ -7,7 +7,7 @@ import { $t } from '@/locales'
 const { routerPushByKey } = useRouterPush()
 
 const props = defineProps<{
-  // eslint-disable-next-line vue/prop-name-casing
+
   config_id: string
 }>()
 const alarmAdd = () => {

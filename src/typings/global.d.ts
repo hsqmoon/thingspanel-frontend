@@ -11,19 +11,14 @@ interface Window {
   $notification?: import('naive-ui').NotificationProviderInst
 }
 
-interface ViewTransition {
-  ready: Promise<void>
-}
-
-interface Document {
-  startViewTransition?: (callback: () => Promise<void> | void) => ViewTransition
-}
 type OptionTypes = {
   label: string
   value: any
 }
+interface ImportMetaEnv extends Env.ImportMeta {}
+
 interface ImportMeta {
-  readonly env: Env.ImportMeta
+  readonly env: ImportMetaEnv
 }
 
 declare namespace Common2 {

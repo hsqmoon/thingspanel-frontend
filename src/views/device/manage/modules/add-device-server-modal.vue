@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import type { FormInst, FormItemRule } from 'naive-ui'
+import type { FormItemRule } from 'naive-ui'
 import { createRequiredFormRule } from '@/utils/form/rule'
 import { $t } from '@/locales'
 
@@ -26,8 +26,6 @@ const modalVisible = computed({
 })
 
 function handleUpdateFormModelByModalType() {}
-
-const formRef = ref<HTMLElement & FormInst>()
 
 type FormModel = Pick<DataService.Data, 'name'>
 
@@ -57,7 +55,7 @@ watch(
 
 <template>
   <NModal v-model:show="modalVisible" preset="card" :title="title" class="w-700px">
-    <NForm ref="formRef" label-placement="left" :label-width="120" :model="formModel" :rules="rules">
+    <NForm label-placement="left" :label-width="120" :model="formModel" :rules="rules">
       <NGrid :cols="24" :x-gap="18">
         <NFormItemGridItem :span="24" :label="$t('generate.enter-key')" path="name">
           <NInput v-model:value="formModel.name" />

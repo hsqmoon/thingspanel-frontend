@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { defineExpose, ref } from 'vue'
+import { ref } from 'vue'
 import { $t } from '@/locales'
 import { formatDateTime } from '@/utils/common/datetime'
 

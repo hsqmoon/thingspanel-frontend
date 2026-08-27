@@ -590,7 +590,7 @@ const shouldPrefillHistoryForDataSource = (dataSourceId?: string) => {
   return typeof bufferSize === 'number' && Number.isFinite(bufferSize) && bufferSize > 0
 }
 
-const buildRequestedFieldData = async (fieldIds: string[], deviceId?: string) => {
+const buildRequestedFieldData = async (fieldIds: string[], _deviceId?: string) => {
   const currentData = props.data
   if (!fieldIds.length) return {}
 

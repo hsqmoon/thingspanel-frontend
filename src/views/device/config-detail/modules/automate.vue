@@ -2,7 +2,7 @@
 import sceneLinkage from '@/views/automation/scene-linkage/modules/dataList.vue'
 
 defineProps<{
-  // eslint-disable-next-line vue/prop-name-casing
+
   config_id: string
 }>()
 </script>

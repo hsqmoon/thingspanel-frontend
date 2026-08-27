@@ -19,7 +19,8 @@ export function setupI18n(app: App) {
   app.use(i18n)
 }
 
-export const $t = i18n.global.t as I18n.$T
-export function setLocale(locale: I18n.LangType) {
+const globalI18n = i18n.global as unknown as { t: App.I18n.$T }
+export const $t = globalI18n.t
+export function setLocale(locale: App.I18n.LangType) {
   i18n.global.locale.value = locale
 }

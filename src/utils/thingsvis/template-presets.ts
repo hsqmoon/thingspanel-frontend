@@ -125,7 +125,8 @@ export function buildTemplateDevicePresets(rawConfig: unknown, fields: PlatformF
     const match = /^(telemetry|attributes)_(.+)$/.exec(presetKey)
     if (!match || !Array.isArray(entries)) return []
 
-    const [, propertyType, fieldId] = match as [string, TemplatePresetPropertyType, string]
+    const propertyType = match[1] as TemplatePresetPropertyType
+    const fieldId = match[2]!
     const fieldMeta = resolvePresetFieldMeta(fieldId, propertyType, fieldMap)
 
     return entries.flatMap((entry, index) => {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { useMessage } from 'naive-ui'
-import type { FormInst, MessageReactive } from 'naive-ui'
+import type { FormInst } from 'naive-ui'
 import { useBoolean, useLoading } from '@sa/hooks'
 import { editNotificationServices, fetchNotificationServicesEmail, sendTestEmail } from '@/service/api'
 import { deepClone } from '@/utils/common/tool'
@@ -87,17 +87,14 @@ const message = useMessage()
 const debugFormRef = ref<HTMLElement & FormInst>()
 async function handleSend() {
   await debugFormRef.value?.validate()
-  let messageReactive: MessageReactive | null = message.loading($t('common.modifySuccess'), {
+  const messageReactive = message.loading($t('common.modifySuccess'), {
     duration: 100000
   })
   const data: any = await sendTestEmail(debugData)
   if (!data.error) {
     window.$message?.success('success')
   }
-  if (messageReactive) {
-    messageReactive.destroy()
-    messageReactive = null
-  }
+  messageReactive.destroy()
   closeModal()
 }
 

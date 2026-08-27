@@ -3,7 +3,6 @@ import { h } from 'vue'
 import { NTag } from 'naive-ui'
 import { $t } from '@/locales'
 
-// eslint-disable-next-line prettier/prettier
 defineOptions({ name: 'DashboardAnalysisBottomPart' })
 
 interface TimelineData {

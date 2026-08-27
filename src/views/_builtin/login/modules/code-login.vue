@@ -15,7 +15,7 @@ defineOptions({
 const { locale } = useI18n()
 const auth = useAuthStore()
 const { toggleLoginModule } = useRouterPush()
-const { formRef, validate } = useNaiveForm()
+const { setFormRef, validate } = useNaiveForm()
 
 interface FormModel {
   phone: string
@@ -53,7 +53,7 @@ async function handleSubmit() {
 </script>
 
 <template>
-  <NForm ref="formRef" :key="locale" :model="model" :rules="rules" size="large" :show-label="false">
+  <NForm :ref="setFormRef" :key="locale" :model="model" :rules="rules" size="large" :show-label="false">
     <NFormItem path="phone">
       <NInput v-model:value="model.phone" :placeholder="$t('page.login.common.phonePlaceholder')" />
     </NFormItem>

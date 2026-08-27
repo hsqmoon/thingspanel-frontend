@@ -121,7 +121,6 @@ async function list() {
         { btnName: $t('page.manage.common.status.enable'), type: 'enable', color: 'success' },
         { btnName: $t('common.delete'), type: 'delete', color: 'error' }
       ]
-      // eslint-disable-next-line array-callback-return
       tableData.value.map(item => {
         if (item.enabled === 'Y') {
           item.operatorBtn = operatorBtn

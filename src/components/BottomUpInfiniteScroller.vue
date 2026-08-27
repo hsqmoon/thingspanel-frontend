@@ -1,7 +1,6 @@
 <template>
   <!-- Replace root div with NScrollbar -->
   <n-scrollbar
-    ref="scrollbarInstRef"
     :scrollbar-ref="scrollbarRootRef"
     :style="{ height: height }"
     class="bottom-up-scroller"
@@ -23,10 +22,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 // Import NEl along with NScrollbar
-import { NScrollbar, ScrollbarInst, NEl } from 'naive-ui'
+import { NScrollbar, NEl } from 'naive-ui'
 
 // --- Props remain the same ---
-const props = defineProps({
+defineProps({
   list: {
     type: Array as () => any[],
     required: true
@@ -37,8 +36,6 @@ const props = defineProps({
   }
 })
 
-// --- Update Ref for NScrollbar instance ---
-const scrollbarInstRef = ref<ScrollbarInst | null>(null)
 // Template ref for the scrollable DOM element
 const scrollbarRootRef = ref<HTMLElement | null>(null)
 // Ref for the content inside (might be needed to get correct scrollHeight)

@@ -1,12 +1,7 @@
-import { ref, type Ref } from 'vue'
+import { ref } from 'vue'
 import { useWebSocket } from '@vueuse/core'
 import { localStg } from '@/utils/storage'
 import { getWebsocketServerUrl } from '@/utils/common/tool'
-
-interface DeviceStatusMessage {
-  device_id: string
-  is_online: number // 1: 在线, 0: 离线
-}
 
 interface SubscriptionParams {
   device_ids: string[]
@@ -93,7 +88,7 @@ export class DeviceStatusWebSocket {
         interval: 30000,
         pongTimeout: 10000
       },
-      onConnected: (ws: WebSocket) => {
+      onConnected: () => {
         this.reconnectAttempts = 0
         this.isConnecting = false // 连接成功，清除连接中标记
 
@@ -104,7 +99,7 @@ export class DeviceStatusWebSocket {
         }
         send(JSON.stringify(subscriptionMessage))
       },
-      onMessage: (ws: WebSocket, event: MessageEvent) => {
+      onMessage: (_ws: WebSocket, event: MessageEvent) => {
         try {
           const data = JSON.parse(event.data)
 
@@ -125,15 +120,15 @@ export class DeviceStatusWebSocket {
             }
           }
           // 其他格式静默忽略，不报错
-        } catch (error) {
+        } catch {
           // 解析失败静默忽略
         }
       },
-      onError: (ws: WebSocket, event: Event) => {
+      onError: () => {
         this.reconnectAttempts++
         this.isConnecting = false // 连接错误，清除连接中标记
       },
-      onDisconnected: (ws: WebSocket, event: CloseEvent) => {
+      onDisconnected: () => {
         this.isConnecting = false // 断开连接，清除连接中标记
       }
     })

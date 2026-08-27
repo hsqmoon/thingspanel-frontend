@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import type { ComponentPublicInstance } from 'vue'
 import type { FormInst } from 'naive-ui'
 import { REG_CODE_SIX, REG_DEFAULT, REG_EMAIL, REG_PHONE, REG_PWD, REG_PHONE_WITH_COUNTRY_CODE } from '@/constants/reg'
 import { $t } from '@/locales'
@@ -67,6 +68,21 @@ export function useFormRules(paramObj?) {
 export function useNaiveForm() {
   const formRef = ref<FormInst | null>(null)
 
+  function isFormInst(instance: Element | ComponentPublicInstance): instance is FormInst & typeof instance {
+    return (
+      'validate' in instance &&
+      typeof instance.validate === 'function' &&
+      'restoreValidation' in instance &&
+      typeof instance.restoreValidation === 'function' &&
+      'invalidateLabelWidth' in instance &&
+      typeof instance.invalidateLabelWidth === 'function'
+    )
+  }
+
+  function setFormRef(instance: Element | ComponentPublicInstance | null) {
+    formRef.value = instance && isFormInst(instance) ? instance : null
+  }
+
   async function validate() {
     await formRef.value?.validate()
   }
@@ -77,6 +93,7 @@ export function useNaiveForm() {
 
   return {
     formRef,
+    setFormRef,
     validate,
     restoreValidation
   }

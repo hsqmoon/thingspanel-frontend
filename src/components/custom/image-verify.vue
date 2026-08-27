@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { watch } from 'vue'
+import type { ComponentPublicInstance } from 'vue'
 import useImageVerify from '@/hooks/business/use-image-verify'
 
 defineOptions({ name: 'ImageVerify' })
@@ -19,6 +20,9 @@ interface Emits {
 const emit = defineEmits<Emits>()
 
 const { domRef, imgCode, setImgCode, getImgCode } = useImageVerify()
+const setDomRef = (element: Element | ComponentPublicInstance | null) => {
+  domRef.value = element instanceof HTMLCanvasElement ? element : undefined
+}
 
 watch(
   () => props.code,
@@ -35,7 +39,7 @@ defineExpose({ getImgCode })
 
 <template>
   <div>
-    <canvas ref="domRef" width="152" height="40" class="cursor-pointer" @click="getImgCode"></canvas>
+    <canvas :ref="setDomRef" width="152" height="40" class="cursor-pointer" @click="getImgCode"></canvas>
   </div>
 </template>
 

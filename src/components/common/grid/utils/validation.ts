@@ -249,8 +249,6 @@ export function validateResponsiveConfig(
 ): LayoutOperationResult<boolean> {
   try {
     const breakpointNames = Object.keys(breakpoints)
-    const colNames = Object.keys(cols)
-
     // 检查断点和列配置是否匹配
     for (const bp of breakpointNames) {
       if (!(bp in cols)) {
@@ -331,8 +329,8 @@ export function validateLargeGridPerformance(
     const gridSize = colNum * Math.max(...layout.map(item => item.y + item.h), 10) // 估算行数
 
     // 性能警告阈值
-    const warnings = []
-    const recommendations = []
+    const warnings: string[] = []
+    const recommendations: string[] = []
 
     if (colNum > 50 && itemCount > 50) {
       warnings.push('大网格（>50列）配合大量组件（>50个）可能影响性能')

@@ -12,18 +12,14 @@ export function getColorName(color: string) {
   let cl = -1
   let df = -1
 
-  let name = ''
-
   colorNames.some((item, index) => {
-    const [hexValue, colorName] = item
+    const [hexValue] = item
 
     const hexcode = `#${hexValue}`
 
     const match = hex === hexcode
 
-    if (match) {
-      name = colorName
-    } else {
+    if (!match) {
       const { r, g, b } = getRgb(hexcode)
       const { h, s, l } = getHsl(hexcode)
 
@@ -40,7 +36,5 @@ export function getColorName(color: string) {
     return match
   })
 
-  name = cl < 0 ? 'Invalid Color' : colorNames[cl][1]
-
-  return name
+  return cl < 0 ? 'Invalid Color' : colorNames[cl][1]
 }

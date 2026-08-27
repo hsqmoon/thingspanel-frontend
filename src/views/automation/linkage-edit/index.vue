@@ -155,9 +155,7 @@ const handleIfData = () => {
     return [] // Return empty array if the ref is not ready
   }
   const ifGroupsData = JSON.parse(JSON.stringify(editPremise.value.ifGroupsData()))
-  // eslint-disable-next-line array-callback-return
   ifGroupsData.map((ifGroupItem: any) => {
-    // eslint-disable-next-line array-callback-return
     ifGroupItem.map((ifItem: any) => {
       // ifItem.expiration_time = moment().format();
       if (ifItem.trigger_conditions_type === '10' || ifItem.trigger_conditions_type === '11') {
@@ -195,7 +193,6 @@ const handleIfData = () => {
       }
       if (ifItem.trigger_conditions_type === '22') {
         let trigger_value = ''
-        // eslint-disable-next-line array-callback-return
         ifItem.weekChoseValue.map((item: any) => {
           trigger_value += item
         })
@@ -215,7 +212,6 @@ const handleIfData = () => {
         }
         if (ifItem.task_type === 'WEEK') {
           let params = ''
-          // eslint-disable-next-line array-callback-return
           ifItem.weekChoseValue.map((item: any) => {
             params += item
           })
@@ -239,10 +235,8 @@ const handleActionData = () => {
   // 处理动作的数据
   const actionGroupsData = JSON.parse(JSON.stringify(editAction.value.actionGroupsReturn()))
   const actionsData = [] as any
-  // eslint-disable-next-line array-callback-return
   actionGroupsData.map((item: any) => {
     if (item.actionType === '1') {
-      // eslint-disable-next-line array-callback-return
       item.actionInstructList.map((instructItem: any) => {
         // 如果是c_telemetry/c_attribute,那么action_value示例格式：{"c_telemetry":2}
         // 如果是c_command,那么action_value示例格式：{"method":"switch1","params":{"false":0}}
@@ -279,9 +273,7 @@ const handleActionData = () => {
 
 // 回显时处理条件数据
 const echoIfData = (ifData: any) => {
-  // eslint-disable-next-line array-callback-return
   ifData.map((item: any) => {
-    // eslint-disable-next-line array-callback-return
     item.map((ifItem: any) => {
       if (ifItem.trigger_conditions_type === '10' || ifItem.trigger_conditions_type === '11') {
         ifItem.ifType = '1'
@@ -357,7 +349,6 @@ const echoIfData = (ifData: any) => {
 const echoActionData = (actionsData: any) => {
   const actionGroupsData = [] as any
   const actionInstructList = [] as any
-  // eslint-disable-next-line array-callback-return
   actionsData.map((item: any) => {
     if (item.action_type === '10' || item.action_type === '11') {
       item.actionParamOptions = []
@@ -394,7 +385,6 @@ const echoActionData = (actionsData: any) => {
   return actionGroupsData
 }
 if (configId.value) {
-  // eslint-disable-next-line no-unused-expressions
   typeof configId.value === 'string' ? (configForm.value.id = configId.value) : ''
   getSceneAutomationsInfo()
 }

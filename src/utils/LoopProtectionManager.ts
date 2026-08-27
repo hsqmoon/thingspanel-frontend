@@ -272,9 +272,6 @@ class LoopProtectionManager {
       this.performanceStats.averageCallsPerSecond = totalCalls / (timeDiff / 1000)
       this.performanceStats.lastResetTime = now
 
-      if (this.config.enableDebug && totalCalls > 0) {
-      }
-
       // 清理过期的历史记录
       this.cleanupExpiredHistory()
     }, 30000) // 每30秒统计一次

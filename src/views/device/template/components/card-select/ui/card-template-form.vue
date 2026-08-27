@@ -88,7 +88,7 @@ const getPanelList = async () => {
 }
 
 const changeIndicate = value => {
-  // eslint-disable-next-line no-param-reassign
+
   value = value.filter(item => item !== undefined)
   if (value.length > state.data.dataSource.sourceNum) {
     message.error($t('common.maxSelect') + state.data.dataSource.sourceNum + $t('common.dataSources'))

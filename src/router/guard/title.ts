@@ -8,7 +8,7 @@ export function createDocumentTitleGuard(router: Router) {
     const sysSettingStore = useSysSettingStore()
     const { i18nKey, title } = to.meta
     const appTitle = sysSettingStore.system_name === '' ? $t('title') : sysSettingStore.system_name
-    let routeTitle = ''
+    let routeTitle: string
 
     // 处理登录页面的子路由
     if (to.path?.startsWith('/login/')) {

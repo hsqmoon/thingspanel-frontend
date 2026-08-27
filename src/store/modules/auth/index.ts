@@ -9,9 +9,9 @@ import { localStg } from '@/utils/storage'
 import { $t } from '@/locales'
 import { encryptDataByRsa, generateRandomHexString } from '@/utils/common/tool'
 import { useRouteStore } from '../route'
-import { useTabStore } from '../tab'
 import { clearAuthStorage, getToken, getUserInfo } from './shared'
 import { clearThingsVisToken } from '@/utils/thingsvis'
+import { initAuthRoute, resetAuthRoute } from '@/router/auth-route-manager'
 
 export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
   const routeStore = useRouteStore()
@@ -26,18 +26,26 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
   const userInfo: Api.Auth.UserInfo = reactive(getUserInfo())
   /** Reset auth store */
   async function resetStore(navigateToLogin = true) {
-    const authStore = useAuthStore()
+    await resetAuthRoute()
 
     clearAuthStorage()
     clearThingsVisToken()
 
-    authStore.$reset()
+    token.value = ''
+    Object.keys(userInfo).forEach(key => {
+      delete (userInfo as unknown as Record<string, unknown>)[key]
+    })
+    Object.assign(userInfo, {
+      authority: '',
+      id: '',
+      userId: '',
+      userName: '',
+      roles: []
+    })
 
     if (navigateToLogin && !route.value.meta.constant) {
       await toLogin()
     }
-
-    await routeStore.resetStore()
   }
 
   /**
@@ -48,6 +56,7 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
    */
   async function login(userName: string, password: string) {
     startLoading()
+    let identityLoaded = false
     try {
       let newP = password
       const data = localStorage.getItem('enableZcAndYzm') ? JSON.parse(localStorage.getItem('enableZcAndYzm')!) : []
@@ -65,7 +74,8 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
 
       const { loop, info } = await loginByToken(loginToken)
       if (loop && info) {
-        const initialized = await routeStore.initAuthRoute()
+        identityLoaded = true
+        const initialized = await initAuthRoute()
         if (!initialized) {
           await resetStore()
           return
@@ -77,7 +87,9 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
         await redirectFromLogin()
       }
     } catch {
-      await resetStore()
+      if (!identityLoaded || !localStg.get('token')) {
+        await resetStore()
+      }
     } finally {
       endLoading()
     }
@@ -90,33 +102,50 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
    */
   async function enter(userId: string) {
     startLoading()
-    const { clearTabs } = useTabStore()
-    const { data: loginToken, error } = await transformUser({
-      become_user_id: userId
-    })
+    let replacingIdentity = false
+    let identityLoaded = false
+    try {
+      const { data: loginToken, error } = await transformUser({
+        become_user_id: userId
+      })
 
-    if (!error) {
-      const { info, loop } = await loginByToken(loginToken)
-
-      clearTabs()
-      if (loop) {
-        await routeStore.initAuthRoute()
-        await redirectFromLogin()
-        if (routeStore.isInitAuthRoute) {
-          window.$notification?.success({
-            title: $t('page.login.common.loginSuccess'),
-            content: $t('page.login.common.welcomeBack', {
-              userName: info?.name
-            }),
-            duration: 4500
-          })
-        }
+      if (error || !loginToken) {
+        await resetStore()
+        return
       }
-    } else {
-      await resetStore()
-    }
 
-    endLoading()
+      replacingIdentity = true
+      await resetAuthRoute()
+      const { info, loop } = await loginByToken(loginToken)
+      if (!loop) {
+        await resetStore()
+        return
+      }
+      identityLoaded = true
+
+      const initialized = await initAuthRoute()
+      if (!initialized) {
+        await resetStore()
+        return
+      }
+
+      await redirectFromLogin()
+      if (routeStore.isInitAuthRoute) {
+        window.$notification?.success({
+          title: $t('page.login.common.loginSuccess'),
+          content: $t('page.login.common.welcomeBack', {
+            userName: info?.name
+          }),
+          duration: 4500
+        })
+      }
+    } catch {
+      if (replacingIdentity && (!identityLoaded || !localStg.get('token'))) {
+        await resetStore()
+      }
+    } finally {
+      endLoading()
+    }
   }
 
   async function loginByToken(loginToken: Api.Auth.LoginToken) {
@@ -145,8 +174,13 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
     return { loop: false, info }
   }
   async function requestLogout() {
-    await logout()
-    resetStore()
+    try {
+      await logout()
+    } catch {
+      // The remote session is best-effort; local credentials must always be removed.
+    } finally {
+      await resetStore()
+    }
   }
 
   return {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { defineProps, onMounted, reactive, ref, watchEffect } from 'vue'
+import { onMounted, reactive, ref, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
 import type { FormInst, FormRules } from 'naive-ui'
 import { NButton, NForm, NFormItem, NInput, NSelect } from 'naive-ui'
@@ -44,6 +44,34 @@ interface FormElement {
   array?: FormElement[] // 仅 table 类型时有效，定义表格列的配置
 }
 
+interface ServicePluginInfo {
+  id: string
+  name: string
+  serviceIdentifier: string
+  serviceType: number
+}
+
+const toServicePluginInfo = (value: unknown): ServicePluginInfo | null => {
+  if (!value || typeof value !== 'object') return null
+
+  const plugin = value as Record<string, unknown>
+  if (
+    typeof plugin.id !== 'string' ||
+    typeof plugin.name !== 'string' ||
+    typeof plugin.service_identifier !== 'string' ||
+    typeof plugin.service_type !== 'number'
+  ) {
+    return null
+  }
+
+  return {
+    id: plugin.id,
+    name: plugin.name,
+    serviceIdentifier: plugin.service_identifier,
+    serviceType: plugin.service_type
+  }
+}
+
 const deviceDataStore = useDeviceDataStore()
 
 const props = defineProps<{
@@ -62,11 +90,11 @@ const feachConnectInfo = async () => {
   connectInfo.value = res.data
 }
 
-const pluginInfo = ref<object>({})
-const getPlugininfoByServiceReq = async str => {
-  const { error, data } = await getPlugininfoByService(str)
+const pluginInfo = ref<ServicePluginInfo | null>(null)
+const getPlugininfoByServiceReq = async (params: { service_identifier: string }) => {
+  const { error, data } = await getPlugininfoByService(params)
   if (!error) {
-    pluginInfo.value = data
+    pluginInfo.value = toServicePluginInfo(data)
   }
 }
 
@@ -121,9 +149,9 @@ const copy = async param => {
   window.$message?.success($t('theme.configOperation.copySuccess'))
 }
 const toServiceClick = () => {
-  if (deviceDataStore?.deviceData?.access_way === 'B') {
+  if (deviceDataStore?.deviceData?.access_way === 'B' && pluginInfo.value) {
     router.push(
-      `/device/service-details?id=${pluginInfo.value.id}&service_type=${pluginInfo.value.service_type}&service_name=${pluginInfo.value.name}&service_identifier=${pluginInfo.value.service_identifier}`
+      `/device/service-details?id=${pluginInfo.value.id}&service_type=${pluginInfo.value.serviceType}&service_name=${pluginInfo.value.name}&service_identifier=${pluginInfo.value.serviceIdentifier}`
     )
   }
 }

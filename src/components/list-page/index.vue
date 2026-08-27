@@ -205,7 +205,7 @@ const getDefaultViewSlot = (): string => {
 
 const initializeView = () => {
   const available = getAvailableViewsWithSlots()
-  let initial = ''
+  let initial: string
 
   // 优先从 memory storage 中获取
   if (props.useViewMemory && storageView.value && available.some((v) => v.key === storageView.value)) {
@@ -230,11 +230,6 @@ const initializeView = () => {
   if (props.useViewMemory && !storageView.value) {
     storageView.value = initial
   }
-}
-
-const handleReset = () => {
-  // 触发重置事件，父组件负责清空表单和刷新数据
-  emit('reset')
 }
 
 const handleAddNew = () => {

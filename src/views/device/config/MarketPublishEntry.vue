@@ -108,13 +108,6 @@ function handlePublished() {
   emit('published')
 }
 
-/**
- * 处理发布失败
- */
-function handlePublishError(error: string) {
-  emit('publish-error', error)
-}
-
 const wizardRef = ref<InstanceType<typeof PublishWizard> | null>(null)
 
 // 暴露方法给父组件

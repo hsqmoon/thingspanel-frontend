@@ -29,7 +29,7 @@ import ProvinceCityDistrictSelector from '@/components/common/ProvinceCityDistri
 const isHttpProxy = import.meta.env.VITE_HTTP_PROXY === 'Y'
 const uploadUrl = isHttpProxy ? createProxyPattern() : getDemoServerUrl()
 const url = ref(uploadUrl)
-const { formRef, validate } = useNaiveForm()
+const { validate } = useNaiveForm()
 const editType = ref(false)
 const header = ref(false)
 const headUrl = ref('')
@@ -277,9 +277,6 @@ function closeEdit() {
 // 移除标签页切换逻辑，新设计不再需要
 /** 更新用户信息 */
 async function updataUserInfo() {
-  if (process.env.NODE_ENV === 'development') {
-  }
-
   const { error } = await changeInformation(getSubmitUserInfoData())
   if (!error) {
     window.$message?.success($t('custom.grouping_details.operationSuccess'))
@@ -638,7 +635,7 @@ onMounted(async () => {
           </div>
 
           <div class="bg-#f8fafc p-20px dark:bg-[#1E293B]">
-            <NForm ref="formRef" label-placement="top" :model="formData" :rules="passRules">
+            <NForm label-placement="top" :model="formData" :rules="passRules">
               <NFormItem :label="$t('generate.old-password')" path="old_password">
                 <NInput
                   v-model:value="formData.old_password"

@@ -1,7 +1,7 @@
 import { useRouter } from 'vue-router'
 import type { RouteLocationRaw } from 'vue-router'
 import type { LastLevelRouteKey, RouteKey } from '@elegant-router/types'
-import { router as globalRouter } from '@/router'
+import { router as globalRouter } from '@/router/instance'
 // import { useAuthStore } from '@/store/modules/auth';
 
 /**
