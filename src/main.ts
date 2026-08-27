@@ -12,19 +12,6 @@ import { initRuntimeFeatures } from '@/config/runtime-features'
 import App from './App.vue'
 const RECENTLY_VISITED_ROUTES_KEY = 'RECENTLY_VISITED_ROUTES'
 const MAX_RECENT_ROUTES = 8
-const PRELOAD_RECOVERY_KEY = 'NSNR_PRELOAD_RECOVERY_AT'
-
-window.addEventListener('vite:preloadError', event => {
-  event.preventDefault()
-  try {
-    const recoveredAt = Number(sessionStorage.getItem(PRELOAD_RECOVERY_KEY) || 0)
-    if (Date.now() - recoveredAt < 60_000) return
-    sessionStorage.setItem(PRELOAD_RECOVERY_KEY, String(Date.now()))
-    window.location.reload()
-  } catch {
-    return
-  }
-})
 
 // --- 更新排除路径列表，支持通配符 ---
 const excludedPaths = ['/login/*', '/404', '/home']
