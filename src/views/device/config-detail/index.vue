@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { defineAsyncComponent, ref } from 'vue'
+import { defineAsyncComponent, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { NButton } from 'naive-ui'
 import { deviceConfigInfo, deviceTemplateDetail } from '@/service/api/device'
@@ -26,11 +26,7 @@ const ExtendInfo = defineAsyncComponent(tabComponentLoaders[5])
 const SettingInfo = defineAsyncComponent(tabComponentLoaders[6])
 
 const preloadTabComponents = () => void Promise.allSettled(tabComponentLoaders.map(load => load()))
-if (typeof requestIdleCallback !== 'undefined') {
-  requestIdleCallback(preloadTabComponents, { timeout: 2000 })
-} else {
-  setTimeout(preloadTabComponents, 500)
-}
+onMounted(() => setTimeout(preloadTabComponents, 1000))
 
 const { routerPushByKey } = useRouterPush()
 const route = useRoute()
