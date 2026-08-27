@@ -67,12 +67,11 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
       if (loop && info) {
         const initialized = await routeStore.initAuthRoute()
         if (!initialized) {
-          if (info.authority === 'TENANT_USER') {
-            routeStore.setIsInitAuthRoute(true)
-            await routerPushByKey('403')
-          } else {
-            await resetStore()
-          }
+          await resetStore()
+          return
+        }
+        if (!routeStore.hasAuthRoutes) {
+          await routerPushByKey('403')
           return
         }
         await redirectFromLogin()

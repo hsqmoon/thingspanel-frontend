@@ -135,11 +135,6 @@ async function createAuthRouteGuard(
   // unresolved when a stale token redirects /login to the dynamic root route.
   if (!initSuccess) {
     const authStore = useAuthStore()
-    if (authStore.userInfo?.authority === 'TENANT_USER') {
-      routeStore.setIsInitAuthRoute(true)
-      next({ name: '403' })
-      return false
-    }
     await authStore.resetStore(false)
     next({ name: 'login', params: { module: 'pwd-login' }, replace: true })
 

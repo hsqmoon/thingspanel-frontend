@@ -28,6 +28,7 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
   const authStore = useAuthStore()
   const tabStore = useTabStore()
   const { bool: isInitAuthRoute, setBool: setIsInitAuthRoute } = useBoolean()
+  const hasAuthRoutes = ref(false)
   const removeRouteFns: (() => void)[] = []
 
   /**
@@ -154,7 +155,7 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
       success = await initDynamicAuthRoute()
     }
 
-    if (success) {
+    if (success && hasAuthRoutes.value) {
       tabStore.initHomeTab()
     }
 
@@ -166,8 +167,11 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
     const { authRoutes } = createRoutes()
 
     const filteredAuthRoutes = filterAuthRoutesByRoles(authRoutes, authStore?.userInfo?.roles as string[])
+    hasAuthRoutes.value = filteredAuthRoutes.length > 0
 
-    handleAuthRoutes(filteredAuthRoutes)
+    if (hasAuthRoutes.value) {
+      handleAuthRoutes(filteredAuthRoutes)
+    }
 
     setIsInitAuthRoute(true)
 
@@ -180,20 +184,22 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
 
     if (!error) {
       const routes = data?.list || []
-      if (!routes.length) {
-        return false
+      hasAuthRoutes.value = routes.length > 0
+
+      if (hasAuthRoutes.value) {
+        handleAuthRoutes(routes)
+
+        setRouteHome('home')
+
+        handleUpdateRootRouteRedirect('home')
       }
-
-      handleAuthRoutes(routes)
-
-      setRouteHome('home')
-
-      handleUpdateRootRouteRedirect('home')
 
       setIsInitAuthRoute(true)
 
       return true // Indicate success
     }
+
+    hasAuthRoutes.value = false
 
     // Optionally handle the error, e.g., show a notification
     // window.$message?.error('Failed to fetch user routes.');
@@ -324,6 +330,7 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
     breadcrumbs,
     initAuthRoute,
     isInitAuthRoute,
+    hasAuthRoutes,
     setIsInitAuthRoute,
     getIsAuthRouteExist,
     getSelectedMenuKeyPath
