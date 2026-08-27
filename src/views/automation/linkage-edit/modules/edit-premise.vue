@@ -197,7 +197,7 @@ const deviceGroupOptions = ref([] as any)
 const getGroup = async () => {
   deviceGroupOptions.value = []
   const res = await deviceGroupTree({})
-  res.data.map((item: any) => {
+  res.data.forEach((item: any) => {
     deviceGroupOptions.value.push(item.group)
   })
 }
@@ -319,10 +319,10 @@ const loadTriggerParamOptions = async (ifItem: any) => {
 
       if (res && res.data) {
         // (Processing logic copied from actionParamShow)
-        res.data.map((item: any) => {
+        res.data.forEach((item: any) => {
           item.value = item.data_source_type
           item.label = `${item.data_source_type}${item.label ? `(${item.label})` : ''}`
-          item.options.map((subItem: any) => {
+          item.options.forEach((subItem: any) => {
             subItem.value = `${item.value}/${subItem.key}`
             subItem.label = `${subItem.key}${subItem.label ? `(${subItem.label})` : ''}`
           })
@@ -351,59 +351,6 @@ const actionParamShow = async (ifItem: any, data: any) => {
   if (data === true) {
     await loadTriggerParamOptions(ifItem)
   }
-  // 原有的 actionParamShow 逻辑可以简化或移除，因为 loadTriggerParamOptions 做了主要工作
-  // 保留原始注释掉的逻辑以供参考，或者完全移除
-  // if (data === true && ifItem.trigger_source) {
-  //   ifItem.triggerParamOptions = [];
-  //   let res = null as any;
-  //   if (ifItem.trigger_conditions_type === '10') {
-  //     res = await deviceMetricsConditionMenu({
-  //       device_id: ifItem.trigger_source
-  //     });
-  //   } else if (ifItem.trigger_conditions_type === '11') {
-  //     res = await configMetricsConditionMenu({
-  //       device_config_id: ifItem.trigger_source
-  //     });
-  //   }
-  //   // eslint-disable-next-line array-callback-return
-  //   if (res.data) {
-  //     // eslint-disable-next-line array-callback-return
-  //     res.data.map((item: any) => {
-  //       item.value = item.data_source_type;
-  //       item.label = `${item.data_source_type}${item.label ? `(${item.label})` : ''}`;
-
-  //       // eslint-disable-next-line array-callback-return
-  //       item.options.map((subItem: any) => {
-  //         subItem.value = `${item.value}/${subItem.key}`;
-  //         subItem.label = `${subItem.key}${subItem.label ? `(${subItem.label})` : ''}`;
-  //       });
-  //     });
-  //     // eslint-disable-next-line require-atomic-updates
-  //     ifItem.triggerParamOptions = res.data;
-  //   }
-  //   const statusData = {
-  //     value: 'status',
-  //     label: 'status(状态)',
-  //     options: [
-  //       {
-  //         value: 'status/On-line',
-  //         label: 'On-line(上线)',
-  //         key: 'On-line'
-  //       },
-  //       {
-  //         value: 'status/Off-line',
-  //         label: 'Off-line(下线)',
-  //         key: 'Off-line'
-  //       },
-  //       {
-  //         value: 'status/All',
-  //         label: 'All(全部)',
-  //         key: 'All'
-  //       }
-  //     ]
-  //   };
-  //   ifItem.triggerParamOptions.push(statusData);
-  // }
 }
 
 // 创建全局的statusData计算属性

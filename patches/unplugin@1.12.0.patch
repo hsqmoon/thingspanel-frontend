@@ -1,0 +1,142 @@
+diff --git a/dist/index.d.mts b/dist/index.d.mts
+index 3021df1215e27c57a31318a2ba902223cedd4c3b..e7a4d7043f09ea1c06f6b2199a0ffab4be78001a 100644
+--- a/dist/index.d.mts
++++ b/dist/index.d.mts
+@@ -1,24 +1,24 @@
+-import * as _farmfe_core from '@farmfe/core';
+-import { JsPlugin } from '@farmfe/core';
+-import * as _rspack_core_dist_config_zod from '@rspack/core/dist/config/zod';
+-import * as webpack from 'webpack';
+-import { Compiler, WebpackPluginInstance } from 'webpack';
+-export { Compiler as WebpackCompiler, WebpackPluginInstance } from 'webpack';
+-import * as rolldown_dist_types_plugin from 'rolldown/dist/types/plugin';
++interface JsPlugin { [key: string]: unknown; }
++interface Compiler { [key: string]: unknown; }
++interface WebpackPluginInstance { apply(compiler: Compiler): void; }
++interface Compiler$1 { [key: string]: unknown; }
++interface RspackPluginInstance { apply(compiler: Compiler$1): void; }
++interface Plugin$2 { [key: string]: unknown; }
++interface VirtualModulesPlugin { [key: string]: unknown; }
++export type WebpackCompiler = Compiler;
++export type { WebpackPluginInstance };
+ import * as vite from 'vite';
+ import { Plugin as Plugin$1 } from 'vite';
+ export { Plugin as VitePlugin } from 'vite';
+ import * as rollup from 'rollup';
+ import { SourceMapInput, EmittedAsset, AstNode, Plugin, PluginContextMeta } from 'rollup';
+ export { Plugin as RollupPlugin } from 'rollup';
+-import { Plugin as Plugin$2 } from 'rolldown';
+-export { Plugin as RolldownPlugin } from 'rolldown';
++export type RolldownPlugin = Plugin$2;
+ import * as esbuild from 'esbuild';
+ import { PluginBuild, OnLoadResult, Loader, BuildOptions, Plugin as Plugin$3 } from 'esbuild';
+ export { Plugin as EsbuildPlugin } from 'esbuild';
+-import { Compiler as Compiler$1, RspackPluginInstance } from '@rspack/core';
+-export { Compiler as RspackCompiler, RspackPluginInstance } from '@rspack/core';
+-import VirtualModulesPlugin from 'webpack-virtual-modules';
++export type RspackCompiler = Compiler$1;
++export type { RspackPluginInstance };
+ 
+ interface OnTransformOptions {
+     filter: RegExp;
+@@ -158,25 +158,14 @@ interface UnpluginContext {
+     error: (message: string | UnpluginMessage) => void;
+     warn: (message: string | UnpluginMessage) => void;
+ }
+-declare module 'webpack' {
+-    interface Compiler {
+-        $unpluginContext: Record<string, ResolvedUnpluginOptions>;
+-    }
+-}
+-declare module '@rspack/core' {
+-    interface Compiler {
+-        $unpluginContext: Record<string, ResolvedUnpluginOptions>;
+-    }
+-}
+-
+ declare function createUnplugin<UserOptions, Nested extends boolean = boolean>(factory: UnpluginFactory<UserOptions, Nested>): UnpluginInstance<UserOptions, Nested>;
+ declare function createEsbuildPlugin<UserOptions, Nested extends boolean = boolean>(factory: UnpluginFactory<UserOptions, Nested>): UnpluginFactoryOutput<UserOptions, esbuild.Plugin>;
+ declare function createRollupPlugin<UserOptions, Nested extends boolean = boolean>(factory: UnpluginFactory<UserOptions, Nested>): UnpluginFactoryOutput<UserOptions, Nested extends true ? rollup.Plugin<any>[] : rollup.Plugin<any>>;
+ declare function createVitePlugin<UserOptions, Nested extends boolean = boolean>(factory: UnpluginFactory<UserOptions, Nested>): UnpluginFactoryOutput<UserOptions, Nested extends true ? vite.Plugin<any>[] : vite.Plugin<any>>;
+ /** @experimental do not use it in production */
+-declare function createRolldownPlugin<UserOptions, Nested extends boolean = boolean>(factory: UnpluginFactory<UserOptions, Nested>): UnpluginFactoryOutput<UserOptions, Nested extends true ? rolldown_dist_types_plugin.Plugin<any>[] : rolldown_dist_types_plugin.Plugin<any>>;
+-declare function createWebpackPlugin<UserOptions, Nested extends boolean = boolean>(factory: UnpluginFactory<UserOptions, Nested>): UnpluginFactoryOutput<UserOptions, webpack.WebpackPluginInstance>;
+-declare function createRspackPlugin<UserOptions, Nested extends boolean = boolean>(factory: UnpluginFactory<UserOptions, Nested>): UnpluginFactoryOutput<UserOptions, _rspack_core_dist_config_zod.RspackPluginInstance>;
+-declare function createFarmPlugin<UserOptions, Nested extends boolean = boolean>(factory: UnpluginFactory<UserOptions, Nested>): UnpluginFactoryOutput<UserOptions, _farmfe_core.JsPlugin>;
++declare function createRolldownPlugin<UserOptions, Nested extends boolean = boolean>(factory: UnpluginFactory<UserOptions, Nested>): UnpluginFactoryOutput<UserOptions, Nested extends true ? Plugin$2[] : Plugin$2>;
++declare function createWebpackPlugin<UserOptions, Nested extends boolean = boolean>(factory: UnpluginFactory<UserOptions, Nested>): UnpluginFactoryOutput<UserOptions, WebpackPluginInstance>;
++declare function createRspackPlugin<UserOptions, Nested extends boolean = boolean>(factory: UnpluginFactory<UserOptions, Nested>): UnpluginFactoryOutput<UserOptions, RspackPluginInstance>;
++declare function createFarmPlugin<UserOptions, Nested extends boolean = boolean>(factory: UnpluginFactory<UserOptions, Nested>): UnpluginFactoryOutput<UserOptions, JsPlugin>;
+ 
+ export { type ExternalIdResult, type JsPluginExtended, type ResolvedUnpluginOptions, type SourceMapCompact, type Thenable, type TransformResult, type UnpluginBuildContext, type UnpluginContext, type UnpluginContextMeta, type UnpluginFactory, type UnpluginFactoryOutput, type UnpluginInstance, type UnpluginMessage, type UnpluginOptions, createEsbuildPlugin, createFarmPlugin, createRolldownPlugin, createRollupPlugin, createRspackPlugin, createUnplugin, createVitePlugin, createWebpackPlugin };
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+index 3021df1215e27c57a31318a2ba902223cedd4c3b..e7a4d7043f09ea1c06f6b2199a0ffab4be78001a 100644
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -1,24 +1,24 @@
+-import * as _farmfe_core from '@farmfe/core';
+-import { JsPlugin } from '@farmfe/core';
+-import * as _rspack_core_dist_config_zod from '@rspack/core/dist/config/zod';
+-import * as webpack from 'webpack';
+-import { Compiler, WebpackPluginInstance } from 'webpack';
+-export { Compiler as WebpackCompiler, WebpackPluginInstance } from 'webpack';
+-import * as rolldown_dist_types_plugin from 'rolldown/dist/types/plugin';
++interface JsPlugin { [key: string]: unknown; }
++interface Compiler { [key: string]: unknown; }
++interface WebpackPluginInstance { apply(compiler: Compiler): void; }
++interface Compiler$1 { [key: string]: unknown; }
++interface RspackPluginInstance { apply(compiler: Compiler$1): void; }
++interface Plugin$2 { [key: string]: unknown; }
++interface VirtualModulesPlugin { [key: string]: unknown; }
++export type WebpackCompiler = Compiler;
++export type { WebpackPluginInstance };
+ import * as vite from 'vite';
+ import { Plugin as Plugin$1 } from 'vite';
+ export { Plugin as VitePlugin } from 'vite';
+ import * as rollup from 'rollup';
+ import { SourceMapInput, EmittedAsset, AstNode, Plugin, PluginContextMeta } from 'rollup';
+ export { Plugin as RollupPlugin } from 'rollup';
+-import { Plugin as Plugin$2 } from 'rolldown';
+-export { Plugin as RolldownPlugin } from 'rolldown';
++export type RolldownPlugin = Plugin$2;
+ import * as esbuild from 'esbuild';
+ import { PluginBuild, OnLoadResult, Loader, BuildOptions, Plugin as Plugin$3 } from 'esbuild';
+ export { Plugin as EsbuildPlugin } from 'esbuild';
+-import { Compiler as Compiler$1, RspackPluginInstance } from '@rspack/core';
+-export { Compiler as RspackCompiler, RspackPluginInstance } from '@rspack/core';
+-import VirtualModulesPlugin from 'webpack-virtual-modules';
++export type RspackCompiler = Compiler$1;
++export type { RspackPluginInstance };
+ 
+ interface OnTransformOptions {
+     filter: RegExp;
+@@ -158,25 +158,14 @@ interface UnpluginContext {
+     error: (message: string | UnpluginMessage) => void;
+     warn: (message: string | UnpluginMessage) => void;
+ }
+-declare module 'webpack' {
+-    interface Compiler {
+-        $unpluginContext: Record<string, ResolvedUnpluginOptions>;
+-    }
+-}
+-declare module '@rspack/core' {
+-    interface Compiler {
+-        $unpluginContext: Record<string, ResolvedUnpluginOptions>;
+-    }
+-}
+-
+ declare function createUnplugin<UserOptions, Nested extends boolean = boolean>(factory: UnpluginFactory<UserOptions, Nested>): UnpluginInstance<UserOptions, Nested>;
+ declare function createEsbuildPlugin<UserOptions, Nested extends boolean = boolean>(factory: UnpluginFactory<UserOptions, Nested>): UnpluginFactoryOutput<UserOptions, esbuild.Plugin>;
+ declare function createRollupPlugin<UserOptions, Nested extends boolean = boolean>(factory: UnpluginFactory<UserOptions, Nested>): UnpluginFactoryOutput<UserOptions, Nested extends true ? rollup.Plugin<any>[] : rollup.Plugin<any>>;
+ declare function createVitePlugin<UserOptions, Nested extends boolean = boolean>(factory: UnpluginFactory<UserOptions, Nested>): UnpluginFactoryOutput<UserOptions, Nested extends true ? vite.Plugin<any>[] : vite.Plugin<any>>;
+ /** @experimental do not use it in production */
+-declare function createRolldownPlugin<UserOptions, Nested extends boolean = boolean>(factory: UnpluginFactory<UserOptions, Nested>): UnpluginFactoryOutput<UserOptions, Nested extends true ? rolldown_dist_types_plugin.Plugin<any>[] : rolldown_dist_types_plugin.Plugin<any>>;
+-declare function createWebpackPlugin<UserOptions, Nested extends boolean = boolean>(factory: UnpluginFactory<UserOptions, Nested>): UnpluginFactoryOutput<UserOptions, webpack.WebpackPluginInstance>;
+-declare function createRspackPlugin<UserOptions, Nested extends boolean = boolean>(factory: UnpluginFactory<UserOptions, Nested>): UnpluginFactoryOutput<UserOptions, _rspack_core_dist_config_zod.RspackPluginInstance>;
+-declare function createFarmPlugin<UserOptions, Nested extends boolean = boolean>(factory: UnpluginFactory<UserOptions, Nested>): UnpluginFactoryOutput<UserOptions, _farmfe_core.JsPlugin>;
++declare function createRolldownPlugin<UserOptions, Nested extends boolean = boolean>(factory: UnpluginFactory<UserOptions, Nested>): UnpluginFactoryOutput<UserOptions, Nested extends true ? Plugin$2[] : Plugin$2>;
++declare function createWebpackPlugin<UserOptions, Nested extends boolean = boolean>(factory: UnpluginFactory<UserOptions, Nested>): UnpluginFactoryOutput<UserOptions, WebpackPluginInstance>;
++declare function createRspackPlugin<UserOptions, Nested extends boolean = boolean>(factory: UnpluginFactory<UserOptions, Nested>): UnpluginFactoryOutput<UserOptions, RspackPluginInstance>;
++declare function createFarmPlugin<UserOptions, Nested extends boolean = boolean>(factory: UnpluginFactory<UserOptions, Nested>): UnpluginFactoryOutput<UserOptions, JsPlugin>;
+ 
+ export { type ExternalIdResult, type JsPluginExtended, type ResolvedUnpluginOptions, type SourceMapCompact, type Thenable, type TransformResult, type UnpluginBuildContext, type UnpluginContext, type UnpluginContextMeta, type UnpluginFactory, type UnpluginFactoryOutput, type UnpluginInstance, type UnpluginMessage, type UnpluginOptions, createEsbuildPlugin, createFarmPlugin, createRolldownPlugin, createRollupPlugin, createRspackPlugin, createUnplugin, createVitePlugin, createWebpackPlugin };

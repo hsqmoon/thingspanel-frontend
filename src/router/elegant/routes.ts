@@ -828,24 +828,6 @@ export const generatedRoutes: GeneratedRoute[] = [
           title: 'plugin_print',
           i18nKey: 'route.plugin_print'
         }
-      },
-      {
-        name: 'plugin_swiper',
-        path: '/plugin/swiper',
-        component: 'view.plugin_swiper',
-        meta: {
-          title: 'plugin_swiper',
-          i18nKey: 'route.plugin_swiper'
-        }
-      },
-      {
-        name: 'plugin_video',
-        path: '/plugin/video',
-        component: 'view.plugin_video',
-        meta: {
-          title: 'plugin_video',
-          i18nKey: 'route.plugin_video'
-        }
       }
     ]
   },

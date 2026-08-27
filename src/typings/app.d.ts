@@ -1887,7 +1887,6 @@ declare namespace App {
         'print-table': string
         'i-have-read-and-accept': string
         color: string
-        'video-player-plugin': string
         'text-button': string
         print: string
         'icon-selector': string
@@ -1935,10 +1934,7 @@ declare namespace App {
         timeoutMinutes: string
         phoneNumber: string
         location: string
-        pluginDemoUrl: string
-        vue3DocumentationUrl: string
         deviceAccessType: string
-        swiperPlugin: string
         onlineDeviceConfig: string
         svgIconCustomization: string
         createDeviceConfig: string
@@ -1947,7 +1943,6 @@ declare namespace App {
         customIconExample: string
         printImage: string
         earningsOfCurrentMonth: string
-        videoPlayerPlugin: string
         copyText: string
         printText: string
         iconSelector: string

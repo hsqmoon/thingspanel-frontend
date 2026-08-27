@@ -1,0 +1,13 @@
+diff --git a/dist/node/module-runner.d.ts b/dist/node/module-runner.d.ts
+index 511f6af6d5cbc0e12aedfd393017e85c80386a68..5b0bf1c20af92a29f3798bc45e47114ba47d8172 100644
+--- a/dist/node/module-runner.d.ts
++++ b/dist/node/module-runner.d.ts
+@@ -158,7 +158,7 @@ interface InterceptorOptions {
+ //#region src/module-runner/types.d.ts
+ interface ModuleRunnerImportMeta extends ImportMeta {
+   url: string;
+-  env: ImportMetaEnv;
++  env: ImportMetaEnv & ImportMeta['env'];
+   hot?: ViteHotContext;
+   [key: string]: any;
+ }

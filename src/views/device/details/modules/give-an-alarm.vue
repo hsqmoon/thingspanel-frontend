@@ -124,7 +124,7 @@ const submitCallback = async () => {
     description: description.value
   }
   await deviceAlarmHistoryPut(putData)
-  alarmHistory.value.map(item => {
+  alarmHistory.value.forEach(item => {
     if (item.id === infoData.value.id) {
       item.description = description.value
     }

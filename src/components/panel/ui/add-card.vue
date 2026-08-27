@@ -362,7 +362,8 @@ onMounted(() => {
           () => {
             if (!state?.curCardData?.cardId) {
               message.destroyAll()
-              return message.warning($t('common.selectCardFirst'))
+              message.warning($t('common.selectCardFirst'))
+              return
             }
             count = 1
             changeWidths()

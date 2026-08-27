@@ -121,7 +121,7 @@ async function list() {
         { btnName: $t('page.manage.common.status.enable'), type: 'enable', color: 'success' },
         { btnName: $t('common.delete'), type: 'delete', color: 'error' }
       ]
-      tableData.value.map(item => {
+      tableData.value.forEach(item => {
         if (item.enabled === 'Y') {
           item.operatorBtn = operatorBtn
         } else {

@@ -1,5 +1,4 @@
-import type { ElegantRoute } from '@elegant-router/types'
-import type { ElegantConstRoute } from '@elegant-router/vue'
+import type { ElegantConstRoute, ElegantRoute } from '@elegant-router/types'
 import { generatedRoutes } from '@/router/elegant/routes'
 import { getRouteName } from '@/router/elegant/transform'
 

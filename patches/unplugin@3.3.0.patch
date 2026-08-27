@@ -1,0 +1,36 @@
+diff --git a/dist/index.d.mts b/dist/index.d.mts
+index e7fadab98b10cb75f7d1698ca9a46e36bed3debd..498524c339fcdaede8b7f4365fd295bd343cd49a 100644
+--- a/dist/index.d.mts
++++ b/dist/index.d.mts
+@@ -1,14 +1,23 @@
+-import VirtualModulesPlugin from "webpack-virtual-modules";
+-import { CompilationContext, JsPlugin } from "@farmfe/core";
+-import { RsbuildPlugin } from "@rsbuild/core";
+-import { Compilation, Compiler as RspackCompiler, LoaderContext, RspackPluginInstance } from "@rspack/core";
+-import { BunPlugin, Loader, PluginBuilder } from "bun";
++type VirtualModulesPlugin = Record<string, unknown>;
++type CompilationContext = Record<string, unknown>;
++type JsPlugin = Record<string, unknown>;
++type RsbuildPlugin = Record<string, unknown>;
++type Compilation = Record<string, unknown>;
++type RspackCompiler = Record<string, unknown>;
++type LoaderContext<T = unknown> = Record<string, unknown> & { options?: T };
++interface RspackPluginInstance { apply(compiler: RspackCompiler): void; }
++type BunPlugin = Record<string, unknown>;
++type Loader = string;
++type PluginBuilder = Record<string, unknown>;
+ import { BuildOptions, Loader as Loader$1, Plugin as EsbuildPlugin, PluginBuild } from "esbuild";
+-import { Plugin as RolldownPlugin } from "rolldown";
++type RolldownPlugin = Record<string, unknown>;
+ import { EmittedAsset, Plugin as RollupPlugin, PluginContextMeta, SourceMapInput } from "rollup";
+-import { Plugin as UnloaderPlugin } from "unloader";
++type UnloaderPlugin = Record<string, unknown>;
+ import { Plugin as VitePlugin } from "vite";
+-import { Compilation as Compilation$1, Compiler as WebpackCompiler, LoaderContext as LoaderContext$1, WebpackPluginInstance } from "webpack";
++type Compilation$1 = Record<string, unknown>;
++type WebpackCompiler = Record<string, unknown>;
++type LoaderContext$1<T = unknown> = Record<string, unknown> & { options?: T };
++interface WebpackPluginInstance { apply(compiler: WebpackCompiler): void; }
+ 
+ //#region src/types.d.ts
+ type Thenable<T> = T | Promise<T>;

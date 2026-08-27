@@ -27,5 +27,13 @@ overrides:
 patchedDependencies:
   '@elegant-router/vue@0.3.8': patches/@elegant-router__vue@0.3.8.patch
   evtd@0.2.4: patches/evtd@0.2.4.patch
+  happy-dom@20.11.12: patches/happy-dom@20.11.12.patch
   jsencrypt@3.5.4: patches/jsencrypt@3.5.4.patch
   naive-ui@2.45.2: patches/naive-ui@2.45.2.patch
+  unconfig@7.5.0: patches/unconfig@7.5.0.patch
+  unplugin-vue-components@32.1.0: patches/unplugin-vue-components@32.1.0.patch
+  unplugin@1.12.0: patches/unplugin@1.12.0.patch
+  unplugin@2.3.11: patches/unplugin@2.3.11.patch
+  unplugin@3.3.0: patches/unplugin@3.3.0.patch
+  vite@7.3.6: patches/vite@7.3.6.patch
+  vue-i18n@11.4.10: patches/vue-i18n@11.4.10.patch

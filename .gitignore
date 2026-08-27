@@ -28,4 +28,3 @@ coverage
 vite.config.ts.timestamp-*-*.mjs
 .tsbuildinfo
 .eslintcache
-src/typings/components.d.ts

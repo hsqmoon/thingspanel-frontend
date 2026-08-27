@@ -128,7 +128,7 @@ const { columns, filteredColumns, data, loading, pagination, getData, searchPara
           <NButton type="primary" ghost size="small" onClick={() => handleEdit(row.id)}>
             {$t('common.edit')}
           </NButton>
-          <NPopconfirm onPositiveClick={() => handleDelete(row.id)}>
+          <NPopconfirm onPositiveClick={() => handleDelete()}>
             {{
               default: () => $t('common.confirmDelete'),
               trigger: () => (
@@ -170,8 +170,7 @@ function handleEdit(id: number) {
   editingData.value = data.value.find(item => item.id === id) || null
   openDrawer()
 }
-// eslint-disable-next-line
-async function handleDelete(id: number) {
+async function handleDelete() {
   // requestTs
   // window.$message?.success($t('common.deleteSuccess'));
 

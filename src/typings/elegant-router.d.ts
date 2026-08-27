@@ -103,8 +103,6 @@ declare module "@elegant-router/types" {
     "plugin_icon": "/plugin/icon";
     "plugin_map": "/plugin/map";
     "plugin_print": "/plugin/print";
-    "plugin_swiper": "/plugin/swiper";
-    "plugin_video": "/plugin/video";
     "resource-hub": "/resource-hub";
     "resource-hub_dashboard": "/resource-hub/dashboard-template";
     "resource-hub_device": "/resource-hub/device-template";
@@ -268,8 +266,6 @@ declare module "@elegant-router/types" {
     | "plugin_icon"
     | "plugin_map"
     | "plugin_print"
-    | "plugin_swiper"
-    | "plugin_video"
     | "resource-hub_dashboard"
     | "resource-hub_device"
     | "rule-engine"

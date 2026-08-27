@@ -161,7 +161,7 @@ async function renderMap() {
 
         const arr = res.data.filter((item: any) => item.label || item.key)
         let dom = ``
-        arr.filter(item => {
+        arr.forEach(item => {
           if (item.label) {
             dom = `${dom}<div class='item_label'>${item?.label ?? ''}(${item?.key ?? ''})：<span class='card_val'>${item?.value ?? ''} </span> ${item?.unit ?? ''}</div>`
           } else if (item.key) {

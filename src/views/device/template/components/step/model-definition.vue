@@ -54,14 +54,11 @@ const comList: { id: string; components: any; title: string }[] = [
   { id: 'command', components: AddEditCommands, title: $t('device_template.addAndEditCommand') }
 ]
 const SwitchCom = computed<any>(() => {
-
-  return comList.find(item => {
-    if (item.id === tabsCurrent.value) {
-      const objItem: any = item
-      addAndEditTitle.value = objItem.title
-      return objItem
-    }
-  })?.components
+  const selectedItem = comList.find(item => item.id === tabsCurrent.value)
+  if (selectedItem) {
+    addAndEditTitle.value = selectedItem.title
+  }
+  return selectedItem?.components
 })
 
 const queryParams: any = reactive([

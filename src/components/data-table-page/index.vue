@@ -206,12 +206,12 @@ const onUpdatePageSize = newPageSize => {
 
 // 观察搜索条件的变化以更新扩展参数，不自动获取数据
 watchEffect(() => {
-  searchConfigs.map((item: any) => {
+  searchConfigs.forEach((item: any) => {
     const vals = searchCriteria.value[item.key]
     if (item?.extendParams && vals) {
-      item?.options.map(oitem => {
+      item?.options.forEach(oitem => {
         if (oitem.dict_value + oitem.device_type === vals) {
-          item?.extendParams.map(eitem => {
+          item?.extendParams.forEach(eitem => {
             searchCriteria.value[eitem.label] = oitem[eitem.value]
           })
         }

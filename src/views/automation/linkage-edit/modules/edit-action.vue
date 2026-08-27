@@ -28,7 +28,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 // 条件中单个/单类设备变化时,重置操作动作中的设备内容
 const resetActionData = () => {
-  actionForm.value.actionGroups.map((item: any) => {
+  actionForm.value.actionGroups.forEach((item: any) => {
     if (item.actionInstructList && item.actionInstructList.length > 0) {
       const data = [] as any
       const instructItem = JSON.parse(JSON.stringify(instructListItem.value))
@@ -138,7 +138,7 @@ const actionOptions = ref([
 
 // 动作选择action值改变时
 const actionChange = (actionGroupItem: any, actionGroupIndex: any, data: any) => {
-  actionOptions.value.map(item => {
+  actionOptions.value.forEach(item => {
     item.disabled = false
   })
   actionGroupItem.actionInstructList = [
@@ -158,12 +158,6 @@ const actionChange = (actionGroupItem: any, actionGroupIndex: any, data: any) =>
   actionGroupItem.action_target = null
 
   if (data === '1') {
-    actionOptions.value.map(item => {
-      if (item.value === '1') {
-        // item.disabled = true;
-        // if (actionGroupItem.actionInstructList.length <= 0) actionForm.value.actionGroups = JSON.parse(JSON.stringify(props.actionData));
-      }
-    })
     addIfGroupsSubItem(actionGroupIndex)
   }
 }
@@ -199,7 +193,7 @@ const deviceGroupOptions = ref([] as any)
 const getGroup = async () => {
   deviceGroupOptions.value = []
   const res = await deviceGroupTree({})
-  res.data.map((item: any) => {
+  res.data.forEach((item: any) => {
     deviceGroupOptions.value.push(item.group)
   })
 }
@@ -261,11 +255,11 @@ const actionParamShow = async (instructItem: any) => {
       })
     }
     if (res.data) {
-      res.data.map((item: any) => {
+      res.data.forEach((item: any) => {
         item.value = item.data_source_type
         item.label = `${item.data_source_type}${item.label ? `(${item.label})` : ''}`
 
-        item.options.map((subItem: any) => {
+        item.options.forEach((subItem: any) => {
           subItem.value = subItem.key
           subItem.label = `${subItem.key}${subItem.label ? `(${subItem.label})` : ''}`
         })

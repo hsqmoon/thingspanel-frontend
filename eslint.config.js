@@ -41,15 +41,13 @@ export default [
     rules: {
       // 应用 Vue 3 推荐规则
       ...vuePlugin.configs.recommended.rules,
-      // 关闭 props 解构检查（Vue 3 Composition API 中常用）
-      'vue/no-setup-props-destructure': 'off',
       // 由 vue-tsc 负责属性检查，避免宏和模板属性误报
       'vue/no-undef-properties': 'off',
       // 关闭组件名必须多单词的限制
       'vue/multi-word-component-names': 'off',
       // 关闭模板中组件名大小写检查
       'vue/component-name-in-template-casing': 'off',
-      // 关闭变量使用前定义检查（Vue文件中的 script setup 语法需要）
+      // 组合式 API 广泛使用先声明回调、后定义实现的安全闭包模式；该规则不做控制流分析
       '@typescript-eslint/no-use-before-define': 'off',
       '@typescript-eslint/no-unused-vars': [
         'warn',
@@ -71,7 +69,7 @@ export default [
     rules: {
       // 应用 TypeScript 推荐规则
       ...tsPlugin.configs.recommended.rules,
-      // 关闭变量使用前定义检查
+      // 该规则不区分安全闭包引用与真正的初始化时序错误
       '@typescript-eslint/no-use-before-define': 'off',
       '@typescript-eslint/no-unused-vars': [
         'warn',
@@ -89,10 +87,7 @@ export default [
   // 应用于所有文件的通用规则设置
   {
     rules: {
-      // 关闭数组回调返回值检查
-      'array-callback-return': 'off',
-      // 关闭导入顺序检查
-      'import/order': 'off',
+      'array-callback-return': 'error',
       // 关闭 Vue 属性简写偏好检查
       'vue/prefer-true-attribute-shorthand': 'off',
       // 允许使用 console

@@ -107,14 +107,14 @@ const actionOptions = ref([
 
 // 动作选择action值改变时
 const actionChange = (actionGroupItem: any, actionGroupIndex: any, data: any) => {
-  actionOptions.value.map(item => {
+  actionOptions.value.forEach(item => {
     item.disabled = false
   })
   actionGroupItem.actionInstructList = []
   actionGroupItem.action_type = null
   actionGroupItem.action_target = null
   if (data === '1') {
-    actionOptions.value.map(item => {
+    actionOptions.value.forEach(item => {
       if (item.value === '1') {
         item.disabled = true
       }
@@ -156,7 +156,7 @@ const deviceGroupOptions = ref([] as any)
 const getGroup = async () => {
   deviceGroupOptions.value = []
   const res = await deviceGroupTree({})
-  res.data.map((item: any) => {
+  res.data.forEach((item: any) => {
     deviceGroupOptions.value.push(item.group)
   })
 }
@@ -217,11 +217,11 @@ const actionParamShow = async (instructItem: any) => {
     })
   }
   if (res.data) {
-    res.data.map((item: any) => {
+    res.data.forEach((item: any) => {
       item.value = item.data_source_type
       item.label = `${item.label ? `(${item.label})` : ''}${item.data_source_type}`
 
-      item.options.map((subItem: any) => {
+      item.options.forEach((subItem: any) => {
         subItem.value = subItem.key
         subItem.label = `${subItem.key}${subItem.label ? `(${subItem.label})` : ''}`
       })
@@ -428,9 +428,9 @@ const tabStore = useTabStore()
 const submitData = async () => {
   await configFormRef.value?.validate()
   const actionsData = [] as any
-  configForm.value.actions.map((item: any) => {
+  configForm.value.actions.forEach((item: any) => {
     if (item.actionType === '1') {
-      item.actionInstructList.map((instructItem: any) => {
+      item.actionInstructList.forEach((instructItem: any) => {
         // 如果是c_telemetry/c_attribute,那么action_value示例格式：{"c_telemetry":2}
         // 如果是c_command,那么action_value示例格式：{"method":"switch1","params":{"false":0}}
         if (
@@ -498,7 +498,7 @@ const getSceneInfo = async () => {
 const dataEcho = actionsData => {
   const actionGroupsData = [] as any
   const actionInstructList = [] as any
-  actionsData.map((item: any) => {
+  actionsData.forEach((item: any) => {
     if (item.action_type === '10' || item.action_type === '11') {
       item.actionParamOptions = []
       const actionValueObj = JSON.parse(item.action_value)

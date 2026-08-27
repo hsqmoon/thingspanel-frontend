@@ -41,6 +41,7 @@ export function useGridResponsive(options: UseGridResponsiveOptions = {}) {
 
   // 断点监听
   let resizeObserver: ResizeObserver | null = null
+  let resizeHandler: (() => void) | null = null
 
   // 计算属性
   const currentCols = computed(() => {
@@ -183,15 +184,12 @@ export function useGridResponsive(options: UseGridResponsiveOptions = {}) {
       resizeObserver.observe(element)
     } else {
       // 回退到window resize事件
-      const handleResize = () => {
+      resizeHandler = () => {
         const rect = element.getBoundingClientRect()
         containerWidth.value = rect.width
       }
 
-      window.addEventListener('resize', handleResize)
-
-      // 清理函数
-      return () => window.removeEventListener('resize', handleResize)
+      window.addEventListener('resize', resizeHandler)
     }
   }
 
@@ -199,6 +197,10 @@ export function useGridResponsive(options: UseGridResponsiveOptions = {}) {
     if (resizeObserver) {
       resizeObserver.disconnect()
       resizeObserver = null
+    }
+    if (resizeHandler) {
+      window.removeEventListener('resize', resizeHandler)
+      resizeHandler = null
     }
   }
 

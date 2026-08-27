@@ -24,8 +24,7 @@ const data = [
 ]
 
 // The server configuration dialog box is displayed
-// eslint-disable-next-line
-function handleSelectClick(index: number) {
+function handleSelectClick() {
   openModal()
 }
 </script>
@@ -39,7 +38,7 @@ function handleSelectClick(index: number) {
         size="large"
         class="card"
         style="background-color: transparent"
-        @click="handleSelectClick(index)"
+        @click="handleSelectClick"
       >
         {{ item.title }}
       </n-tag>

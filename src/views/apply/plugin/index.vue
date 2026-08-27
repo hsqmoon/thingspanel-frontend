@@ -1,13 +1,14 @@
-<!-- eslint-disable require-atomic-updates -->
 <script setup lang="tsx">
-import { ref, watch } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 import { NButton, NPopconfirm, NSpace, NTag } from 'naive-ui'
 import { delRegisterService, getServices } from '@/service/api/plugin'
 import { $t } from '@/locales'
+import { componentLogger } from '@/utils/logger'
 import serviceConfigModal from './components/serviceConfigModal.vue'
 import serviceModal from './components/serviceModal.vue'
 const serviceModalRef = ref<any>(null)
 const serviceConfigModalRef = ref<any>(null)
+let listRequestId = 0
 
 const pageData = ref<any>({
   loading: false,
@@ -38,19 +39,41 @@ const queryInfo = ref<any>({
   itemCount: 0,
   onChange: (page: number) => {
     queryInfo.value.page = page
-    getList()
+    void getList()
   },
   onUpdatePageSize: (pageSize: number) => {
     queryInfo.value.page_size = pageSize
     queryInfo.value.page = 1
-    getList()
+    void getList()
   }
 })
 
-const getList: () => void = async () => {
-  const { data }: { data: any } = await getServices(queryInfo.value)
-  pageData.value.tableData = data.list
-  queryInfo.value.itemCount = data.total
+async function getList() {
+  const requestId = ++listRequestId
+  const params = {
+    page: queryInfo.value.page,
+    page_size: queryInfo.value.page_size,
+    service_type: queryInfo.value.service_type
+  }
+  pageData.value.loading = true
+
+  try {
+    const { data }: { data: any } = await getServices(params)
+    if (requestId !== listRequestId) return
+
+    pageData.value.tableData = Array.isArray(data?.list) ? data.list : []
+    queryInfo.value.itemCount = Number(data?.total || 0)
+  } catch (error: any) {
+    if (requestId !== listRequestId) return
+
+    componentLogger.error('Failed to load plugin services', error)
+    window.$message?.destroyAll()
+    window.$message?.error(error?.response?.data?.message || error?.message || $t('common.operationFailed'))
+  } finally {
+    if (requestId === listRequestId) {
+      pageData.value.loading = false
+    }
+  }
 }
 
 const edit: (row: any) => void = row => {
@@ -58,9 +81,9 @@ const edit: (row: any) => void = row => {
 }
 const del: (row: any) => void = async row => {
   await delRegisterService(row)
-  getList()
+  await getList()
 }
-const config: (row: any) => void = async row => {
+const config: (row: any) => void = row => {
   serviceConfigModalRef.value.openModal(row)
 }
 const columns: any = ref([
@@ -150,12 +173,16 @@ const addData: () => void = () => {
 watch(
   () => queryInfo.value.service_type,
   () => {
-    getList()
+    void getList()
   },
   { deep: true }
 )
 
-getList()
+onBeforeUnmount(() => {
+  listRequestId += 1
+})
+
+void getList()
 </script>
 
 <template>

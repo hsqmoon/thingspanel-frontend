@@ -539,7 +539,7 @@ export const deviceStatusHistory = async (params: {
 
 /** 获取设备诊断信息 */
 export const deviceDiagnostics = async (deviceId: string) => {
-  return await request.get<any>(`/devices/${deviceId}/diagnostics`)
+  return await request.get<any>(`/devices/${deviceId}/diagnostics`, { silentError: true })
 }
 
 export interface TopicMappingPayload {

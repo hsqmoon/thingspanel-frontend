@@ -6,6 +6,7 @@ import { $t } from '@/locales'
 import { Refresh, HelpCircleOutline } from '@vicons/ionicons5'
 import type { DataTableColumns } from 'naive-ui'
 import { deviceDiagnostics, getDeviceDebugStatus, setDeviceDebugStatus, getDeviceDebugLogs } from '@/service/api'
+import { componentLogger } from '@/utils/logger'
 
 // 类型定义
 interface StatisticsItem {
@@ -85,6 +86,14 @@ const statistics = ref<Statistics>({
 
 // 失败记录表格数据
 const failureRecords = ref<FailureRecord[]>([])
+let diagnosticsRequestId = 0
+let isMounted = false
+let diagnosticsErrorMessage: { destroy: () => void } | null = null
+
+const clearDiagnosticsError = () => {
+  diagnosticsErrorMessage?.destroy()
+  diagnosticsErrorMessage = null
+}
 
 // 表格列定义
 const columns: DataTableColumns<FailureRecord> = [
@@ -125,8 +134,13 @@ const columns: DataTableColumns<FailureRecord> = [
 
 // 获取诊断数据
 const fetchDiagnostics = async () => {
+  const requestId = ++diagnosticsRequestId
+  clearDiagnosticsError()
+
   try {
     const response = (await deviceDiagnostics(props.id)) as DiagnosticsResponse
+    if (!isMounted || requestId !== diagnosticsRequestId) return
+
     const data = response?.data || (response as unknown as DiagnosticsData)
 
     if (data && data.stats) {
@@ -161,7 +175,12 @@ const fetchDiagnostics = async () => {
         failureRecords.value = []
       }
     }
-  } catch {}
+  } catch (error) {
+    if (!isMounted || requestId !== diagnosticsRequestId) return
+
+    componentLogger.error('Failed to fetch device diagnostics', error)
+    diagnosticsErrorMessage = window.$message?.error('获取设备诊断信息失败，请稍后重试') ?? null
+  }
 }
 
 // 刷新数据
@@ -243,12 +262,16 @@ const stopLogPolling = () => {
 }
 
 onMounted(() => {
+  isMounted = true
   fetchDiagnostics()
   getLogStatus()
   startLogPolling()
 })
 
 onUnmounted(() => {
+  isMounted = false
+  diagnosticsRequestId += 1
+  clearDiagnosticsError()
   stopLogPolling()
 })
 </script>

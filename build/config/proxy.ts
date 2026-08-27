@@ -1,6 +1,25 @@
 import type { ProxyOptions } from 'vite'
 import { createProxyPattern, createServiceConfig } from '../../env.config'
 
+function parseThingsVisURL(name: string, value: string, allowRootRelative: boolean): URL {
+  if (allowRootRelative && value.startsWith('/') && !value.startsWith('//')) {
+    return new URL(value, 'http://same-origin.invalid')
+  }
+
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch (error) {
+    throw new Error(`${name} must be a valid absolute HTTP(S) URL: ${value}`, { cause: error })
+  }
+
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error(`${name} must use HTTP or HTTPS: ${value}`)
+  }
+
+  return url
+}
+
 /**
  * Set http proxy
  *
@@ -8,6 +27,13 @@ import { createProxyPattern, createServiceConfig } from '../../env.config'
  */
 export function createViteProxy(env: Env.ImportMeta) {
   const isEnableHttpProxy = env.VITE_HTTP_PROXY === 'Y'
+  const thingsvisApiUrl = env.VITE_THINGSVIS_API_URL || 'http://localhost:8000'
+  const studioHost = parseThingsVisURL(
+    'VITE_THINGSVIS_STUDIO_URL',
+    env.VITE_THINGSVIS_STUDIO_URL || 'http://localhost:3000',
+    !isEnableHttpProxy
+  ).origin
+  parseThingsVisURL('VITE_THINGSVIS_API_URL', thingsvisApiUrl, !isEnableHttpProxy)
 
   if (!isEnableHttpProxy) return undefined
 
@@ -37,7 +63,6 @@ export function createViteProxy(env: Env.ImportMeta) {
   }
 
   // ThingsVis API 代理 (从环境变量获取，默认8000)
-  const thingsvisApiUrl = env.VITE_THINGSVIS_API_URL || 'http://localhost:8000'
   proxy['/thingsvis-api'] = {
     target: thingsvisApiUrl,
     changeOrigin: true,
@@ -53,15 +78,6 @@ export function createViteProxy(env: Env.ImportMeta) {
   // Important: ThingsVis 前端代理 (新增)
   // 将 /thingsvis/* 请求转发到本地开发的 Studio 服务
   // 这解决了 "Iframe 加载 ThingsPanel 自身页面" 的问题
-  let studioHost = 'http://localhost:3000'
-  if (env.VITE_THINGSVIS_STUDIO_URL) {
-    try {
-      studioHost = new URL(env.VITE_THINGSVIS_STUDIO_URL).origin
-    } catch {
-      // ignore invalid URL, use default
-    }
-  }
-
   proxy['/thingsvis'] = {
     target: studioHost,
     changeOrigin: true,

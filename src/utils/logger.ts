@@ -21,7 +21,7 @@ interface LoggerConfig {
 
 // 默认配置：开发环境启用所有日志，生产环境只启用警告和错误
 const DEFAULT_CONFIG: LoggerConfig = {
-  enabled: import.meta.env.DEV,
+  enabled: true,
   level: import.meta.env.DEV ? LogLevel.DEBUG : LogLevel.WARN,
   prefix: '[ThingsPanel]',
   timestamp: true
@@ -83,7 +83,7 @@ export default class Logger {
    */
   warn(...args: any[]): void {
     if (this.isLevelEnabled(LogLevel.WARN)) {
-      console.error(this.formatPrefix('WARN'), ...args)
+      console.warn(this.formatPrefix('WARN'), ...args)
     }
   }
 

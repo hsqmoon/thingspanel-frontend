@@ -1,11 +1,11 @@
-<!-- eslint-disable require-atomic-updates -->
 <script setup lang="tsx">
-import { ref, watch } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { NButton, NPopconfirm, NSpace } from 'naive-ui'
 import dayjs from 'dayjs'
 import { delServiceAccess, getServiceAccess } from '@/service/api/plugin'
 import { $t } from '@/locales'
+import { componentLogger } from '@/utils/logger'
 import serviceModal from './components/serviceModal.vue'
 import serviceConfigModal from './components/serviceConfigModal.vue'
 
@@ -14,6 +14,7 @@ const router: any = useRouter()
 const serviceModalRef = ref<any>(null)
 const serviceConfigModalRef = ref<any>(null)
 const service_plugin_id = ref<any>(route.query.id)
+let listRequestId = 0
 const pageData = ref<any>({
   loading: false,
   tableData: []
@@ -27,19 +28,41 @@ const queryInfo = ref<any>({
   pageSizes: [10, 15, 20, 25, 30],
   onChange: (page: number) => {
     queryInfo.value.page = page
-    getList()
+    void getList()
   },
   onUpdatePageSize: (pageSize: number) => {
     queryInfo.value.page_size = pageSize
     queryInfo.value.page = 1
-    getList()
+    void getList()
   }
 })
 
-const getList: () => void = async () => {
-  const { data }: { data: any } = await getServiceAccess(queryInfo.value)
-  pageData.value.tableData = data.list
-  queryInfo.value.itemCount = data.total
+async function getList() {
+  const requestId = ++listRequestId
+  const params = {
+    service_plugin_id: queryInfo.value.service_plugin_id,
+    page: queryInfo.value.page,
+    page_size: queryInfo.value.page_size
+  }
+  pageData.value.loading = true
+
+  try {
+    const { data }: { data: any } = await getServiceAccess(params)
+    if (requestId !== listRequestId) return
+
+    pageData.value.tableData = Array.isArray(data?.list) ? data.list : []
+    queryInfo.value.itemCount = Number(data?.total || 0)
+  } catch (error: any) {
+    if (requestId !== listRequestId) return
+
+    componentLogger.error('Failed to load service access points', error)
+    window.$message?.destroyAll()
+    window.$message?.error(error?.response?.data?.message || error?.message || $t('common.operationFailed'))
+  } finally {
+    if (requestId === listRequestId) {
+      pageData.value.loading = false
+    }
+  }
 }
 
 const see: (row: any) => void = row => {
@@ -49,9 +72,9 @@ const see: (row: any) => void = row => {
 }
 const del: (row: any) => void = async row => {
   await delServiceAccess(row)
-  getList()
+  await getList()
 }
-const config: (row: any) => void = async row => {
+const config: (row: any) => void = row => {
   serviceModalRef.value.openModal(service_plugin_id.value, row)
 }
 const columns: any = ref([
@@ -129,21 +152,25 @@ const isEdit: (val: any, row: any, edit: any) => void = (val, row, edit) => {
     } else {
       serviceConfigModalRef.value.openModal(val, row, edit)
     }
-    getList()
+    void getList()
   } else {
     serviceConfigModalRef.value.openModal(val, row)
-    getList()
+    void getList()
   }
 }
 watch(
   () => queryInfo.value.service_type,
   () => {
-    getList()
+    void getList()
   },
   { deep: true }
 )
 
-getList()
+onBeforeUnmount(() => {
+  listRequestId += 1
+})
+
+void getList()
 </script>
 
 <template>

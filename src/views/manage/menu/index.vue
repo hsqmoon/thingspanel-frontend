@@ -159,14 +159,14 @@ const { columns, filteredColumns, data, loading, pagination, getData } = useTabl
       render: (row) => (
         <div class="flex-center justify-end gap-8px">
           {row.menuType === '1' && (
-            <NButton type="primary" ghost size="small" onClick={() => handleAddChildMenu(row.id)}>
+            <NButton type="primary" ghost size="small" onClick={() => handleAddChildMenu()}>
               {$t('page.manage.menu.addChildMenu')}
             </NButton>
           )}
           <NButton type="primary" ghost size="small" onClick={() => handleEdit(row.id)}>
             {$t('common.edit')}
           </NButton>
-          <NPopconfirm onPositiveClick={() => handleDelete(row.id)}>
+          <NPopconfirm onPositiveClick={() => handleDelete()}>
             {{
               default: () => $t('common.confirmDelete'),
               trigger: () => (
@@ -199,8 +199,7 @@ async function handleBatchDelete() {
 
   getData()
 }
-// eslint-disable-next-line
-function handleAddChildMenu(id: number) {
+function handleAddChildMenu() {
   operateType.value = 'add'
   openDrawer()
 }
@@ -213,8 +212,7 @@ function handleEdit(id: number) {
   editingData.value = data.value.find((item) => item.id === id) || null
   openDrawer()
 }
-// eslint-disable-next-line
-async function handleDelete(id: number) {
+async function handleDelete() {
   // requestTs
   // window.$message?.success($t('common.deleteSuccess'));
 

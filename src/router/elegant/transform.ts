@@ -249,8 +249,6 @@ const routeMap: RouteMap = {
   "plugin_icon": "/plugin/icon",
   "plugin_map": "/plugin/map",
   "plugin_print": "/plugin/print",
-  "plugin_swiper": "/plugin/swiper",
-  "plugin_video": "/plugin/video",
   "resource-hub": "/resource-hub",
   "resource-hub_dashboard": "/resource-hub/dashboard-template",
   "resource-hub_device": "/resource-hub/device-template",

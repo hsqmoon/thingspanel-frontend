@@ -1,0 +1,60 @@
+diff --git a/dist/index.d.cts b/dist/index.d.cts
+index 0787cb45b4dcdda5a47c5f35c26e230e25aa3910..7d7ef49403a3c27a4a164b09899e7d00c0103e8c 100644
+--- a/dist/index.d.cts
++++ b/dist/index.d.cts
+@@ -1,12 +1,19 @@
+-import { CompilationContext, JsPlugin } from "@farmfe/core";
+-import { Compilation, Compiler as RspackCompiler, LoaderContext, RspackPluginInstance } from "@rspack/core";
++type CompilationContext = Record<string, unknown>;
++type JsPlugin = Record<string, unknown>;
++type Compilation = Record<string, unknown>;
++type RspackCompiler = Record<string, unknown>;
++type LoaderContext<T = unknown> = Record<string, unknown> & { options?: T };
++interface RspackPluginInstance { apply(compiler: RspackCompiler): void; }
+ import { BuildOptions, Loader, Plugin as EsbuildPlugin, PluginBuild } from "esbuild";
+-import { Plugin as RolldownPlugin } from "rolldown";
++type RolldownPlugin = Record<string, unknown>;
+ import { AstNode, EmittedAsset, Plugin as RollupPlugin, PluginContextMeta, SourceMapInput } from "rollup";
+-import { Plugin as UnloaderPlugin } from "unloader";
++type UnloaderPlugin = Record<string, unknown>;
+ import { Plugin as VitePlugin } from "vite";
+-import { Compilation as Compilation$1, Compiler as WebpackCompiler, LoaderContext as LoaderContext$1, WebpackPluginInstance } from "webpack";
+-import VirtualModulesPlugin from "webpack-virtual-modules";
++type Compilation$1 = Record<string, unknown>;
++type WebpackCompiler = Record<string, unknown>;
++type LoaderContext$1<T = unknown> = Record<string, unknown> & { options?: T };
++interface WebpackPluginInstance { apply(compiler: WebpackCompiler): void; }
++type VirtualModulesPlugin = Record<string, unknown>;
+ 
+ //#region src/types.d.ts
+ type Thenable<T> = T | Promise<T>;
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+index 64166a0984c57a32184eece0e395e17441ca6aa3..59f445387e94bb937035d3fde64219bff786c6a4 100644
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -1,12 +1,19 @@
+-import VirtualModulesPlugin from "webpack-virtual-modules";
+-import { CompilationContext, JsPlugin } from "@farmfe/core";
+-import { Compilation, Compiler as RspackCompiler, LoaderContext, RspackPluginInstance } from "@rspack/core";
++type VirtualModulesPlugin = Record<string, unknown>;
++type CompilationContext = Record<string, unknown>;
++type JsPlugin = Record<string, unknown>;
++type Compilation = Record<string, unknown>;
++type RspackCompiler = Record<string, unknown>;
++type LoaderContext<T = unknown> = Record<string, unknown> & { options?: T };
++interface RspackPluginInstance { apply(compiler: RspackCompiler): void; }
+ import { BuildOptions, Loader, Plugin as EsbuildPlugin, PluginBuild } from "esbuild";
+-import { Plugin as RolldownPlugin } from "rolldown";
++type RolldownPlugin = Record<string, unknown>;
+ import { AstNode, EmittedAsset, Plugin as RollupPlugin, PluginContextMeta, SourceMapInput } from "rollup";
+-import { Plugin as UnloaderPlugin } from "unloader";
++type UnloaderPlugin = Record<string, unknown>;
+ import { Plugin as VitePlugin } from "vite";
+-import { Compilation as Compilation$1, Compiler as WebpackCompiler, LoaderContext as LoaderContext$1, WebpackPluginInstance } from "webpack";
++type Compilation$1 = Record<string, unknown>;
++type WebpackCompiler = Record<string, unknown>;
++type LoaderContext$1<T = unknown> = Record<string, unknown> & { options?: T };
++interface WebpackPluginInstance { apply(compiler: WebpackCompiler): void; }
+ 
+ //#region src/types.d.ts
+ type Thenable<T> = T | Promise<T>;

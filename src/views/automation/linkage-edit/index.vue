@@ -155,8 +155,8 @@ const handleIfData = () => {
     return [] // Return empty array if the ref is not ready
   }
   const ifGroupsData = JSON.parse(JSON.stringify(editPremise.value.ifGroupsData()))
-  ifGroupsData.map((ifGroupItem: any) => {
-    ifGroupItem.map((ifItem: any) => {
+  ifGroupsData.forEach((ifGroupItem: any) => {
+    ifGroupItem.forEach((ifItem: any) => {
       // ifItem.expiration_time = moment().format();
       if (ifItem.trigger_conditions_type === '10' || ifItem.trigger_conditions_type === '11') {
         if (ifItem.trigger_param_type === 'event') {
@@ -193,7 +193,7 @@ const handleIfData = () => {
       }
       if (ifItem.trigger_conditions_type === '22') {
         let trigger_value = ''
-        ifItem.weekChoseValue.map((item: any) => {
+        ifItem.weekChoseValue.forEach((item: any) => {
           trigger_value += item
         })
         trigger_value += `|${moment(ifItem.startTimeValue).format('HH:mm:ssZ')}`
@@ -212,7 +212,7 @@ const handleIfData = () => {
         }
         if (ifItem.task_type === 'WEEK') {
           let params = ''
-          ifItem.weekChoseValue.map((item: any) => {
+          ifItem.weekChoseValue.forEach((item: any) => {
             params += item
           })
           ifItem.params = `${params}|${moment(ifItem.weekTimeValue).format('HH:mm:00Z')}`
@@ -235,9 +235,9 @@ const handleActionData = () => {
   // 处理动作的数据
   const actionGroupsData = JSON.parse(JSON.stringify(editAction.value.actionGroupsReturn()))
   const actionsData = [] as any
-  actionGroupsData.map((item: any) => {
+  actionGroupsData.forEach((item: any) => {
     if (item.actionType === '1') {
-      item.actionInstructList.map((instructItem: any) => {
+      item.actionInstructList.forEach((instructItem: any) => {
         // 如果是c_telemetry/c_attribute,那么action_value示例格式：{"c_telemetry":2}
         // 如果是c_command,那么action_value示例格式：{"method":"switch1","params":{"false":0}}
         if (
@@ -273,8 +273,8 @@ const handleActionData = () => {
 
 // 回显时处理条件数据
 const echoIfData = (ifData: any) => {
-  ifData.map((item: any) => {
-    item.map((ifItem: any) => {
+  ifData.forEach((item: any) => {
+    item.forEach((ifItem: any) => {
       if (ifItem.trigger_conditions_type === '10' || ifItem.trigger_conditions_type === '11') {
         ifItem.ifType = '1'
         if (ifItem.trigger_param_type === 'event') {
@@ -349,7 +349,7 @@ const echoIfData = (ifData: any) => {
 const echoActionData = (actionsData: any) => {
   const actionGroupsData = [] as any
   const actionInstructList = [] as any
-  actionsData.map((item: any) => {
+  actionsData.forEach((item: any) => {
     if (item.action_type === '10' || item.action_type === '11') {
       item.actionParamOptions = []
       const actionValueObj = JSON.parse(item.action_value)

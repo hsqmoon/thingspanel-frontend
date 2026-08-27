@@ -90,8 +90,7 @@ const tagsClose: (index: number) => void = index => {
 const demoUrl = getDemoServerUrl()
 const url: any = ref(demoUrl)
 const pngPath: any = ref('')
-// eslint-disable-next-line
-const customRequest = ({ file, event }: { file: UploadFileInfo; event?: ProgressEvent }) => {
+const customRequest = ({ event }: { file: UploadFileInfo; event?: ProgressEvent }) => {
   if (!event || !event.target) return
 
   const xhr = event.target as XMLHttpRequest

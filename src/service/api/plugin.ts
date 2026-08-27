@@ -2,7 +2,7 @@ import { request } from '../request'
 
 // 获取服务列表数据
 export const getServices = async (params: any) => {
-  return await request.get<Panel.Data>('/service/list', { params })
+  return await request.get<Panel.Data>('/service/list', { params, silentError: true })
 }
 
 // 注册服务
@@ -22,7 +22,7 @@ export const delRegisterService = async (id: any) => {
 
 // 获取租户三方接入点列表
 export const getServiceAccess = async (params: any) => {
-  return await request.get<Panel.Data>('/service/access/list', { params })
+  return await request.get<Panel.Data>('/service/access/list', { params, silentError: true })
 }
 
 // 获取租户三方接入点表单
