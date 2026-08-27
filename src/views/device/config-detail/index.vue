@@ -1,18 +1,19 @@
 <script lang="ts" setup>
-import { ref } from 'vue'
+import { defineAsyncComponent, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { NButton } from 'naive-ui'
 import { deviceConfigInfo, deviceTemplateDetail } from '@/service/api/device'
-import SettingInfo from '@/views/device/config-detail/modules/setting-info.vue'
-import DataHandle from '@/views/device/config-detail/modules/data-handle.vue'
 import { useRouterPush } from '@/hooks/common/router'
 import { $t } from '@/locales'
 import AssociatedDevices from './modules/associated-devices.vue'
-import ExtendInfo from './modules/extend-info.vue'
-import AttributeInfo from './modules/attribute-info.vue'
-import ConnectionInfo from './modules/connection-info.vue'
-import AlarmInfo from './modules/alarm-info.vue'
-import Automate from './modules/automate.vue'
+
+const AttributeInfo = defineAsyncComponent(() => import('./modules/attribute-info.vue'))
+const ConnectionInfo = defineAsyncComponent(() => import('./modules/connection-info.vue'))
+const DataHandle = defineAsyncComponent(() => import('./modules/data-handle.vue'))
+const Automate = defineAsyncComponent(() => import('./modules/automate.vue'))
+const AlarmInfo = defineAsyncComponent(() => import('./modules/alarm-info.vue'))
+const ExtendInfo = defineAsyncComponent(() => import('./modules/extend-info.vue'))
+const SettingInfo = defineAsyncComponent(() => import('./modules/setting-info.vue'))
 
 const { routerPushByKey } = useRouterPush()
 const route = useRoute()
@@ -97,29 +98,33 @@ const clickConfig: () => void = () => {
         </div>
       </div>
 
-      <n-tabs v-model:value="activeName" animated type="line">
-        <n-tab-pane :name="tabKeys.associatedDevices" :tab="$t('common.associatedDevices')">
+      <n-tabs v-model:value="activeName" type="line">
+        <n-tab-pane
+          display-directive="show:lazy"
+          :name="tabKeys.associatedDevices"
+          :tab="$t('common.associatedDevices')"
+        >
           <AssociatedDevices :device-config-id="configId" />
         </n-tab-pane>
-        <n-tab-pane :name="tabKeys.thingModel" :tab="$t('common.thingModel')">
+        <n-tab-pane display-directive="show:lazy" :name="tabKeys.thingModel" :tab="$t('common.thingModel')">
           <AttributeInfo :config-info="configForm" @up-date-config="getConfig" />
         </n-tab-pane>
-        <n-tab-pane :name="tabKeys.protocolConfig" :tab="$t('common.protocolConfig')">
+        <n-tab-pane display-directive="show:lazy" :name="tabKeys.protocolConfig" :tab="$t('common.protocolConfig')">
           <ConnectionInfo :config-info="configForm" @up-date-config="getConfig" />
         </n-tab-pane>
-        <n-tab-pane :name="tabKeys.dataProces" :tab="$t('common.dataProces')">
+        <n-tab-pane display-directive="show:lazy" :name="tabKeys.dataProces" :tab="$t('common.dataProces')">
           <DataHandle :config-info="configForm" />
         </n-tab-pane>
-        <n-tab-pane :name="tabKeys.automate" :tab="$t('custom.device_details.automate')">
+        <n-tab-pane display-directive="show:lazy" :name="tabKeys.automate" :tab="$t('custom.device_details.automate')">
           <Automate :config_id="configId" />
         </n-tab-pane>
-        <n-tab-pane :name="tabKeys.alarm" :tab="$t('route.alarm')">
+        <n-tab-pane display-directive="show:lazy" :name="tabKeys.alarm" :tab="$t('route.alarm')">
           <AlarmInfo :config_id="configId" />
         </n-tab-pane>
-        <n-tab-pane :name="tabKeys.extensionInfo" :tab="$t('generate.extension-info')">
+        <n-tab-pane display-directive="show:lazy" :name="tabKeys.extensionInfo" :tab="$t('generate.extension-info')">
           <ExtendInfo :config-info="configForm" @up-date-config="getConfig" />
         </n-tab-pane>
-        <n-tab-pane :name="tabKeys.devicesSetting" :tab="$t('common.devicesSetting')">
+        <n-tab-pane display-directive="show:lazy" :name="tabKeys.devicesSetting" :tab="$t('common.devicesSetting')">
           <SettingInfo :config-info="configForm" @change="getConfig" />
         </n-tab-pane>
       </n-tabs>

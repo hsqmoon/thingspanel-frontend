@@ -1,7 +1,7 @@
 <script setup lang="tsx">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { NFlex } from 'naive-ui'
-import { deviceConfigEdit, deviceConfigInfo, deviceConfigMenu } from '@/service/api/device'
+import { deviceConfigEdit, deviceConfigMenu } from '@/service/api/device'
 import { useRouterPush } from '@/hooks/common/router'
 import { $t } from '@/locales'
 // eslint-disable-next-line vue/valid-define-emits
@@ -40,11 +40,14 @@ const choseTemp = async v => {
 const toTemplate = () => {
   routerPushByKey('device_template')
 }
-onMounted(async () => {
-  await getTableData('')
-  const res = await deviceConfigInfo({ id: props.configInfo.id })
-  selectValue.value = res.data.device_template_id
-})
+watch(
+  () => props.configInfo?.device_template_id,
+  value => {
+    selectValue.value = value
+  },
+  { immediate: true }
+)
+onMounted(() => getTableData(''))
 </script>
 
 <template>

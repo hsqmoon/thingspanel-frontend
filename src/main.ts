@@ -7,7 +7,6 @@ import { setupDayjs, setupIconifyOffline, setupLoading, setupNProgress } from '.
 import { setupStore } from './store'
 import { router, setupRouter } from './router'
 import { i18n, setupI18n } from './locales'
-import { initEChartsComponents } from '@/utils/echarts/echarts-manager'
 import { initRuntimeFeatures } from '@/config/runtime-features'
 
 import App from './App.vue'
@@ -67,8 +66,6 @@ async function setupApp() {
       () => {
         setupIconifyOffline()
         setupDayjs()
-        // ECharts 延迟初始化，减少启动内存占用
-        initEChartsComponents()
       },
       { timeout: 2000 }
     )
@@ -77,7 +74,6 @@ async function setupApp() {
     setTimeout(() => {
       setupIconifyOffline()
       setupDayjs()
-      initEChartsComponents()
     }, 100)
   }
 

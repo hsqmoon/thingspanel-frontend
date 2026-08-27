@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { computed, getCurrentInstance, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, getCurrentInstance, nextTick, ref, watch } from 'vue'
 import { type FormInst, NButton, useDialog } from 'naive-ui'
 import { PencilOutline as editIcon, TrashOutline as trashIcon } from '@vicons/ionicons5'
-import MonacoEditor from 'monaco-editor-vue3'
 import ItemCard from '@/components/dev-card-item/index.vue'
 import {
   dataScriptAdd,
@@ -21,6 +20,7 @@ import { useI18n } from 'vue-i18n'
 const { t } = useI18n()
 // const message = useMessage();
 const dialog = useDialog()
+const MonacoEditor = defineAsyncComponent(() => import('monaco-editor-vue3'))
 
 interface Props {
   configInfo?: object | any
@@ -244,8 +244,9 @@ interface DataScriptItem {
 const dataScriptList = ref<Array<DataScriptItem>>([])
 const dataScriptTotal = ref(0)
 const queryDataScriptList = async () => {
-  queryData.value.device_config_id = props.configInfo.id
-  const res = await getDataScriptList(queryData.value)
+  const deviceConfigId = props.configInfo?.id
+  if (!deviceConfigId) return
+  const res = await getDataScriptList({ ...queryData.value, device_config_id: deviceConfigId })
   dataScriptList.value = res.data.list
   dataScriptTotal.value = res.data.total
 }
@@ -358,10 +359,11 @@ const doQuiz = async () => {
       t('page.dataForward.debugRequestFailed') + ': ' + (error.message || t('page.dataForward.unknownError'))
   }
 }
-watch(queryData.value, () => queryDataScriptList(), { deep: true })
-onMounted(() => {
-  queryDataScriptList()
-})
+watch(
+  () => [props.configInfo?.id, queryData.value.script_type, queryData.value.page, queryData.value.page_size],
+  () => queryDataScriptList(),
+  { immediate: true }
+)
 </script>
 <template>
   <div class="m-b-20px flex items-center gap-20px">

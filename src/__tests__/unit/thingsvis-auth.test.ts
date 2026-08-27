@@ -12,6 +12,8 @@ describe('thingsvis-auth', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     mockGet.mockImplementation((key: string) => {
       if (key === 'token') return 'tp-token'
       if (key === 'userInfo') {

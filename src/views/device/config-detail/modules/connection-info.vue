@@ -318,12 +318,13 @@ onMounted(async () => {
   if (props.configInfo.protocol_config) {
     protocol_config.value = JSON.parse(props.configInfo.protocol_config)
   }
-  getProtocolList(props.configInfo.device_type)
   extendForm.value = props.configInfo
-  await getVoucherType(extendForm.value.protocol_type)
-
-  await getConfigForm(extendForm.value.protocol_type)
-  await fetchTopicMappings()
+  await Promise.all([
+    getProtocolList(props.configInfo.device_type),
+    getVoucherType(extendForm.value.protocol_type),
+    getConfigForm(extendForm.value.protocol_type),
+    fetchTopicMappings()
+  ])
 })
 
 watch(
