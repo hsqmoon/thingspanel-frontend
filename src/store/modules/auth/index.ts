@@ -25,7 +25,7 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
 
   const userInfo: Api.Auth.UserInfo = reactive(getUserInfo())
   /** Reset auth store */
-  async function resetStore() {
+  async function resetStore(navigateToLogin = true) {
     const authStore = useAuthStore()
 
     clearAuthStorage()
@@ -33,7 +33,7 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
 
     authStore.$reset()
 
-    if (!route.value.meta.constant) {
+    if (navigateToLogin && !route.value.meta.constant) {
       await toLogin()
     }
 

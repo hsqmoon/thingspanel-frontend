@@ -130,7 +130,9 @@ async function createAuthRouteGuard(
   // 5. init auth route
   const initSuccess = await routeStore.initAuthRoute()
 
-  // If init failed, reset store (which likely redirects to login) and stop navigation
+  // If init failed, clear the stale session and explicitly finish this pending
+  // navigation. Relying on resetStore's current-route check can leave the guard
+  // unresolved when a stale token redirects /login to the dynamic root route.
   if (!initSuccess) {
     const authStore = useAuthStore()
     if (authStore.userInfo?.authority === 'TENANT_USER') {
@@ -138,7 +140,8 @@ async function createAuthRouteGuard(
       next({ name: '403' })
       return false
     }
-    await authStore.resetStore() // This typically handles redirection to login
+    await authStore.resetStore(false)
+    next({ name: 'login', params: { module: 'pwd-login' }, replace: true })
 
     return false
   }
