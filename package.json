@@ -146,7 +146,8 @@
     "vite-svg-loader": "5.1.2",
     "vitest": "3.2.7",
     "vue-eslint-parser": "10.4.1",
-    "vue-tsc": "3.3.11"
+    "vue-tsc": "3.3.11",
+    "yaml": "2.9.0"
   },
   "website": "http://23.94.59.38:8089/",
   "packageManager": "pnpm@10.34.5+sha512.a4ee05f2f73658255bd6a89859c065a45c28a57daefae2c893a168ee2b73168c37b91e83e57ea67654ad03f03031746430e8bce38e362e042605fb8abc80192e"
