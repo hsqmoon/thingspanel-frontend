@@ -139,6 +139,9 @@ importers:
       jsencrypt:
         specifier: 3.5.4
         version: 3.5.4(patch_hash=1c5a235e3095873191c41e951f58f24416ad94fac22fd4ae3359a99eb7df9233)
+      lodash:
+        specifier: 4.18.0
+        version: 4.18.0
       lodash-es:
         specifier: 4.18.0
         version: 4.18.0
@@ -335,6 +338,9 @@ importers:
       sass:
         specifier: 1.103.1
         version: 1.103.1
+      seemly:
+        specifier: 0.3.10
+        version: 0.3.10
       tsx:
         specifier: 4.23.12
         version: 4.23.12
