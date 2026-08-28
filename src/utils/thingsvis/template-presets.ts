@@ -37,20 +37,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function parseTemplateChartConfig(rawConfig: unknown): TemplateChartConfig {
   if (typeof rawConfig === 'string') {
     if (!rawConfig.trim()) return {}
+    let parsed: unknown
     try {
-      const parsed = JSON.parse(rawConfig)
-      return isRecord(parsed) ? (parsed as TemplateChartConfig) : {}
-    } catch (error) {
-      console.warn('[template-presets] Failed to parse chart config:', error)
-      return {}
+      parsed = JSON.parse(rawConfig)
+    } catch {
+      throw new Error('物模型图表配置不是有效 JSON，已禁止覆盖保存。')
     }
+    if (isRecord(parsed)) return parsed as TemplateChartConfig
+    throw new Error('物模型图表配置格式无效，已禁止覆盖保存。')
   }
 
   if (isRecord(rawConfig)) {
     return rawConfig as TemplateChartConfig
   }
 
-  return {}
+  if (rawConfig === null || rawConfig === undefined || rawConfig === '') return {}
+
+  throw new Error('物模型图表配置格式无效，已禁止覆盖保存。')
 }
 
 export function getTemplatePresetKey(propertyType: TemplatePresetPropertyType, fieldId: string) {

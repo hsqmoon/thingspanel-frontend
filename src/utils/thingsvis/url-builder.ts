@@ -4,7 +4,6 @@
  */
 
 import type { PlatformField } from './types'
-import { localStg } from '@/utils/storage'
 import { getPlatformApiBase, getThingsVisApiBase } from './constants'
 
 /** URL 构建选项 */
@@ -72,33 +71,11 @@ export async function buildThingsVisUrl(options: ThingsVisUrlOptions): Promise<s
   params.set('thingsvisApiBaseUrl', thingsvisApiBaseUrl)
   params.set('platformApiBaseUrl', getPlatformApiBase())
 
-  // 1. SSO Token 交换 (关键实现)
-  try {
-    console.log('[url-builder] 开始 SSO token 交换...')
-    // 动态导入以避免循环依赖
-    const { getThingsVisToken } = await import('./thingsvis-auth')
-    const thingsvisToken = await getThingsVisToken()
-
-    if (thingsvisToken) {
-      params.set('token', thingsvisToken)
-      console.log('✅ SSO token 获取成功, length:', thingsvisToken.length)
-    } else {
-      // 降级：使用 ThingsPanel token
-      const tpToken = localStg.get('token')
-      if (tpToken) {
-        params.set('token', tpToken)
-        console.warn('⚠️ SSO 失败，降级使用 ThingsPanel token')
-      }
-    }
-  } catch (error) {
-    console.error('❌ SSO token exchange failed:', error)
-    // 降级：使用 ThingsPanel token
-    const tpToken = localStg.get('token')
-    if (tpToken) {
-      params.set('token', tpToken)
-      console.warn('⚠️ 降级使用 ThingsPanel token')
-    }
-  }
+  // ThingsVis 只接受当前身份交换得到的专用 token，不回退使用 ThingsPanel token。
+  const { getThingsVisToken } = await import('./thingsvis-auth')
+  const thingsvisToken = await getThingsVisToken()
+  if (!thingsvisToken) throw new Error('ThingsVis token exchange returned an empty token')
+  params.set('token', thingsvisToken)
 
   // 显示选项(编辑模式默认显示，预览模式默认隐藏)
   const isEditor = options.mode === 'editor'
@@ -139,19 +116,6 @@ export async function buildThingsVisUrl(options: ThingsVisUrlOptions): Promise<s
   const route = options.mode === 'viewer' ? '/embed' : '/editor'
 
   const finalUrl = `${baseUrl}#${route}?${params.toString()}`
-
-  // 🔍 调试：打印最终 URL
-  console.log('[url-builder] 🔗 构建 URL:', {
-    mode: options.mode,
-    route,
-    baseUrl,
-    finalUrl: finalUrl.substring(0, 300)
-  })
-  console.log('[url-builder] 最终 URL:', {
-    hasToken: params.has('token'),
-    tokenLength: params.get('token')?.length,
-    urlPreview: finalUrl.substring(0, 200) + '...'
-  })
 
   return finalUrl
 }

@@ -2,6 +2,7 @@
 import { computed, getCurrentInstance, markRaw, nextTick, onBeforeMount, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useLoading } from '@sa/hooks'
+import { isFlatRequestFailure } from '@sa/axios'
 import { useWebSocket } from '@vueuse/core'
 import Telemetry from '@/views/device/details/modules/telemetry/telemetry.vue'
 import TelemetryChart from '@/views/device/details/modules/telemetry-chart.vue'
@@ -170,6 +171,7 @@ const name = ref('')
 const device_number = ref('')
 const device_is_online = ref(0)
 const device_loop = ref(false)
+let detailRequestEpoch = 0
 let wsUrl = getWebsocketServerUrl()
 const DEVICE_STATUS_INACTIVE_COLOR = '#ccc'
 const DEVICE_ALARM_ACTIVE_COLOR = '#ee0808'
@@ -296,75 +298,76 @@ const rules = {
   }
 }
 const getDeviceDetail = async () => {
+  const requestEpoch = ++detailRequestEpoch
   device_loop.value = false
-  const { error, data } = await deviceDetail(getDeviceId())
-  device_loop.value = true
-  deviceData.value = data
-  labels.value.length = 0
+  const response = await deviceDetail(getDeviceId())
+  if (isFlatRequestFailure(response) || requestEpoch !== detailRequestEpoch) {
+    if (requestEpoch === detailRequestEpoch) device_loop.value = true
+    return
+  }
+
+  const data = response.data
+  if (!data) {
+    device_loop.value = true
+    return
+  }
+  const nextLabels: string[] = []
 
   if (data.label) {
     if (data.label.includes(',')) {
-      labels.value = data.label.split(',')
+      nextLabels.push(...data.label.split(','))
     } else {
-      labels.value.push(data.label)
+      nextLabels.push(data.label)
     }
   }
-  if (!error) {
-    device_number.value = data.device_number
-    device_is_online.value = data.is_online
-    name.value = data.name
 
-    // 构建过滤后的组件列表（一次性赋值，避免多次触发响应式更新）
-    let filtered = baseComponents.map(item => ({ ...item }))
-    let hasTemplateChart = false
+  // 构建过滤后的组件列表（一次性赋值，避免多次触发响应式更新）
+  let filtered = baseComponents.map(item => ({ ...item }))
+  let hasTemplateChart: boolean | null = false
 
-    if (data?.device_config) {
-      device_type.value = data.device_config.device_type
-      if (device_type.value !== '2' || !data?.device_config_name) {
-        filtered = filtered.filter(item => item.key !== 'device-analysis')
-      }
-      if (device_type.value === '3') {
-        filtered = filtered.filter(item => item.key !== 'join')
-      }
-      if (data.device_config.device_template_id) {
-        hasTemplateChart = await resolveTemplateHasChartContent(data.device_config.device_template_id)
-      }
-      if (!data.device_config.device_template_id || !hasTemplateChart) {
-        filtered = filtered.filter(item => item.key !== 'chart')
-      }
-    } else if (!data?.device_config_name) {
+  if (data.device_config) {
+    if (data.device_config.device_type !== '2' || !data.device_config_name) {
       filtered = filtered.filter(item => item.key !== 'device-analysis')
+    }
+    if (data.device_config.device_type === '3') filtered = filtered.filter(item => item.key !== 'join')
+    if (data.device_config.device_template_id) {
+      hasTemplateChart = await resolveTemplateHasChartContent(data.device_config.device_template_id)
+    }
+    if (!data.device_config.device_template_id || hasTemplateChart === false) {
       filtered = filtered.filter(item => item.key !== 'chart')
     }
-
-    // 一次性赋值
-    components.value = filtered
-
-    ensureActiveTab()
-
-    const nextSig = components.value.map(item => item.key).join('|')
-    const currentConfigId = data?.device_config_id || ''
-
-    if (nextSig !== lastTabsSig || (lastConfigId && lastConfigId !== currentConfigId)) {
-      const isFirstRender = lastTabsSig === ''
-      lastTabsSig = nextSig
-      lastConfigId = currentConfigId
-      if (!isFirstRender) {
-        await nextTick()
-        tabsRenderKey.value += 1
-      }
-    } else {
-      lastTabsSig = nextSig
-      lastConfigId = currentConfigId
-    }
-
-    send(
-      JSON.stringify({
-        device_id: getDeviceId(),
-        token: localStg.get('token')
-      })
-    )
+  } else if (!data.device_config_name) {
+    filtered = filtered.filter(item => item.key !== 'device-analysis' && item.key !== 'chart')
   }
+  if (requestEpoch !== detailRequestEpoch) return
+
+  device_loop.value = true
+  deviceData.value = data
+  labels.value = nextLabels
+  device_number.value = data.device_number
+  device_is_online.value = data.is_online
+  name.value = data.name
+  device_type.value = data.device_config?.device_type || ''
+  components.value = filtered
+  ensureActiveTab()
+
+  const nextSig = components.value.map(item => item.key).join('|')
+  const currentConfigId = data.device_config_id || ''
+  if (nextSig !== lastTabsSig || (lastConfigId && lastConfigId !== currentConfigId)) {
+    const isFirstRender = lastTabsSig === ''
+    lastTabsSig = nextSig
+    lastConfigId = currentConfigId
+    if (!isFirstRender) {
+      await nextTick()
+      if (requestEpoch !== detailRequestEpoch) return
+      tabsRenderKey.value += 1
+    }
+  } else {
+    lastTabsSig = nextSig
+    lastConfigId = currentConfigId
+  }
+
+  send(JSON.stringify({ device_id: getDeviceId(), token: localStg.get('token') }))
 }
 
 const resolveTemplateHasChartContent = async (templateId?: string | number) => {
@@ -383,10 +386,8 @@ const resolveTemplateHasChartContent = async (templateId?: string | number) => {
 
     templateChartAvailabilityCache.set(normalizedTemplateId, hasChart)
     return hasChart
-  } catch (err) {
-    console.warn('[DeviceDetail] 加载模板图表标签失败', normalizedTemplateId, err)
-    templateChartAvailabilityCache.set(normalizedTemplateId, false)
-    return false
+  } catch {
+    return null
   }
 }
 const closeModal = async () => {
@@ -450,11 +451,11 @@ const save = async () => {
   queryParams.label = labels.value.join(',')
   queryParams.description = deviceData.value?.description
 
-  const { error } = await deviceUpdate(queryParams)
-  if (!error) {
-    showDialog.value = false
-    getDeviceDetail()
-  }
+  const response = await deviceUpdate(queryParams)
+  if (isFlatRequestFailure(response)) return
+
+  showDialog.value = false
+  await getDeviceDetail()
 }
 watch(
   () => appStore.locale,

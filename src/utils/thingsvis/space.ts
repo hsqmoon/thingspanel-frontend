@@ -21,7 +21,7 @@ export function isSysAdminUser(userInfo?: UserInfoLike | null): boolean {
 
 export function resolveThingsVisSpaceId(userInfo?: UserInfoLike | null): string {
   if (isSysAdminUser(userInfo)) {
-    return SYS_ADMIN_SPACE_ID
+    return String(localStg.get('tenantScopeId') || '').trim() || SYS_ADMIN_SPACE_ID
   }
 
   const tenantId = String(userInfo?.tenantId || userInfo?.tenant_id || '').trim()
@@ -29,7 +29,8 @@ export function resolveThingsVisSpaceId(userInfo?: UserInfoLike | null): string 
 }
 
 export function getThingsVisSpaceLabel(userInfo?: UserInfoLike | null): string {
-  return isSysAdminUser(userInfo) ? '超管独立看板空间' : '租户看板空间'
+  if (!isSysAdminUser(userInfo)) return '租户看板空间'
+  return localStg.get('tenantScopeId') ? '已选租户看板空间' : '超管全局看板空间'
 }
 
 export { SYS_ADMIN_ROLE, SYS_ADMIN_SPACE_ID }

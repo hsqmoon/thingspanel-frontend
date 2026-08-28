@@ -9,6 +9,7 @@
 <script setup lang="ts">
 import { computed, ref, toRefs } from 'vue'
 import type { FormItemRule, FormRules } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 import { useNaiveForm } from '@/hooks/common/form'
 import { getConfirmPwdRule } from '@/utils/form/rule'
 import { changeInformation, passwordModification } from '@/service/api/personal-center'
@@ -82,10 +83,10 @@ const editName = async () => {
   const data = { name: formData.value.name }
   const res = await changeInformation(data)
 
-  if (!res.error) {
-    modalVisible.value = false
-    emit('modification', formData.value.name)
-  }
+  if (isFlatRequestFailure(res)) return
+
+  modalVisible.value = false
+  emit('modification', formData.value.name)
 }
 /** passwordModification */
 const password = async () => {
@@ -104,10 +105,10 @@ const password = async () => {
     salt
   }
   const res = await passwordModification(param)
-  if (!res.error) {
-    modalVisible.value = false
-    emit('modification')
-  }
+  if (isFlatRequestFailure(res)) return
+
+  modalVisible.value = false
+  emit('modification')
 }
 
 function submit() {

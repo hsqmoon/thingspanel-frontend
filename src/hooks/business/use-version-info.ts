@@ -1,5 +1,6 @@
 import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
+import { isFlatRequestFailure } from '@sa/axios'
 
 import { getSysVersion } from '@/service/api/system-data'
 
@@ -10,7 +11,6 @@ interface VersionInfoSnapshot {
 
 const DEFAULT_VERSION = '--'
 const LATEST_VERSION_CACHE_KEY = 'thingspanel_latest_version_cache_v1'
-const LEGACY_CACHE_KEYS = ['thingspanel_version_info_cache', 'thingspanel_latest_version_cache']
 const LATEST_VERSION_CACHE_TTL = 12 * 60 * 60 * 1000
 
 let versionInfoCache: VersionInfoSnapshot | null = null
@@ -29,8 +29,6 @@ function normalizeVersion(version: unknown): string {
 
 function getCachedLatestVersion(): string {
   if (typeof window === 'undefined') return DEFAULT_VERSION
-
-  LEGACY_CACHE_KEYS.forEach(key => localStorage.removeItem(key))
 
   try {
     const raw = localStorage.getItem(LATEST_VERSION_CACHE_KEY)
@@ -74,7 +72,9 @@ async function fetchVersionInfo(): Promise<VersionInfoSnapshot> {
   ])
     .then(([currentResult, latestResult]) => {
       const currentVersion =
-        currentResult.status === 'fulfilled' ? normalizeVersion(currentResult.value?.data?.version) : DEFAULT_VERSION
+        currentResult.status === 'fulfilled' && !isFlatRequestFailure(currentResult.value)
+          ? normalizeVersion(currentResult.value.data?.version)
+          : DEFAULT_VERSION
 
       const latestVersion =
         latestResult.status === 'fulfilled'
@@ -83,12 +83,16 @@ async function fetchVersionInfo(): Promise<VersionInfoSnapshot> {
 
       setCachedLatestVersion(latestVersion)
 
-      versionInfoCache = {
+      const snapshot = {
         currentVersion,
         latestVersion
       }
 
-      return versionInfoCache
+      if (currentVersion !== DEFAULT_VERSION && latestVersion !== DEFAULT_VERSION) {
+        versionInfoCache = snapshot
+      }
+
+      return snapshot
     })
     .finally(() => {
       versionInfoPending = null

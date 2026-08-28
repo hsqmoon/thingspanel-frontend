@@ -10,6 +10,7 @@
 import { computed, onMounted, ref, toRefs, watch } from 'vue'
 import { NButton } from 'naive-ui'
 import type { FormItemRule, FormRules } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 import { $t } from '@/locales'
 import { localStg } from '@/utils/storage'
 import { getConfirmPwdRule } from '@/utils/form/rule'
@@ -181,6 +182,37 @@ const getSubmitUserInfoData = () => {
     phone_number: fullPhoneNumber.value
   }
 }
+
+const getAvatarUrl = (path: string) => {
+  const serverUrl = getDemoServerUrl().replace(/\/api\/v1\/?$/, '')
+  return `${serverUrl}/${path.replace(/^\.?\//, '')}`
+}
+
+const applyUserInfo = (data: any) => {
+  const phoneNumber = typeof data.phone_number === 'string' ? data.phone_number : ''
+  const { country_code, phone_only } = parsePhoneNumber(phoneNumber)
+  userInfoData.value = {
+    additional_info: typeof data.additional_info === 'string' ? data.additional_info : '{}',
+    name: data.name || '',
+    email: data.email || '',
+    phone_number: phoneNumber,
+    country_code,
+    phone_only,
+    authority: data.authority || '',
+    organization: data.organization || '',
+    timezone: data.timezone || '',
+    default_language: data.default_language || '',
+    avatar_url: data.avatar_url || '',
+    address: {
+      province: data.address?.province || '',
+      city: data.address?.city || '',
+      district: data.address?.district || '',
+      detailed_address: data.address?.detailed_address || ''
+    }
+  }
+  header.value = Boolean(userInfoData.value.avatar_url)
+  headUrl.value = header.value ? getAvatarUrl(userInfoData.value.avatar_url) : ''
+}
 /** 初始from数据 */
 const formData = ref({
   name: '',
@@ -277,11 +309,11 @@ function closeEdit() {
 // 移除标签页切换逻辑，新设计不再需要
 /** 更新用户信息 */
 async function updataUserInfo() {
-  const { error } = await changeInformation(getSubmitUserInfoData())
-  if (!error) {
-    window.$message?.success($t('custom.grouping_details.operationSuccess'))
-    closeEdit() // 成功后退出编辑模式
-  }
+  const response = await changeInformation(getSubmitUserInfoData())
+  if (isFlatRequestFailure(response)) return
+
+  window.$message?.success($t('custom.grouping_details.operationSuccess'))
+  closeEdit() // 成功后退出编辑模式
 }
 /** 重置密码 */
 const resetPass = async () => {
@@ -306,104 +338,46 @@ const submitPass = async () => {
     salt
   }
   const res = await passwordModification(param)
-  if (!res.error) {
-    window.$message?.success($t('custom.grouping_details.operationSuccess'))
-  }
+  if (isFlatRequestFailure(res)) return
+
+  window.$message?.success($t('custom.grouping_details.operationSuccess'))
 }
 
 async function handleFinish({ event }: { event?: ProgressEvent }) {
-  const response = JSON.parse((event?.target as XMLHttpRequest).response)
-  // 字符串转成对象，兼容两种字段名
-  const additionalInfoStr = userInfoData.value.additional_info || '{}'
-  const obj = JSON.parse(additionalInfoStr)
-  obj.user_icon = response.data.path
-  const info = JSON.stringify(obj)
-  userInfoData.value.additional_info = info
-  userInfoData.value.avatar_url = response.data.path
+  let response: any
+  try {
+    response = JSON.parse((event?.target as XMLHttpRequest | undefined)?.response || '')
+  } catch {
+    window.$message?.error('头像上传响应无效，请重试。')
+    return
+  }
+
+  const avatarPath = response?.code === 200 && typeof response?.data?.path === 'string' ? response.data.path : ''
+  if (!avatarPath) {
+    window.$message?.error(response?.message || '头像上传失败，请重试。')
+    return
+  }
 
   // 调用用户信息更新接口,更新成功，刷新页面头像显示
-  const { error } = await changeInformation(getSubmitUserInfoData())
-  if (!error) {
-    // 显示头像时使用服务器域名，去掉 /api/v1 路径
-    const serverUrl = getDemoServerUrl().replace('/api/v1', '')
-    headUrl.value = serverUrl + response.data.path.substring(1)
-    // header.value = true
+  const nextUserInfo = { ...getSubmitUserInfoData(), avatar_url: avatarPath }
+  const updateResponse = await changeInformation(nextUserInfo)
+  if (isFlatRequestFailure(updateResponse)) return
 
-    // 重新获取最新的用户信息，确保本地数据与服务器数据保持同步
-    const { data } = await fetchUserInfo()
-    const basePhone = data.phone_num || data.phone_number || ''
-    const { country_code, phone_only } = parsePhoneNumber(basePhone)
-    userInfoData.value = {
-      ...data,
-      // 处理电话号码字段的兼容性映射
-      phone_number: basePhone,
-      country_code,
-      phone_only,
-      authority: data.authority || '',
-      // 处理附加信息字段的兼容性映射
-      additional_info: data.additional_info || data.additionalInfo || '{}',
-      // 确保新增字段有默认值
-      organization: data.organization || '',
-      timezone: data.timezone || '',
-      default_language: data.default_language || '',
-      address: {
-        province: data.address?.province || '',
-        city: data.address?.city || '',
-        district: data.address?.district || '',
-        detailed_address: data.address?.detailed_address || ''
-      }
-    }
+  userInfoData.value.avatar_url = avatarPath
+  header.value = true
+  headUrl.value = getAvatarUrl(avatarPath)
 
-    window.$message?.success($t('custom.grouping_details.operationSuccess'))
-  }
+  window.$message?.success($t('custom.grouping_details.operationSuccess'))
 }
 
 function handleUploadFinish(payload: { event?: ProgressEvent }) {
   void handleFinish(payload)
 }
 onMounted(async () => {
-  const { data } = await fetchUserInfo()
-  const basePhone = data.phone_num || data.phone_number || ''
-  const { country_code, phone_only } = parsePhoneNumber(basePhone)
-  userInfoData.value = {
-    ...data,
-    // 将 phone_num 映射为 phone_number
-    phone_number: basePhone,
-    country_code,
-    phone_only,
-    authority: data.authority || '',
-    // 兼容 additional_info 和 additionalInfo 字段
-    additional_info: data.additional_info || data.additionalInfo || '{}',
-    // 确保新字段有默认值
-    organization: data.organization || '',
-    timezone: data.timezone || '',
-    default_language: data.default_language || '',
-    address: {
-      province: data.address?.province || '',
-      city: data.address?.city || '',
-      district: data.address?.district || '',
-      detailed_address: data.address?.detailed_address || ''
-    }
-  }
+  const response = await fetchUserInfo()
+  if (isFlatRequestFailure(response) || !response.data) return
 
-  // 兼容两种字段名的头像显示逻辑
-  const additionalInfoStr = userInfoData.value.additional_info || '{}'
-  if (additionalInfoStr === '{}' || !additionalInfoStr) {
-    header.value = false
-  } else {
-    header.value = true
-    try {
-      const obj = JSON.parse(additionalInfoStr)
-      if (obj.user_icon) {
-        // 显示头像时使用服务器域名，去掉 /api/v1 路径
-        const serverUrl = getDemoServerUrl().replace('/api/v1', '')
-        headUrl.value = serverUrl + obj.user_icon.substring(1)
-      }
-    } catch (error) {
-      console.error('解析用户头像信息失败:', error)
-      header.value = false
-    }
-  }
+  applyUserInfo(response.data)
 })
 </script>
 

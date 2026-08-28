@@ -1,6 +1,7 @@
 <script setup lang="tsx">
 import { onBeforeMount, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { Ref } from 'vue'
+import { isFlatRequestFailure } from '@sa/axios'
 import { useRoute, useRouter } from 'vue-router'
 import type { DrawerPlacement, StepsProps } from 'naive-ui'
 import { NSpace, NTag, NButton } from 'naive-ui'
@@ -54,9 +55,16 @@ const initialDeviceConfigId = ref(typeof route.query.deviceConfigId === 'string'
 const secondLevelOptions = ref<DeviceManagement.ServiceData[]>([])
 const selectedFirstLevel = ref<string | null>(null)
 const serviceIds = ref<ServiceIds[]>([])
-const queryOfServiceIdentifier = ref(route.query.service_identifier)
-const queryOfServiceAccessId = ref(route.query.service_access_id)
+let firstLevelRequestEpoch = 0
+let secondLevelRequestEpoch = 0
+let availabilityRequestEpoch = 0
+let firstLevelOptionsReady = false
+let pendingTableParams: Record<string, any> | null = null
 const { cache: query, setCache } = usePageCache()
+const initialServiceIdentifier =
+  typeof route.query.service_identifier === 'string' ? route.query.service_identifier : query.service_identifier
+const initialServiceAccessId =
+  typeof route.query.service_access_id === 'string' ? route.query.service_access_id : query.service_access_id
 
 // 初始化设备状态 WebSocket 管理器
 const deviceStatusWS = useDeviceStatusWebSocket()
@@ -65,26 +73,22 @@ const deviceStatusWS = useDeviceStatusWebSocket()
  * 更新表格中设备状态的函数
  */
 const updateDeviceStatusInTable = (deviceId: string, isOnline: boolean) => {
-  try {
-    // 更新表格中的设备状态
-    if (tablePageRef.value?.dataList && Array.isArray(tablePageRef.value.dataList)) {
-      const deviceIndex = tablePageRef.value.dataList.findIndex(device => device.id === deviceId)
+  // 更新表格中的设备状态
+  if (Array.isArray(tablePageRef.value?.dataList)) {
+    const deviceIndex = tablePageRef.value.dataList.findIndex(device => device.id === deviceId)
 
-      if (deviceIndex !== -1) {
-        tablePageRef.value.dataList[deviceIndex].is_online = isOnline ? 1 : 0
-      }
+    if (deviceIndex !== -1) {
+      tablePageRef.value.dataList[deviceIndex].is_online = isOnline ? 1 : 0
     }
-  } catch (error) {
-    console.error('更新设备状态失败:', error)
   }
 }
 
 /**
  * 订阅当前页面的设备状态
  */
-const subscribeDeviceStatus = () => {
+const subscribeDeviceStatus = (rows = tablePageRef.value?.dataList || []) => {
   // 获取当前页面的设备ID列表
-  const deviceIds = tablePageRef.value?.dataList?.map((device: any) => device.id) || []
+  const deviceIds = rows.map((device: any) => device.id)
 
   if (deviceIds.length > 0) {
     // 连接并订阅（第一次会建立连接，后续会更新订阅）
@@ -97,6 +101,7 @@ const subscribeDeviceStatus = () => {
 
 const getFormJson = async id => {
   const res = await devicCeonnectForm({ device_id: id })
+  if (isFlatRequestFailure(res)) return
 
   formData.value = res.data
 }
@@ -128,6 +133,8 @@ const getDeviceGroupOptions = async () => {
   }
 
   const res = await deviceGroupTree({})
+  if (isFlatRequestFailure(res)) return []
+
   let options: any[] = []
   if (res.data) {
     options = convertTreeNodesToTarget(res.data)
@@ -141,6 +148,8 @@ const getDeviceConfigOptions = async () => {
     page_size: 99
     // device_type: pattern
   })
+  if (isFlatRequestFailure(res)) return configOptions.value
+
   let options: any[] = []
   if (res.data && res.data.list) {
     options = res.data.list
@@ -325,7 +334,7 @@ const searchConfigs = ref<SearchConfig[]>([
     key: 'service_identifier',
     label: 'card.anyProtocolService',
     type: 'select',
-    initValue: query.service_identifier,
+    initValue: initialServiceIdentifier,
     options: [{ label: $t('card.anyProtocolService'), value: '' }]
   },
   {
@@ -341,6 +350,16 @@ const searchConfigs = ref<SearchConfig[]>([
     type: 'input'
   }
 ])
+if (initialServiceIdentifier && initialServiceAccessId) {
+  const identifierIndex = searchConfigs.value.findIndex(item => item.key === 'service_identifier')
+  searchConfigs.value.splice(identifierIndex + 1, 0, {
+    key: 'service_access_id',
+    label: '选择二级服务',
+    type: 'select',
+    initValue: initialServiceAccessId,
+    options: []
+  })
+}
 const dropOption = [
   {
     label: () => $t('custom.devicePage.manualAdd'),
@@ -359,30 +378,30 @@ const dropOption = [
 ]
 
 const fetchFirstLevelOptions = async () => {
-  const { data } = await deviceDictProtocolServiceFirstLevel({
+  const requestEpoch = ++firstLevelRequestEpoch
+  const response = await deviceDictProtocolServiceFirstLevel({
     language_code: localStg.get('lang')
   })
+  if (isFlatRequestFailure(response) || requestEpoch !== firstLevelRequestEpoch) return
 
-  const protocolOptions = data.protocol.map(item => ({
+  const data = response.data
+
+  const protocolOptions = (Array.isArray(data?.protocol) ? data.protocol : []).map(item => ({
     label: item.name,
     value: item.service_identifier,
     type: 'protocol'
   }))
 
-  const serviceOptions = data.service
-    ? data.service.map(item => {
-        serviceIds.value.push({
-          service_identifier: item.service_identifier,
-          service_plugin_id: item.service_plugin_id
-        })
-
-        return {
-          label: item.name,
-          value: item.service_identifier,
-          type: 'service'
-        }
-      })
-    : []
+  const services = Array.isArray(data?.service) ? data.service : []
+  serviceIds.value = services.map(item => ({
+    service_identifier: item.service_identifier,
+    service_plugin_id: item.service_plugin_id
+  }))
+  const serviceOptions = services.map(item => ({
+    label: item.name,
+    value: item.service_identifier,
+    type: 'service'
+  }))
 
   searchConfigs.value.map((item: any) => {
     if (item.key === 'service_identifier') {
@@ -404,93 +423,88 @@ const fetchFirstLevelOptions = async () => {
     }
     return item
   })
+
+  firstLevelOptionsReady = true
+  if (pendingTableParams) {
+    const params = pendingTableParams
+    pendingTableParams = null
+    await paramsUpdateHandle(params)
+  }
 }
 
-const fetchSecondLevelOptions = async (firstLevelValue, page = 1) => {
+const fetchSecondLevelOptions = async firstLevelValue => {
   if (!firstLevelValue) return
-  if (page === 1) {
-    // 清空二级选项
-    secondLevelOptions.value = []
-    searchConfigs.value.map((item: any) => {
-      if (item.key === 'service_access_id') {
-        item.options = []
-      }
-      return item
-    })
-  }
+  const requestEpoch = ++secondLevelRequestEpoch
+  const pluginId = serviceIds.value.find(item => item.service_identifier === firstLevelValue)?.service_plugin_id
+  if (!pluginId) return
 
-  const pluginId = serviceIds.value.filter(item => item.service_identifier === firstLevelValue)[0]?.service_plugin_id
-  const { data } = await deviceDictProtocolServiceSecondLevel({
-    params: {
-      service_plugin_id: pluginId,
-      page,
-      page_size: 100
+  const options: DeviceManagement.ServiceData[] = []
+  let page = 1
+  let total: number
+  do {
+    const response = await deviceDictProtocolServiceSecondLevel({
+      params: { service_plugin_id: pluginId, page, page_size: 100 }
+    })
+    if (isFlatRequestFailure(response) || requestEpoch !== secondLevelRequestEpoch) return
+
+    const list = Array.isArray(response.data?.list) ? response.data.list : []
+    options.push(...list)
+    total = Number(response.data?.total) || 0
+    page += 1
+    if (list.length === 0) break
+  } while (options.length < total)
+
+  secondLevelOptions.value = options
+  searchConfigs.value.forEach((item: any) => {
+    if (item.key === 'service_access_id') {
+      item.options = options.map(option => ({ label: option.name, value: option.id }))
     }
   })
-
-  const { list, total } = data
-  if (page === 1) {
-    secondLevelOptions.value = list
-  } else {
-    secondLevelOptions.value = [...secondLevelOptions.value, ...list]
-  }
-  if (total > secondLevelOptions.value.length) {
-    await fetchSecondLevelOptions(firstLevelValue, page + 1)
-  } else {
-    searchConfigs.value.map((item: any) => {
-      if (item.key === 'service_access_id') {
-        item.options = secondLevelOptions.value.map(item2 => ({
-          label: item2.name,
-          value: item2.id
-        }))
-      }
-      return item
-    })
-  }
 }
 
-const paramsUpdateHandle = async params => {
+async function paramsUpdateHandle(params: Record<string, any>) {
+  if (!firstLevelOptionsReady) {
+    pendingTableParams = { ...params }
+    return
+  }
+
   const firstSelected = params.service_identifier
-  if (firstSelected && selectedFirstLevel.value !== firstSelected) {
-    selectedFirstLevel.value = firstSelected
-    const identifierIndex = searchConfigs.value.findIndex(item => item.key === 'service_identifier')
-    const accessIndex = searchConfigs.value.findIndex(item => item.key === 'service_access_id')
-    // 重置二级选项
-    const isService = serviceIds.value.map(item => item.service_identifier).includes(firstSelected)
-    if (isService) {
-      if (accessIndex === -1) {
-        searchConfigs.value.splice(identifierIndex + 1, 0, {
-          key: 'service_access_id',
-          label: '选择二级服务',
-          type: 'select',
-          options: []
-        })
-      } else if (accessIndex > -1) {
-        tablePageRef.value?.forceChangeParamsByKey({
-          service_access_id: null
-        })
-      }
-      await fetchSecondLevelOptions(firstSelected)
-    } else if (accessIndex > -1) {
-      searchConfigs.value.splice(accessIndex, 1)
-      tablePageRef.value?.forceChangeParamsByKey({
-        service_access_id: null
+  if (selectedFirstLevel.value === firstSelected) return
+
+  const previousFirstLevel = selectedFirstLevel.value
+  selectedFirstLevel.value = firstSelected || null
+  const identifierIndex = searchConfigs.value.findIndex(item => item.key === 'service_identifier')
+  const accessIndex = searchConfigs.value.findIndex(item => item.key === 'service_access_id')
+  const hasAccessSelection = params.service_access_id !== undefined && params.service_access_id !== null && params.service_access_id !== ''
+  const isService = Boolean(firstSelected && serviceIds.value.some(item => item.service_identifier === firstSelected))
+
+  if (isService) {
+    if (accessIndex === -1) {
+      searchConfigs.value.splice(identifierIndex + 1, 0, {
+        key: 'service_access_id',
+        label: '选择二级服务',
+        type: 'select',
+        options: []
       })
+    } else if (previousFirstLevel !== null && hasAccessSelection) {
+      await tablePageRef.value?.forceChangeParamsByKey({ service_access_id: null })
+    }
+    await fetchSecondLevelOptions(firstSelected)
+  } else if (accessIndex > -1) {
+    searchConfigs.value.splice(accessIndex, 1)
+    if (hasAccessSelection) {
+      await tablePageRef.value?.forceChangeParamsByKey({ service_access_id: null })
     }
   }
-}
-
-const setServiceParams = () => {
-  tablePageRef.value?.forceChangeParamsByKey({
-    service_identifier: queryOfServiceIdentifier.value,
-    service_access_id: queryOfServiceAccessId.value
-  })
 }
 
 const loadTenantNames = async () => {
   if (authStore.userInfo.authority !== 'SYS_ADMIN') return
 
-  const { data } = await fetchUserList({ page: 1, page_size: 1000 })
+  const response = await fetchUserList({ page: 1, page_size: 1000 })
+  if (isFlatRequestFailure(response)) return
+
+  const data = response.data
   tenantNames.value = Object.fromEntries(
     (data?.list || []).map((tenant: any) => [
       tenant.tenant_id,
@@ -501,7 +515,6 @@ const loadTenantNames = async () => {
 
 onBeforeMount(async () => {
   await Promise.all([fetchFirstLevelOptions(), loadTenantNames()])
-  setServiceParams()
 })
 
 /**
@@ -518,6 +531,9 @@ onMounted(() => {
  * 组件卸载前清理 WebSocket 连接
  */
 onUnmounted(() => {
+  firstLevelRequestEpoch += 1
+  secondLevelRequestEpoch += 1
+  availabilityRequestEpoch += 1
   deviceStatusWS.disconnect()
 })
 
@@ -557,12 +573,12 @@ const activate = async (place: DrawerPlacement, key: string | number) => {
 }
 
 const completeAdd = async () => {
-  const { error } = await putDeviceActive({
+  const response = await putDeviceActive({
     device_number: deviceNumber.value
   })
-  if (!error) {
-    active.value = true
-  }
+  if (isFlatRequestFailure(response)) return
+
+  active.value = true
 }
 
 const completeHandAdd = () => {
@@ -583,39 +599,29 @@ const messageStyle = ref({
   marginTop: '5px'
 })
 
-watch(
-  deviceNumber,
-  _.debounce(async newDeviceNumber => {
-    try {
-      if (!newDeviceNumber) {
-        showMessage.value = false
-        return
-      }
-      const { data, error } = await checkDevice(newDeviceNumber)
-      if (!error && data && data.is_available) {
-        buttonDisabled.value = false
-        messageColor.value = 'rgb(2,153,52)'
-      } else {
-        buttonDisabled.value = true
-        messageColor.value = 'rgb(255, 26, 26)'
-      }
-      showMessage.value = true
-    } catch (error) {
-      console.error(error)
-    }
-  }, 500)
-)
+const checkDeviceAvailability = _.debounce(async newDeviceNumber => {
+  const requestEpoch = ++availabilityRequestEpoch
+  if (!newDeviceNumber) {
+    buttonDisabled.value = true
+    showMessage.value = false
+    return
+  }
+
+  buttonDisabled.value = true
+  showMessage.value = false
+  const response = await checkDevice(newDeviceNumber)
+  if (isFlatRequestFailure(response) || requestEpoch !== availabilityRequestEpoch) return
+
+  buttonDisabled.value = !response.data?.is_available
+  messageColor.value = response.data?.is_available ? 'rgb(2,153,52)' : 'rgb(255, 26, 26)'
+  showMessage.value = true
+}, 500)
+
+watch(deviceNumber, newDeviceNumber => checkDeviceAvailability(newDeviceNumber))
+onUnmounted(() => checkDeviceAvailability.cancel())
 const fetchData = async (params: Record<string, any>) => {
   setCache(params)
-  const result = await deviceList(params)
-
-  // 数据加载完成后，订阅当前页面的设备状态
-  // 使用 nextTick 确保 tablePageRef.value.dataList 已更新
-  setTimeout(() => {
-    subscribeDeviceStatus()
-  }, 100)
-
-  return result
+  return await deviceList(params)
 }
 </script>
 
@@ -632,6 +638,7 @@ const fetchData = async (params: Record<string, any>) => {
       :init-page-size="query.page_size"
       :row-click="goDeviceDetails"
       @params-update="paramsUpdateHandle"
+      @data-loaded="subscribeDeviceStatus"
     />
     <n-drawer v-model:show="active" :height="720" :placement="placement" @after-leave="completeHandAdd">
       <n-drawer-content

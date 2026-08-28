@@ -12,8 +12,11 @@ export function fetchLogin(email: string, password: string, salt: string | null)
 }
 
 /** Get user info */
-export function fetchGetUserInfo() {
-  return request.get<Api.Auth.UserInfo>('/user/detail')
+export function fetchGetUserInfo(token?: string) {
+  return request.get<Api.Auth.UserInfo>(
+    '/user/detail',
+    token ? { headers: { 'x-token': token }, silentError: true } : undefined
+  )
 }
 
 // 登出接口
@@ -83,7 +86,10 @@ export const delUser = async (id: string) => {
 
 /** 切换用户 */
 export const transformUser = async (params: any) => {
-  const data = await request.post<Api.Auth.LoginToken>(`/user/transform`, params)
+  const data = await request.post<Api.Auth.LoginToken>(`/user/transform`, params, {
+    preserveSessionOn401: true,
+    silentError: true
+  })
   return data
 }
 /** 修改密码 */
@@ -123,8 +129,6 @@ export function fetchTenantSetupState() {
   return request.get<{
     has_admin: boolean
     entry: 'login' | 'register'
-    market_base_url?: string
-    market_register_url?: string
   }>('/tenant/setup-state')
 }
 
@@ -134,36 +138,9 @@ export interface SuperAdminInitPayload {
   confirm_password: string
 }
 
-/** 首次安装超管初始化（语义化新接口） */
-export async function fetchSuperAdminInit(data: SuperAdminInitPayload) {
-  try {
-    return await request.post('/tenant/super-admin/init', data, {
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    })
-  } catch (error: any) {
-    const status = error?.response?.status
-    const code = error?.response?.data?.code
-    if (status === 404 || code === 100404) {
-      return request.post('/tenant/market-register', data, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      })
-    }
-    throw error
-  }
-}
-
-/** 兼容旧命名：本地超管初始化 */
-export function fetchMarketRegister(data: SuperAdminInitPayload) {
-  return fetchSuperAdminInit(data)
-}
-
-/** 旧接口直连（仅兼容场景需要时使用） */
-export function fetchMarketRegisterLegacy(data: SuperAdminInitPayload) {
-  return request.post('/tenant/market-register', data, {
+/** 首次安装超管初始化 */
+export function fetchSuperAdminInit(data: SuperAdminInitPayload) {
+  return request.post('/tenant/super-admin/init', data, {
     headers: {
       'Content-Type': 'application/json'
     }

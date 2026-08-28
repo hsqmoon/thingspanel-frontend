@@ -32,9 +32,4 @@ declare namespace Common2 {
 /** Build time of the project */
 declare const BUILD_TIME: string
 
-// eslint-disable-next-line no-redeclare
-declare interface Window {
-  NMessage: any
-}
-
 declare module 'moving-numbers-vue3'

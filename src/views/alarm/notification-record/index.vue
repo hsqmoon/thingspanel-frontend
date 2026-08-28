@@ -2,6 +2,7 @@
 import { computed, getCurrentInstance, reactive, ref } from 'vue'
 import type { Ref } from 'vue'
 import { NButton } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 import type { DataTableColumns, PaginationProps } from 'naive-ui'
 import moment from 'moment'
 import { getNotificationHistoryList } from '@/service/api/notification'
@@ -22,6 +23,7 @@ const queryParams = reactive({
   send_time_end: ''
 })
 const tableData = ref<Api.Alarm.NotificationHistoryList[]>([])
+let tableRequestEpoch = 0
 
 function setTableData(data: Api.Alarm.NotificationHistoryList[] | []) {
   tableData.value = data || []
@@ -54,6 +56,7 @@ const pagination: PaginationProps = reactive({
 })
 
 const getTableData = async () => {
+  const requestEpoch = ++tableRequestEpoch
   startLoading()
   const prams = {
     page: pagination.page || 1,
@@ -63,12 +66,14 @@ const getTableData = async () => {
     send_time_start: queryParams.send_time_start,
     send_time_stop: queryParams.send_time_end
   }
-  const res = await getNotificationHistoryList(prams)
-  if (res?.data) {
-    setTableData(res?.data.list || [])
-    pagination.itemCount = res.data.total || 0
+  try {
+    const res = await getNotificationHistoryList(prams)
+    if (isFlatRequestFailure(res) || requestEpoch !== tableRequestEpoch) return
+    setTableData(res.data?.list || [])
+    pagination.itemCount = res.data?.total || 0
+  } finally {
+    if (requestEpoch === tableRequestEpoch) endLoading()
   }
-  endLoading()
 }
 
 const columns: Ref<DataTableColumns<DataService.Data>> = ref([

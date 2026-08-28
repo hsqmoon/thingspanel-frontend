@@ -1,11 +1,11 @@
 <script setup lang="tsx">
 import { onBeforeUnmount, ref, watch } from 'vue'
+import { isFlatRequestFailure } from '@sa/axios'
 import { useRoute, useRouter } from 'vue-router'
-import { NButton, NPopconfirm, NSpace } from 'naive-ui'
+import { NButton, NPopconfirm, NSpace, type MessageReactive } from 'naive-ui'
 import dayjs from 'dayjs'
 import { delServiceAccess, getServiceAccess } from '@/service/api/plugin'
 import { $t } from '@/locales'
-import { componentLogger } from '@/utils/logger'
 import serviceModal from './components/serviceModal.vue'
 import serviceConfigModal from './components/serviceConfigModal.vue'
 
@@ -15,6 +15,8 @@ const serviceModalRef = ref<any>(null)
 const serviceConfigModalRef = ref<any>(null)
 const service_plugin_id = ref<any>(route.query.id)
 let listRequestId = 0
+let isActive = true
+let listErrorMessage: MessageReactive | null = null
 const pageData = ref<any>({
   loading: false,
   tableData: []
@@ -38,6 +40,8 @@ const queryInfo = ref<any>({
 })
 
 async function getList() {
+  if (!isActive) return
+
   const requestId = ++listRequestId
   const params = {
     service_plugin_id: queryInfo.value.service_plugin_id,
@@ -47,34 +51,44 @@ async function getList() {
   pageData.value.loading = true
 
   try {
-    const { data }: { data: any } = await getServiceAccess(params)
-    if (requestId !== listRequestId) return
+    const response = await getServiceAccess(params)
+    if (!isActive || requestId !== listRequestId) return
 
+    if (isFlatRequestFailure(response)) {
+      if (response.error.status === 401) return
+
+      listErrorMessage?.destroy()
+      listErrorMessage = window.$message?.error(response.error.message || $t('common.operationFailed')) || null
+      return
+    }
+
+    const { data } = response
     pageData.value.tableData = Array.isArray(data?.list) ? data.list : []
     queryInfo.value.itemCount = Number(data?.total || 0)
-  } catch (error: any) {
-    if (requestId !== listRequestId) return
+  } catch {
+    if (!isActive || requestId !== listRequestId) return
 
-    componentLogger.error('Failed to load service access points', error)
-    window.$message?.destroyAll()
-    window.$message?.error(error?.response?.data?.message || error?.message || $t('common.operationFailed'))
+    listErrorMessage?.destroy()
+    listErrorMessage = window.$message?.error($t('common.operationFailed')) || null
   } finally {
-    if (requestId === listRequestId) {
+    if (isActive && requestId === listRequestId) {
       pageData.value.loading = false
     }
   }
 }
 
-const see: (row: any) => void = row => {
+const see: (row: any) => void = (row) => {
   router.push(
     `/device/manage?service_identifier=${route.query.service_identifier}&device_name=${row.name}&service_access_id=${row.id}`
   )
 }
-const del: (row: any) => void = async row => {
-  await delServiceAccess(row)
+const del: (row: any) => void = async (row) => {
+  const result = await delServiceAccess(row)
+  if (!isActive || isFlatRequestFailure(result)) return
+
   await getList()
 }
-const config: (row: any) => void = row => {
+const config: (row: any) => void = (row) => {
   serviceModalRef.value.openModal(service_plugin_id.value, row)
 }
 const columns: any = ref([
@@ -87,7 +101,7 @@ const columns: any = ref([
     title: $t('common.creationTime'),
     key: 'create_at',
     minWidth: '200px',
-    render: row => {
+    render: (row) => {
       if (row.create_at) {
         return <span>{dayjs(row.create_at).format('YYYY-MM-DD HH:mm:ss')}</span>
       }
@@ -104,7 +118,7 @@ const columns: any = ref([
         width: 420
       }
     },
-    render: row => {
+    render: (row) => {
       return (
         <NSpace justify="start">
           {
@@ -141,6 +155,10 @@ const addData: () => void = () => {
   serviceModalRef.value.openModal(service_plugin_id.value)
 }
 
+const goBackToAccessPoint = (row: any) => {
+  serviceModalRef.value.openModal(service_plugin_id.value, row)
+}
+
 const isEdit: (val: any, row: any, edit: any) => void = (val, row, edit) => {
   if (edit) {
     if (row && row.auth_type === 'auto') {
@@ -167,7 +185,10 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  isActive = false
   listRequestId += 1
+  listErrorMessage?.destroy()
+  listErrorMessage = null
 })
 
 void getList()
@@ -190,7 +211,11 @@ void getList()
         />
       </div>
     </NCard>
-    <serviceConfigModal ref="serviceConfigModalRef" @get-list="getList"></serviceConfigModal>
+    <serviceConfigModal
+      ref="serviceConfigModalRef"
+      @get-list="getList"
+      @go-back="goBackToAccessPoint"
+    ></serviceConfigModal>
     <serviceModal ref="serviceModalRef" @is-edit="isEdit"></serviceModal>
   </div>
 </template>

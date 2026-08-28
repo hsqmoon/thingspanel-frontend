@@ -20,11 +20,13 @@ interface TopicMapping {
 interface Props {
   visible?: boolean
   editData?: TopicMapping | null
+  saving?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   visible: false,
-  editData: null
+  editData: null,
+  saving: false
 })
 
 interface Emits {
@@ -338,10 +340,11 @@ watch(
 
 // 保存
 const handleSave = async () => {
+  if (props.saving) return
+
   try {
     await formRef.value?.validate()
     emit('save', { ...formData.value })
-    modalVisible.value = false
   } catch {
     message.error(t('generate.topicMapping.message.validateForm'))
   }
@@ -577,7 +580,7 @@ const renderTopicTag: SelectRenderTag = ({ option }) => {
     <template #action>
       <div class="modal-footer">
         <NButton @click="handleCancel">{{ t('common.cancel') }}</NButton>
-        <NButton type="primary" @click="handleSave">{{ t('common.save') }}</NButton>
+        <NButton type="primary" :loading="saving" :disabled="saving" @click="handleSave">{{ t('common.save') }}</NButton>
       </div>
     </template>
   </NModal>

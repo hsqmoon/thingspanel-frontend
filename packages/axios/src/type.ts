@@ -70,6 +70,7 @@ export type CustomAxiosRequestConfig<R extends ResponseType = 'json'> = Omit<Axi
   responseType?: R
   needMessage?: boolean
   silentError?: boolean
+  preserveSessionOn401?: boolean
   skipTenantScope?: boolean
 }
 
@@ -108,10 +109,19 @@ export type FlatResponseSuccessData<T = any> = {
   error: null
 }
 
-export type FlatResponseFailData<T = any> = {
-  data: null
-  error: AxiosError<T>
+export interface FlatRequestError<T = unknown> {
+  message: string
+  status?: number
+  code?: string
+  data?: T
 }
+
+export interface FlatRequestFailure<T = unknown> {
+  data: null
+  error: FlatRequestError<T>
+}
+
+export type FlatResponseFailData<T = unknown> = FlatRequestFailure<T>
 
 export type FlatResponseData<T = any> = FlatResponseSuccessData<T> | FlatResponseFailData<T>
 

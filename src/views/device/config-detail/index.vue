@@ -2,6 +2,7 @@
 import { defineAsyncComponent, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { NButton } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 import { deviceConfigInfo, deviceTemplateDetail } from '@/service/api/device'
 import { useRouterPush } from '@/hooks/common/router'
 import { $t } from '@/locales'
@@ -49,18 +50,25 @@ const configForm = ref({
 const editConfig = () => {
   routerPushByKey('device_config-edit', { query: { id: configId.value } })
 }
-const getTemplateDetail = async (templateId: string) => {
+let configRequestEpoch = 0
+const getTemplateDetail = async (templateId: string, epoch: number) => {
   const res = await deviceTemplateDetail({ id: templateId })
-  if (res.data) {
+  if (!isFlatRequestFailure(res) && epoch === configRequestEpoch && res.data) {
     configForm.value.device_template_name = res.data.name
   }
 }
 const getConfig = async () => {
+  const epoch = ++configRequestEpoch
   const res = await deviceConfigInfo({ id: configId.value })
-  configForm.value = res.data
+  if (isFlatRequestFailure(res) || epoch !== configRequestEpoch || !res.data) return
+
+  const currentTemplateName = configForm.value.device_template_name
+  configForm.value = {
+    ...res.data,
+    device_template_name: res.data.device_template_name || currentTemplateName
+  }
   if (configForm.value.device_template_id) {
-    configForm.value.device_template_name = ''
-    getTemplateDetail(String(configForm.value.device_template_id))
+    void getTemplateDetail(String(configForm.value.device_template_id), epoch)
   }
 }
 const tabKeys = {
@@ -76,7 +84,7 @@ const tabKeys = {
 
 const activeName = ref(tabKeys.associatedDevices)
 if (configId.value) {
-  getConfig()
+  void getConfig()
   activeName.value = tabKeys.associatedDevices
 }
 const clickConfig: () => void = () => {

@@ -11,14 +11,12 @@ import { computed, getCurrentInstance, h, reactive, ref } from 'vue'
 import type { Ref } from 'vue'
 import type { DataTableColumns, PaginationProps } from 'naive-ui'
 import { NButton, NPopconfirm, useMessage } from 'naive-ui'
-import { getNotificationGroupList } from '@/service/api/notification'
+import { isFlatRequestFailure } from '@sa/axios'
 import { delInfo, editInfo, warningMessageList } from '@/service/api/alarm'
 import { $t } from '@/locales'
-import { createLogger } from '@/utils/logger'
 import type { ModalType } from './pop-up.vue'
 import popUp from './pop-up.vue'
 import { useBoolean } from '~/packages/hooks'
-const logger = createLogger('Information')
 const rowKey = (row: DeviceManagement.DeviceData) => row.id
 const { bool: visible, setTrue: openModal } = useBoolean()
 const modalType = ref<ModalType>('add')
@@ -92,57 +90,42 @@ const tableData = ref<ColumnsData[]>([])
 /** 告警信息列表 */
 async function list() {
   loading.value = true
-  const innerparams = { page: pagination.page, page_size: pagination.pageSize }
-  const { data } = await warningMessageList(innerparams)
+  try {
+    const innerparams = { page: pagination.page, page_size: pagination.pageSize }
+    const response = await warningMessageList(innerparams)
+    if (isFlatRequestFailure(response) || !response.data) return
 
-  if (data) {
-    setTimeout(() => {
-      loading.value = false
-      tableData.value = data.list
-      const operatorBtn: { btnName: string; type: string; color: string }[] = [
-        {
-          btnName: $t('common.edit'),
-          type: 'edit',
-          color: 'info'
-        },
-        {
-          btnName: $t('page.manage.common.status.disable'),
-          type: 'enable',
-          color: 'warning'
-        },
-        {
-          btnName: $t('common.delete'),
-          type: 'delete',
-          color: 'error'
-        }
-      ]
-      const operatorBtns: { btnName: string; type: string; color: string }[] = [
-        { btnName: $t('common.edit'), type: 'edit', color: 'info' },
-        { btnName: $t('page.manage.common.status.enable'), type: 'enable', color: 'success' },
-        { btnName: $t('common.delete'), type: 'delete', color: 'error' }
-      ]
-      tableData.value.forEach(item => {
-        if (item.enabled === 'Y') {
-          item.operatorBtn = operatorBtn
-        } else {
-          item.operatorBtn = operatorBtns
-        }
-      })
-      pagination.itemCount = data.total
-    }, 1000)
+    tableData.value = response.data.list || []
+    const operatorBtn: { btnName: string; type: string; color: string }[] = [
+      {
+        btnName: $t('common.edit'),
+        type: 'edit',
+        color: 'info'
+      },
+      {
+        btnName: $t('page.manage.common.status.disable'),
+        type: 'enable',
+        color: 'warning'
+      },
+      {
+        btnName: $t('common.delete'),
+        type: 'delete',
+        color: 'error'
+      }
+    ]
+    const operatorBtns: { btnName: string; type: string; color: string }[] = [
+      { btnName: $t('common.edit'), type: 'edit', color: 'info' },
+      { btnName: $t('page.manage.common.status.enable'), type: 'enable', color: 'success' },
+      { btnName: $t('common.delete'), type: 'delete', color: 'error' }
+    ]
+    tableData.value.forEach(item => {
+      item.operatorBtn = item.enabled === 'Y' ? operatorBtn : operatorBtns
+    })
+    pagination.itemCount = response.data.total || 0
+  } finally {
+    loading.value = false
   }
 }
-
-/** 获取通知组 */
-const getTableData = async () => {
-  const prams = {
-    page: 100,
-    page_size: 100
-  }
-  const res = await getNotificationGroupList(prams)
-  logger.info(res)
-}
-getTableData()
 const columns: Ref<DataTableColumns<ColumnsData>> = ref([
   {
     key: 'name',
@@ -243,26 +226,21 @@ function handleDeleteTable(rowId) {
 /** 编辑:启动停止 */
 
 async function editInfos() {
-  const { data } = await editInfo(params)
-  if (data) {
-    params.enabled === 'Y' ? message.success($t('common.startSuccess')) : message.success($t('common.stopSuccess'))
+  const response = await editInfo(params)
+  if (isFlatRequestFailure(response)) return
 
-    list()
-  } else {
-    params.enabled === 'Y' ? message.error($t('common.startFail')) : message.error($t('common.stopFail'))
-  }
+  message.success(params.enabled === 'Y' ? $t('common.startSuccess') : $t('common.stopSuccess'))
+  await list()
 }
 
 /** 删除告警 */
 
 async function deleteInfo() {
-  const { data } = await delInfo(deleteId.value)
-  if (!data) {
-    message.success($t('common.deleteSuccess'))
-  } else {
-    message.error($t('common.deleteFail'))
-  }
-  list()
+  const response = await delInfo(deleteId.value)
+  if (isFlatRequestFailure(response)) return
+
+  message.success($t('common.deleteSuccess'))
+  await list()
 }
 
 const getPlatform = computed(() => {

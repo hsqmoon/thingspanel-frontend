@@ -5,6 +5,7 @@ import { NButton, NCard, NFlex, NGrid, NGridItem, NPagination, useDialog } from 
 import { PencilOutline as editIcon, TrashOutline as trashIcon } from '@vicons/ionicons5'
 import { DocumentOnePage24Regular } from '@vicons/fluent'
 import moment from 'moment'
+import { isFlatRequestFailure } from '@sa/axios'
 import { useRouterPush } from '@/hooks/common/router'
 import ItemCard from '@/components/dev-card-item/index.vue'
 import {
@@ -59,9 +60,9 @@ const linkEdit = (item: any) => {
 // 开启/关闭场景
 const linkActivation = async (item: any) => {
   const res = await sceneAutomationsSwitch(item.id)
-  if (!res.error) {
-    await getData()
-  }
+  if (isFlatRequestFailure(res)) return
+
+  await getData()
 }
 
 const queryData = ref({
@@ -72,17 +73,19 @@ const queryData = ref({
   device_config_id: ''
 })
 const dataTotal = ref(0)
+let linkageListRequestEpoch = 0
 
 const getData = async () => {
   queryData.value.device_id = props.device_id
   queryData.value.device_config_id = props.device_config_id
-  const res = props.isAlarm
-    ? await deviceAlarmList(queryData.value)
-    : await sceneAutomationsGet(queryData.value)
-  if (res && !res.error) {
-    sceneLinkageList.value = res.data.list || []
-    dataTotal.value = res.data.total
-  }
+  const epoch = ++linkageListRequestEpoch
+  const params = { ...queryData.value }
+  const res = props.isAlarm ? await deviceAlarmList(params) : await sceneAutomationsGet(params)
+  if (epoch !== linkageListRequestEpoch || isFlatRequestFailure(res) || !res.data) return false
+
+  sceneLinkageList.value = res.data.list || []
+  dataTotal.value = res.data.total
+  return true
 }
 const handleQuery = async () => {
   queryData.value.page = 1
@@ -117,6 +120,7 @@ const logQuery = ref({
 })
 const logDataTotal = ref(0)
 const logData = ref([])
+let logListRequestEpoch = 0
 const queryLog = () => {
   logQuery.value.page = 1
   getLogList()
@@ -126,16 +130,21 @@ const getLogList = async () => {
     logQuery.value.execution_start_time = moment(logQuery.value.queryTime[0]).format()
     logQuery.value.execution_end_time = moment(logQuery.value.queryTime[1]).format()
   }
-  const res = await sceneAutomationsLog(logQuery.value)
+  const epoch = ++logListRequestEpoch
+  const res = await sceneAutomationsLog({ ...logQuery.value })
+  if (epoch !== logListRequestEpoch || isFlatRequestFailure(res) || !res.data) return false
+
   logData.value = res.data.list
   logDataTotal.value = res.data.total
+  return true
 }
 
 // 查看日志
-const openLog = (item: any) => {
+const openLog = async (item: any) => {
   logQuery.value.scene_automation_id = item.id
-  getLogList()
-  showLog.value = true
+  if (await getLogList()) {
+    showLog.value = true
+  }
 }
 // 删除场景
 const deleteLink = async (item: any) => {
@@ -146,9 +155,9 @@ const deleteLink = async (item: any) => {
     negativeText: $t('common.cancel'),
     onPositiveClick: async () => {
       const res = await sceneAutomationsDel(item.id)
-      if (!res.error) {
-        await getData()
-      }
+      if (isFlatRequestFailure(res)) return
+
+      await getData()
     }
   })
 }

@@ -1,6 +1,7 @@
 <script setup lang="tsx">
 import { computed, onMounted, ref } from 'vue'
 import type { Ref } from 'vue'
+import { isFlatRequestFailure } from '@sa/axios'
 import { useRouter } from 'vue-router'
 import { NButton, NPopconfirm, NSpace } from 'naive-ui'
 import {
@@ -29,6 +30,8 @@ const log_page = ref(1)
 const page_size = ref(10)
 const selectChild = ref<string[]>([])
 const sOptions = ref<any[]>([])
+let tableRequestEpoch = 0
+let optionsRequestEpoch = 0
 
 const pagination = computed(() => ({
   page: log_page.value,
@@ -48,27 +51,29 @@ const pagination = computed(() => ({
 }))
 
 const getData = async () => {
+  const requestEpoch = ++tableRequestEpoch
   const res = await childDeviceTableList({
     page: log_page.value,
     page_size: page_size.value,
     id: props.id
   })
-  tableData.value = res.data.list || []
-  total.value = res.data.total
+  if (isFlatRequestFailure(res) || requestEpoch !== tableRequestEpoch) return
+
+  tableData.value = Array.isArray(res.data?.list) ? res.data.list : []
+  total.value = Number(res.data?.total) || 0
 }
 const selectConfig = v => {
   selectChild.value = v
 }
 const deleteDevice = async id => {
-  const { error } = await removeChildDevice({
+  const response = await removeChildDevice({
     sub_device_id: id
   })
-  if (!error) {
-    showDeleteDialog.value = false
-    log_page.value = 1
-    tableData.value = []
-    getData()
-  }
+  if (isFlatRequestFailure(response)) return
+
+  showDeleteDialog.value = false
+  log_page.value = 1
+  await getData()
 }
 
 const handleLook = (id: string) => {
@@ -135,42 +140,38 @@ const setDeviceAddress = async () => {
     parent_id: props.id,
     sub_device_addr: deviceSetName.value
   })
-  if (res) {
-    tableData.value = []
-    showSetDialog.value = false
-    log_page.value = 1
-    getData()
-  }
+  if (isFlatRequestFailure(res)) return
+
+  showSetDialog.value = false
+  log_page.value = 1
+  await getData()
 }
 
-const addChildDeviceSure = () => {
+const addChildDeviceSure = async () => {
   if (selectChild.value.length === 0) {
     window.$message?.error($t('generate.selectSubDevices'))
   } else {
-    addChildDevice({
+    const res = await addChildDevice({
       id: props.id,
       son_id: selectChild.value.join(',')
-    }).then(res => {
-      if (!res.error) {
-        showAddDialog.value = false
-        selectChild.value = []
-        sOptions.value = []
-        tableData.value = []
-        getData()
-      }
     })
+    if (isFlatRequestFailure(res)) return
+
+    showAddDialog.value = false
+    selectChild.value = []
+    sOptions.value = []
+    await getData()
   }
 }
 
 const getDeviceList = async () => {
+  const requestEpoch = ++optionsRequestEpoch
   const res = await childDeviceSelectList()
-  if (res.data.length !== 0) {
-    sOptions.value = []
-    const tempSOptions = res.data?.map(item => {
-      return { label: item.name, value: item.id }
-    })
-    sOptions.value = sOptions.value.concat(tempSOptions)
-  }
+  if (isFlatRequestFailure(res) || requestEpoch !== optionsRequestEpoch) return
+
+  sOptions.value = Array.isArray(res.data)
+    ? res.data.map(item => ({ label: item.name, value: item.id }))
+    : []
 }
 
 const addDevice = () => {
@@ -178,7 +179,7 @@ const addDevice = () => {
   getDeviceList()
 }
 
-getData()
+void getData()
 
 onMounted(() => {})
 </script>

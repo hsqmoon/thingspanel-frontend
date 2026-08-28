@@ -1,6 +1,7 @@
 <script setup lang="tsx">
-import { onMounted, ref, watch } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { isFlatRequestFailure } from '@sa/axios'
 import type { TransferRenderSourceList } from 'naive-ui'
 import { NTree } from 'naive-ui'
 import {
@@ -33,22 +34,27 @@ type Option = {
 }
 const options = ref<Option[]>()
 const sOptions = ref<any[]>([{ label: $t('generate.unbind'), value: '' }])
+const groupSaving = ref(false)
+const configSaving = ref(false)
+let configListRequestEpoch = 0
 const route = useRoute()
 const { query } = route
 const { removeTab } = useTabStore()
 const currentTabId = getTabIdByRoute(route)
 const deviceConfigList = async name => {
-  const { data, error } = await getDeviceConfigList({
+  const requestEpoch = ++configListRequestEpoch
+  const response = await getDeviceConfigList({
     page: 1,
     page_size: 99,
     name
   })
-  if (!error && data) {
-    const tempSOptions = data?.list?.map(item => {
-      return { label: item.name, value: item.id }
-    })
-    sOptions.value = sOptions.value.concat(tempSOptions)
-  }
+  if (isFlatRequestFailure(response) || requestEpoch !== configListRequestEpoch) return
+
+  const list = Array.isArray(response.data?.list) ? response.data.list : []
+  sOptions.value = [
+    { label: $t('generate.unbind'), value: '' },
+    ...list.map(item => ({ label: item.name, value: item.id }))
+  ]
 }
 
 function transformDataToOptions(data) {
@@ -74,17 +80,17 @@ function transformDataToOptions(data) {
 }
 
 const getTreeData = async () => {
-  const { data, error } = await deviceGroupTree({})
-  if (!error && data) {
-    treeData.value = transformDataToOptions(data)
-    options.value = flattenTree(treeData.value)
-  }
+  const response = await deviceGroupTree({})
+  if (isFlatRequestFailure(response) || !Array.isArray(response.data)) return
+
+  treeData.value = transformDataToOptions(response.data)
+  options.value = flattenTree(treeData.value)
 }
 const getTreeRelationData = async () => {
-  const { data, error } = await getDeviceGroupRelation({ device_id: props.id })
-  if (!error && data) {
-    valueRef.value = data?.map(item => item.group_id)
-  }
+  const response = await getDeviceGroupRelation({ device_id: props.id })
+  if (isFlatRequestFailure(response) || !Array.isArray(response.data)) return
+
+  valueRef.value = response.data.map(item => item.group_id)
 }
 const deviceDataStore = useDeviceDataStore()
 const selectedValues = ref('')
@@ -115,45 +121,34 @@ const renderSourceList: TransferRenderSourceList = ({ pattern }) => {
       checkOnClick
       blockLine
       selectable={false}
-      onUpdateCheckedKeys={(keys, _option, meta) => {
-        valueRef.value = keys
-        if (meta.node) {
-          if (meta.action === 'check') {
-            deviceGroupRelation({
-              group_id: meta.node.value,
-              device_id_list: [props.id]
-            })
-          } else {
-            deleteDeviceGroupRelation({
-              group_id: meta.node.value,
-              device_id: props.id
-            })
-          }
+      disabled={groupSaving.value}
+      onUpdateCheckedKeys={async (keys, _option, meta) => {
+        if (!meta.node || groupSaving.value) return
+
+        groupSaving.value = true
+        try {
+          const response =
+            meta.action === 'check'
+              ? await deviceGroupRelation({ group_id: meta.node.value, device_id_list: [props.id] })
+              : await deleteDeviceGroupRelation({ group_id: meta.node.value, device_id: props.id })
+          if (isFlatRequestFailure(response)) return
+
+          valueRef.value = keys
+        } finally {
+          groupSaving.value = false
         }
-        //
       }}
       pattern={pattern}
     />
   )
 }
-watch(
-  () => valueRef.value,
-  (value, oldValue) => {
-    if (oldValue.length > value.length) {
-      const difference = oldValue.filter(x => !value.includes(x))
-      difference.forEach(item => {
-        deleteDeviceGroupRelation({ group_id: item, device_id: props.id })
-      })
-    }
-  }
-)
-
 const initData = async () => {
   const result = await deviceDetail(query.d_id as string)
-  device_coding.value = result?.data?.device_number
-  selectedValues.value = result?.data?.device_config_id || ''
-  getTreeData()
-  getTreeRelationData()
+  if (isFlatRequestFailure(result)) return
+
+  device_coding.value = result.data?.device_number || ''
+  selectedValues.value = result.data?.device_config_id || ''
+  await Promise.all([getTreeData(), getTreeRelationData()])
 }
 
 onMounted(() => {
@@ -163,11 +158,20 @@ onMounted(() => {
 })
 
 const selectConfig = async v => {
-  selectedValues.value = v
-  await deviceUpdateConfig({ device_id: props.id, device_config_id: v })
-  await deviceDataStore.fetchData(props.id)
-  await initData()
-  emit('change')
+  if (configSaving.value) return
+
+  configSaving.value = true
+  try {
+    const response = await deviceUpdateConfig({ device_id: props.id, device_config_id: v })
+    if (isFlatRequestFailure(response)) return
+
+    selectedValues.value = v
+    await deviceDataStore.fetchData(props.id)
+    await initData()
+    emit('change')
+  } finally {
+    configSaving.value = false
+  }
 }
 
 const handleDeleteDevice = () => {
@@ -184,14 +188,11 @@ const handleDeleteDevice = () => {
 }
 
 const deleteD = async (id: string) => {
-  try {
-    await deleteDevice({ id })
-    window.$message?.success($t('common.deleteSuccess'))
-    // 关闭当前标签页
-    removeTab(currentTabId)
-  } catch (error) {
-    console.error('删除设备失败:', error)
-  }
+  const response = await deleteDevice({ id })
+  if (isFlatRequestFailure(response)) return
+
+  window.$message?.success($t('common.deleteSuccess'))
+  removeTab(currentTabId)
 }
 </script>
 
@@ -200,7 +201,9 @@ const deleteD = async (id: string) => {
     <div class="flex items-center">
       <div>{{ $t('card.configTemplate') }}：</div>
       <NSelect
-        v-model:value="selectedValues"
+        :value="selectedValues"
+        :loading="configSaving"
+        :disabled="configSaving"
         filterable
         class="w-200px"
         :options="sOptions"

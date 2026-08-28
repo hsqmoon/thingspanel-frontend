@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, getCurrentInstance, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { isFlatRequestFailure } from '@sa/axios'
 import type { FormInst } from 'naive-ui'
 import { NButton, NSpace, useMessage, NInputNumber, NTooltip, NInput, NSelect, NSwitch } from 'naive-ui'
 import { deviceConfigInfo, deviceDetail, deviceLocation } from '@/service/api'
@@ -18,6 +19,8 @@ const longitude = ref('')
 const isShow = ref(false)
 const additionInfo = ref([] as ExtensionInfo[])
 const extensionFormRef = ref<HTMLElement & FormInst>()
+const saving = ref(false)
+let infoRequestEpoch = 0
 
 interface ExtensionInfoBase {
   name: string
@@ -41,8 +44,7 @@ const safeParseJSON = <T,>(payload: string | null | undefined, fallback: T): T =
 
   try {
     return JSON.parse(payload) as T
-  } catch (error) {
-    console.warn('Failed to parse JSON payload:', error)
+  } catch {
     return fallback
   }
 }
@@ -95,6 +97,9 @@ const { query } = useRoute()
 const message = useMessage()
 
 const handleSave = async () => {
+  if (saving.value) return
+
+  saving.value = true
   try {
     if (latitude.value && longitude.value) {
       const error = getCoordinateStringValidationError(latitude.value, longitude.value)
@@ -122,11 +127,13 @@ const handleSave = async () => {
       additional_info: JSON.stringify(extentedInfoObject)
     })
 
-    if (!res.error) {
-      message.success($t('common.modifySuccess'))
-    }
+    if (isFlatRequestFailure(res)) return
+
+    message.success($t('common.modifySuccess'))
   } catch {
     message.error($t('common.saveFailed'))
+  } finally {
+    saving.value = false
   }
 }
 
@@ -149,16 +156,27 @@ const openMapAndGetPosition = () => {
 }
 
 const getConfigInfo = async () => {
-  const result = await deviceDetail(query.d_id as string)
-  const location = result?.data?.location || ''
-  const deviceAdditionalInfo = safeParseJSON<Record<string, unknown>>(result?.data?.additional_info, {})
+  const requestEpoch = ++infoRequestEpoch
+  const [result, resultData] = await Promise.all([
+    deviceDetail(query.d_id as string),
+    props.deviceConfigId ? deviceConfigInfo({ id: props.deviceConfigId }) : Promise.resolve(null)
+  ])
+  if (
+    isFlatRequestFailure(result) ||
+    (resultData && isFlatRequestFailure(resultData)) ||
+    requestEpoch !== infoRequestEpoch
+  ) {
+    return
+  }
+
+  const location = result.data?.location || ''
+  const deviceAdditionalInfo = safeParseJSON<Record<string, unknown>>(result.data?.additional_info, {})
   const locationData = location?.split(',') || []
   latitude.value = locationData[1] || ''
   longitude.value = locationData[0] || ''
 
-  if (props.deviceConfigId) {
-    const resultData = await deviceConfigInfo({ id: props.deviceConfigId })
-    const parsedAdditionalInfo = safeParseJSON<ExtensionInfo[]>(resultData?.data?.additional_info, [])
+  if (resultData) {
+    const parsedAdditionalInfo = safeParseJSON<ExtensionInfo[]>(resultData.data?.additional_info, [])
     const extendedInfoCandidates = deviceAdditionalInfo?.extendedInfo ?? deviceAdditionalInfo ?? []
     const extendedInfo = normalizeExtendedInfo(extendedInfoCandidates)
     const extendedInfoMap = new Map(extendedInfo.map(info => [info.name, info.value]))
@@ -252,7 +270,7 @@ onMounted(getConfigInfo)
       </div>
     </NCard>
 
-    <NButton type="primary" @click="handleSave">{{ $t('common.save') }}</NButton>
+    <NButton type="primary" :loading="saving" @click="handleSave">{{ $t('common.save') }}</NButton>
     <NModal v-model:show="isShow" class="flex-center" :class="getPlatform ? 'max-w-90%' : 'max-w-720px'">
       <NCard class="flex flex-1">
         <TencentMap

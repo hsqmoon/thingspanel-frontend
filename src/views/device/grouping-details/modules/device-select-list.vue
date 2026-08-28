@@ -2,15 +2,14 @@
 import { onMounted, reactive, ref } from 'vue'
 import type { DataTableColumns, DataTableRowKey, PaginationProps } from 'naive-ui'
 import { NDataTable } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 import { deviceGroupRelation, deviceList } from '@/service/api/device'
 import { createDeviceColumns } from '@/views/device/modules/all-columns'
 import { $t } from '@/locales'
 
-
 const emit = defineEmits(['closed_modal', 'refresh_data'])
 
 interface TProps {
-
   group_id: string
 }
 
@@ -18,6 +17,7 @@ const props = defineProps<TProps>()
 const data = ref<DeviceManagement.DeviceData[]>([])
 const checkedRowKeysRef = ref<DataTableRowKey[]>([])
 const searchKeyword = ref('')
+const submitting = ref(false)
 
 const queryParams = reactive<{ page: number; page_size: number; search?: string }>({
   page: 1,
@@ -26,8 +26,10 @@ const queryParams = reactive<{ page: number; page_size: number; search?: string 
 const getDeviceList = async () => {
   queryParams.search = searchKeyword.value.trim() || undefined
   const res = await deviceList(queryParams)
+  if (isFlatRequestFailure(res)) return
+
   const rows = Array.isArray(res.data?.list) ? res.data.list : []
-  data.value = rows.filter(item => item.group_id !== props.group_id) as DeviceManagement.DeviceData[]
+  data.value = rows.filter((item) => item.group_id !== props.group_id) as DeviceManagement.DeviceData[]
   if (res?.data?.total) {
     pagination.pageCount = Math.ceil(res?.data?.total / 5)
   } else {
@@ -66,12 +68,10 @@ const handleReset = () => {
 // 定义 emit 函数，指定可能发出的事件类型
 
 const closeModal = () => {
-
   emit('closed_modal', false)
 }
 
 const reload = () => {
-
   emit('refresh_data', true)
 }
 
@@ -81,13 +81,22 @@ interface ruquestParams {
 }
 
 const submit_data = async () => {
+  if (submitting.value) return
+
   const params: ruquestParams = {
     device_id_list: checkedRowKeysRef.value as string[],
     group_id: props.group_id
   }
-  await deviceGroupRelation(params)
-  reload()
-  closeModal()
+  submitting.value = true
+  try {
+    const result = await deviceGroupRelation(params)
+    if (isFlatRequestFailure(result)) return
+
+    reload()
+    closeModal()
+  } finally {
+    submitting.value = false
+  }
 }
 onMounted(getDeviceList)
 </script>
@@ -134,8 +143,12 @@ onMounted(getDeviceList)
         <span class="text-blue-4">{{ checkedRowKeysRef.length }}</span>
         {{ $t('generate.number-of-devices') }}
       </div>
-      <NButton type="info" @click="closeModal">{{ $t('custom.grouping_details.cancel') }}</NButton>
-      <NButton type="primary" @click="submit_data">{{ $t('custom.grouping_details.confirm') }}</NButton>
+      <NButton type="info" :disabled="submitting" @click="closeModal">
+        {{ $t('custom.grouping_details.cancel') }}
+      </NButton>
+      <NButton type="primary" :loading="submitting" @click="submit_data">
+        {{ $t('custom.grouping_details.confirm') }}
+      </NButton>
     </NFlex>
   </NFlex>
 </template>

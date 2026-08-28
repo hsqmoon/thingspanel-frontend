@@ -9,10 +9,7 @@ const demoUrl = otherBaseURL.demo ? otherBaseURL.demo : `${window.location.origi
 
 export const request = createFlatRequest<App.Service.DEVResponse>(
   {
-    baseURL: isHttpProxy ? createProxyPattern() : demoUrl,
-    headers: {
-      apifoxToken: 'XL299LiMEDZ0H5h3A29PxwQXdMJqWyY2'
-    }
+    baseURL: isHttpProxy ? createProxyPattern() : demoUrl
   },
   {
     async onRequest(config) {
@@ -23,12 +20,16 @@ export const request = createFlatRequest<App.Service.DEVResponse>(
       const userInfo = localStg.get('userInfo')
       const requestPath = config.url?.split('?')[0]
       const requestOptions = config as typeof config & { skipTenantScope?: boolean }
-      const bypassTenantScope = requestOptions.skipTenantScope === true || requestPath === '/user/logout'
+      const explicitToken = typeof headers.get === 'function' ? headers.get('x-token') : headers['x-token']
+      const bypassTenantScope =
+        requestOptions.skipTenantScope === true ||
+        requestPath === '/user/logout' ||
+        Boolean(explicitToken && explicitToken !== token)
       delete requestOptions.skipTenantScope
       const tenantScopeID =
         userInfo?.authority === 'SYS_ADMIN' && !bypassTenantScope ? localStg.get('tenantScopeId') : null
       // const Authorization = token ? `Bearer ${token}` : null;
-      const headersWithToken = token ? { 'x-token': token } : {}
+      const headersWithToken = !explicitToken && token ? { 'x-token': token } : {}
       if (userLanguage) {
         headersWithToken['Accept-Language'] = userLanguage
       }
@@ -56,9 +57,6 @@ export const request = createFlatRequest<App.Service.DEVResponse>(
       // for example: the token is expired, prefetch token and retry requestTs
     },
     transformBackendResponse(response) {
-      if (response.config.method !== 'get') {
-        window.$message?.destroyAll()
-      }
       if ((response as any).config?.needMessage) {
         return response.data
       }
@@ -68,6 +66,8 @@ export const request = createFlatRequest<App.Service.DEVResponse>(
       // when the requestTs is fail, you can show error message
 
       if (error?.response?.status === 401) {
+        if ((error.config as typeof error.config & { preserveSessionOn401?: boolean })?.preserveSessionOn401) return
+
         // 检查错误码
         const errorData = error?.response?.data
         const errorCode = errorData?.code
@@ -100,7 +100,6 @@ export const request = createFlatRequest<App.Service.DEVResponse>(
 
       let message = error.message
       if (error.response?.status === 404) {
-        window.$message?.destroyAll()
         window.$message?.error('请求的资源未找到 (404)。')
         return
       }
@@ -108,50 +107,6 @@ export const request = createFlatRequest<App.Service.DEVResponse>(
       if (error.code === BACKEND_ERROR_CODE) {
         message = error.response?.data?.message || message
       }
-      window.$message?.destroyAll()
-
-      window.$message?.error(message)
-    }
-  }
-)
-
-export const mockRequest = createFlatRequest<App.Service.DEVResponse>(
-  {
-    baseURL: otherBaseURL.mock
-  },
-  {
-    async onRequest(config) {
-      const { headers } = config
-
-      // set token
-      const token = localStg.get('token')
-      const XToken = token || null
-      Object.assign(headers, { 'x-token': XToken })
-
-      return config
-    },
-    isBackendSuccess(response) {
-      // when the backend response code is "200", it means the requestTs is success
-      // you can change this logic by yourself
-      return response.data.code === 200
-    },
-    async onBackendFail(_response) {
-      // when the backend response code is not "200", it means the requestTs is fail
-      // for example: the token is expired, prefetch token and retry requestTs
-    },
-    transformBackendResponse(response) {
-      return response.data.data
-    },
-    onError(error) {
-      // when the requestTs is fail, you can show error message
-
-      let message = error.message
-
-      // show backend error message
-      if (error.code === BACKEND_ERROR_CODE) {
-        message = error.response?.data?.message || message
-      }
-
       window.$message?.error(message)
     }
   }

@@ -2,7 +2,7 @@
 import { onMounted, ref, watch } from 'vue'
 import { useScriptTag } from '@vueuse/core'
 import { TENCENT_MAP_SDK_URL } from '@/constants/map-sdk'
-import { isValidCoordinate, getCoordinateValidationError } from '@/utils/common/map-validator'
+import { isValidCoordinate } from '@/utils/common/map-validator'
 
 const { load } = useScriptTag(TENCENT_MAP_SDK_URL)
 const emit = defineEmits(['position-selected'])
@@ -29,10 +29,13 @@ async function renderMap() {
   if (!domRef.value) return
 
   // 使用传入的经纬度或默认坐标作为地图中心点
-  const lat = Number(props.latitude) || 39.98412
-  const lng = Number(props.longitude) || 116.307484
+  const requestedLat = Number(props.latitude)
+  const requestedLng = Number(props.longitude)
   const hasValidCoords =
-    props.latitude && props.longitude && props.latitude !== '' && props.longitude !== '' && isValidCoordinate(lat, lng)
+    Boolean(props.latitude && props.longitude && props.latitude !== '' && props.longitude !== '') &&
+    isValidCoordinate(requestedLat, requestedLng)
+  const lat = hasValidCoords ? requestedLat : 39.98412
+  const lng = hasValidCoords ? requestedLng : 116.307484
 
   const center = new TMap.LatLng(lat, lng)
 
@@ -54,8 +57,6 @@ async function renderMap() {
 
     // 验证经纬度是否在有效范围内
     if (!isValidCoordinate(lat, lng)) {
-      const error = getCoordinateValidationError(lat, lng)
-      console.error('地图点击事件获取到无效的经纬度:', { lat, lng, error })
       return
     }
 
@@ -75,8 +76,6 @@ async function renderMap() {
 function addCurrentLocationMarker(lat: number, lng: number) {
   // 验证经纬度参数是否在有效范围内
   if (!isValidCoordinate(lat, lng)) {
-    const error = getCoordinateValidationError(lat, lng)
-    console.error('addCurrentLocationMarker接收到无效的经纬度参数:', { lat, lng, error })
     return
   }
 
@@ -137,9 +136,6 @@ watch(
         map.setCenter(center)
         // 添加或更新标记
         addCurrentLocationMarker(lat, lng)
-      } else {
-        const error = getCoordinateValidationError(lat, lng)
-        console.warn('监听到无效的经纬度更新:', { lat, lng, error })
       }
     }
   },

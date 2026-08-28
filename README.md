@@ -43,13 +43,6 @@ Mobile Application Interface
   <img src="https://github.com/ThingsPanel/app/blob/main/github/iphone-2.png" width="30%">
 </div>
 
-## Demo
-URL: http://demo.thingspanel.cn
-
-Account: test@test.cn
-
-Password: 123456
-
 ## Product Applications
 - Unified device management
 - IoT middleware Platform
@@ -114,7 +107,7 @@ Password: 123456
 2. **Clone the project**.
 3. **Install Dependencies**.
   Install Node.js and pnpm:
-  `npm install -g pnpm`, 
+  `npm install -g pnpm`,
   Install project dependencies:
   `pnpm install`.
 4. **Start the Development Server**.
@@ -126,7 +119,7 @@ Password: 123456
      - `pnpm lint` Run ESLint for code checking;
      - `pnpm typecheck` Run TypeScript type checking;
      - `pnpm format` Format the code.
-1. CI/CD with GitHub Actions, 
+1. CI/CD with GitHub Actions,
   **Ensure that the CI/CD checks pass and make necessary modifications if needed**.
 2. **Submit a Pull Request**
   After committing code, submit a pull request and wait for review.

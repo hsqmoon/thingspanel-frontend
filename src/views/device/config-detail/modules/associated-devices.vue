@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Ref } from 'vue'
 import { computed, getCurrentInstance, h, onMounted, ref } from 'vue'
+import { isFlatRequestFailure } from '@sa/axios'
 import type { DataTableColumns, FormInst } from 'naive-ui'
 import { NButton, NDataTable, NFlex, NForm, NFormItem, NModal, NPagination, NPopconfirm, useMessage } from 'naive-ui'
 import moment from 'moment'
@@ -30,6 +31,9 @@ const associatedForm = ref<AssociatedFormType>(defaultAssociatedForm())
 const deviceOptions = ref<Api.Device.DeviceSelectItem[]>([])
 const hasMoreDevices = ref(true)
 const loadingMore = ref(false)
+const submitting = ref(false)
+let optionsRequestEpoch = 0
+let listRequestEpoch = 0
 
 const queryDevice = ref({
   page: 1,
@@ -43,6 +47,7 @@ function initQueryDevice() {
   }
   deviceOptions.value = []
   hasMoreDevices.value = true
+  loadingMore.value = false
 }
 
 function defaultAssociatedForm() {
@@ -70,22 +75,34 @@ const addDevice = () => {
   visible.value = true
 }
 const modalClose = () => {
+  optionsRequestEpoch += 1
   initQueryDevice()
   associatedForm.value = defaultAssociatedForm()
 }
 const handleSubmit = async () => {
-  await associatedFormRef?.value?.validate()
+  if (submitting.value) return
 
   if (!associatedForm.value.device_ids || associatedForm.value.device_ids.length === 0) {
     message.warning($t('custom.associatedDevices.selectDeviceFirst'))
     return
   }
 
-  associatedForm.value.device_config_id = props.deviceConfigId
-  const { error } = await deviceConfigBatch(associatedForm.value)
-  if (!error) {
+  submitting.value = true
+  try {
+    await associatedFormRef?.value?.validate()
+  } catch {
+    submitting.value = false
+    return
+  }
+
+  try {
+    const response = await deviceConfigBatch({ ...associatedForm.value, device_config_id: props.deviceConfigId })
+    if (isFlatRequestFailure(response)) return
+
     message.success($t('common.addSuccess') || 'Added successfully')
     handleClose()
+  } finally {
+    submitting.value = false
   }
 }
 const handleClose = () => {
@@ -98,17 +115,15 @@ const handleClose = () => {
 
 const getDeviceOptions = async (isInitialLoad = false) => {
   if (loadingMore.value) {
-    console.error('Load request ignored, already loading.')
-    return
+    return false
   }
-  if (!isInitialLoad && !hasMoreDevices.value) return
+  if (!isInitialLoad && !hasMoreDevices.value) return false
 
   if (isInitialLoad) {
     queryDevice.value.page = 1
-    deviceOptions.value = []
-    hasMoreDevices.value = true
   }
 
+  const requestEpoch = ++optionsRequestEpoch
   loadingMore.value = true
 
   const params: Api.Device.DeviceSelectorParams = {
@@ -118,38 +133,24 @@ const getDeviceOptions = async (isInitialLoad = false) => {
   }
 
   try {
-    const { data, error } = await getDeviceListForSelect(params)
+    const response = await getDeviceListForSelect(params)
+    if (isFlatRequestFailure(response) || requestEpoch !== optionsRequestEpoch) return false
 
-    if (!error && data?.list) {
-      deviceOptions.value.push(...data.list)
-
-      if (data.list.length < queryDevice.value.page_size) {
-
-        hasMoreDevices.value = false
-      } else {
-
-        hasMoreDevices.value = true
-      }
-    } else {
-
-      hasMoreDevices.value = false
-      if (error) {
-        message.error($t('common.fetchDataFailed'))
-      }
-    }
-  } catch {
-    message.error($t('common.networkError'))
-
-    hasMoreDevices.value = false
+    const list = Array.isArray(response.data?.list) ? response.data.list : []
+    deviceOptions.value = isInitialLoad ? list : [...deviceOptions.value, ...list]
+    hasMoreDevices.value = list.length >= queryDevice.value.page_size
+    return true
   } finally {
-
-    loadingMore.value = false
+    if (requestEpoch === optionsRequestEpoch) loadingMore.value = false
   }
 }
 
 const handleLoadMoreDevices = () => {
-  queryDevice.value.page += 1
-  getDeviceOptions()
+  const previousPage = queryDevice.value.page
+  queryDevice.value.page = previousPage + 1
+  void getDeviceOptions().then(success => {
+    if (!success && queryDevice.value.page === previousPage + 1) queryDevice.value.page = previousPage
+  })
 }
 
 const handleInitialLoadDevices = () => {
@@ -159,29 +160,30 @@ const handleInitialLoadDevices = () => {
 const configDevice = ref([])
 const configDeviceTotal = ref(0)
 const getDeviceList = async () => {
+  const requestEpoch = ++listRequestEpoch
   queryData.value.device_config_id = props.deviceConfigId
-  const { data, error } = await deviceList(queryData.value)
-  if (!error && data?.list) {
+  const response = await deviceList({ ...queryData.value })
+  if (isFlatRequestFailure(response) || requestEpoch !== listRequestEpoch) return
+
+  const data = response.data
+  if (Array.isArray(data?.list)) {
     data.list.forEach(sitem => {
       sitem.activate_flag = sitem.is_online === 0 ? $t('custom.devicePage.offline') : $t('custom.devicePage.online')
     })
     configDevice.value = data.list || []
     configDeviceTotal.value = data.total || 0
-  } else {
-    configDevice.value = []
-    configDeviceTotal.value = 0
   }
 }
 
 const handleDelete = async row => {
-  const { error } = await deviceDelete({
+  const response = await deviceDelete({
     device_id: row.id,
     device_config_id: ''
   })
-  if (!error) {
-    message.success($t('card.removeSuccess') || 'Removed successfully')
-    getDeviceList()
-  }
+  if (isFlatRequestFailure(response)) return
+
+  message.success($t('card.removeSuccess') || 'Removed successfully')
+  await getDeviceList()
 }
 
 const columnsData: Ref<DataTableColumns<any>> = ref([
@@ -326,6 +328,7 @@ onMounted(async () => {
           <NButton
             type="primary"
             :disabled="!associatedForm.device_ids || associatedForm.device_ids.length === 0"
+            :loading="submitting"
             @click="handleSubmit"
           >
             {{ $t('generate.add') }}

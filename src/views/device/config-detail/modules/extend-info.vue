@@ -1,6 +1,7 @@
 <script setup lang="tsx">
 import type { Ref } from 'vue'
 import { computed, getCurrentInstance, onMounted, ref } from 'vue'
+import { isFlatRequestFailure } from '@sa/axios'
 import type { DataTableColumns, FormInst } from 'naive-ui'
 import { NButton, NPopconfirm, NSpace, NSwitch, useMessage } from 'naive-ui'
 import { deviceConfigEdit } from '@/service/api/device'
@@ -12,6 +13,8 @@ const editIndex = ref(-1)
 const extendFormRef = ref<HTMLElement & FormInst>()
 const extendForm = ref(defaultExtendForm())
 const message = useMessage()
+const saving = ref(false)
+const validating = ref(false)
 
 interface Emits {
   (e: 'upDateConfig'): void
@@ -76,29 +79,48 @@ const handleClose = () => {
   editIndex.value = -1
 }
 
-const handleSave = async () => {
-  const postData = props.configInfo
-  postData.additional_info = JSON.stringify(extendInfoList.value)
-  const res = await deviceConfigEdit(postData)
-  if (!res.error) {
+const handleSave = async (nextList: any[]) => {
+  if (saving.value) return false
+
+  saving.value = true
+  try {
+    const res = await deviceConfigEdit({
+      ...props.configInfo,
+      additional_info: JSON.stringify(nextList)
+    })
+    if (isFlatRequestFailure(res)) return false
+
+    extendInfoList.value = nextList
     message.success($t('common.modifySuccess'))
     emit('upDateConfig')
+    return true
+  } finally {
+    saving.value = false
   }
-  handleClose()
 }
 
 const handleSubmit = async () => {
-  await extendFormRef?.value?.validate()
-  if (editIndex.value >= 0) {
-    extendInfoList.value[editIndex.value] = extendForm.value
-  } else {
-    extendForm.value.enable = false
-    extendInfoList.value.push(extendForm.value)
+  if (saving.value || validating.value) return
+
+  validating.value = true
+  try {
+    await extendFormRef?.value?.validate()
+  } catch {
+    return
+  } finally {
+    validating.value = false
   }
-  handleSave()
+
+  const nextList = extendInfoList.value.map(item => ({ ...item }))
+  if (editIndex.value >= 0) {
+    nextList[editIndex.value] = { ...extendForm.value }
+  } else {
+    nextList.push({ ...extendForm.value, enable: false })
+  }
+  if (await handleSave(nextList)) handleClose()
 }
 
-const handleSwitchChange = async row => {
+const handleSwitchChange = async (row, enable: boolean) => {
   const index = (extendInfoList.value || []).findIndex(item => {
     return (
       item.name === row.name &&
@@ -108,8 +130,9 @@ const handleSwitchChange = async row => {
     )
   })
   if (index >= 0) {
-    extendInfoList.value[index].enable = !extendInfoList.value[index].enable
-    handleSave()
+    const nextList = extendInfoList.value.map(item => ({ ...item }))
+    nextList[index].enable = enable
+    await handleSave(nextList)
   }
 }
 
@@ -123,10 +146,9 @@ const handleDeleteTable = async row => {
     )
   })
   if (index >= 0) {
-    extendInfoList.value.splice(index, 1)
-    handleSave()
+    const nextList = extendInfoList.value.filter((_, itemIndex) => itemIndex !== index)
+    if (await handleSave(nextList)) window.$message?.info($t('common.extensionInfoDeleted'))
   }
-  window.$message?.info($t('common.extensionInfoDeleted'))
 }
 const handleEditTable = async row => {
   editIndex.value = (extendInfoList.value || []).findIndex(item => {
@@ -138,7 +160,7 @@ const handleEditTable = async row => {
     )
   })
 
-  extendForm.value = row
+  extendForm.value = { ...row }
   isEdit.value = true
   visible.value = true
 }
@@ -174,7 +196,13 @@ const columns: Ref<DataTableColumns<ServiceManagement.Service>> = ref([
     title: $t('page.manage.common.status.enable'),
     align: 'left',
     render: (row: any) => {
-      return <NSwitch value={Boolean(row.enable)} onChange={() => handleSwitchChange(row)} />
+      return (
+        <NSwitch
+          value={Boolean(row.enable)}
+          loading={saving.value}
+          onUpdateValue={(value: boolean) => handleSwitchChange(row, value)}
+        />
+      )
     }
   },
   {
@@ -211,7 +239,12 @@ onMounted(() => {
   if (!props.configInfo.additional_info || props.configInfo.additional_info === '{}') {
     extendInfoList.value = []
   } else {
-    extendInfoList.value = JSON.parse(props.configInfo.additional_info)
+    try {
+      const additionalInfo = JSON.parse(props.configInfo.additional_info)
+      extendInfoList.value = Array.isArray(additionalInfo) ? additionalInfo : []
+    } catch {
+      extendInfoList.value = []
+    }
   }
 })
 </script>
@@ -252,7 +285,9 @@ onMounted(() => {
         </NFormItem>
         <NFlex justify="flex-end">
           <NButton @click="handleClose">{{ $t('generate.cancel') }}</NButton>
-          <NButton type="primary" @click="handleSubmit">{{ $t('page.login.common.confirm') }}</NButton>
+          <NButton type="primary" :loading="saving || validating" @click="handleSubmit">
+            {{ $t('page.login.common.confirm') }}
+          </NButton>
         </NFlex>
       </NForm>
     </NModal>

@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import type { FormInst } from 'naive-ui'
 import { NButton, NCard, useDialog } from 'naive-ui'
 import moment from 'moment'
+import { isFlatRequestFailure } from '@sa/axios'
 import EditAction from '@/views/automation/linkage-edit/modules/edit-action.vue'
 import EditPremise from '@/views/automation/linkage-edit/modules/edit-premise.vue'
 import { sceneAutomationsAdd, sceneAutomationsEdit, sceneAutomationsInfo } from '@/service/api/automation'
@@ -41,6 +42,8 @@ const configFormRef = ref<HTMLElement & FormInst>()
 const configForm = ref(defaultConfigForm())
 
 const configId = ref(route.query.id || '')
+const editBlocked = ref(Boolean(configId.value))
+const editDataError = ref('')
 const propsData = ref({
   device_id: route.query.device_id || '',
   device_config_id: route.query.device_config_id || ''
@@ -60,6 +63,13 @@ const tabStore = useTabStore()
 const editPremise = ref()
 const editAction = ref()
 const submitData = async () => {
+  if (editBlocked.value) {
+    if (editDataError.value) {
+      window.$message?.error(editDataError.value)
+    }
+    return
+  }
+
   // 处理条件的数据保存
   configForm.value.trigger_condition_groups = handleIfData()
   // 处理动作数据保存
@@ -99,27 +109,27 @@ const submitData = async () => {
     onPositiveClick: async () => {
       if (configId.value) {
         const res = await sceneAutomationsEdit(configForm.value)
-        if (!res.error) {
-          await tabStore.removeTab(route.path)
-          if (backType.value === 'device') {
-            router.replace({ path: '/device/details', query: { d_id: propsData.value.device_id } })
-          } else if (backType.value === 'config') {
-            router.replace({ path: '/device/config-detail', query: { id: propsData.value.device_config_id } })
-          } else {
-            router.replace({ path: '/automation/scene-linkage' })
-          }
+        if (isFlatRequestFailure(res)) return
+
+        await tabStore.removeTab(route.path)
+        if (backType.value === 'device') {
+          router.replace({ path: '/device/details', query: { d_id: propsData.value.device_id } })
+        } else if (backType.value === 'config') {
+          router.replace({ path: '/device/config-detail', query: { id: propsData.value.device_config_id } })
+        } else {
+          router.replace({ path: '/automation/scene-linkage' })
         }
       } else {
         const res = await sceneAutomationsAdd(configForm.value)
-        if (!res.error) {
-          await tabStore.removeTab(route.path)
-          if (backType.value === 'device') {
-            router.replace({ path: '/device/details', query: { d_id: propsData.value.device_id } })
-          } else if (backType.value === 'config') {
-            router.replace({ path: '/device/config-detail', query: { id: propsData.value.device_config_id } })
-          } else {
-            router.replace({ path: '/automation/scene-linkage' })
-          }
+        if (isFlatRequestFailure(res)) return
+
+        await tabStore.removeTab(route.path)
+        if (backType.value === 'device') {
+          router.replace({ path: '/device/details', query: { d_id: propsData.value.device_id } })
+        } else if (backType.value === 'config') {
+          router.replace({ path: '/device/config-detail', query: { id: propsData.value.device_config_id } })
+        } else {
+          router.replace({ path: '/automation/scene-linkage' })
         }
       }
     }
@@ -138,21 +148,31 @@ const actionData = ref([] as any)
 
 const getSceneAutomationsInfo = async () => {
   const res = await sceneAutomationsInfo(configId.value)
-  if (res.data) {
-    automationsInfo.value = res.data
-    configForm.value = res.data
-    // 条件数据回显
-    conditionData.value = echoIfData(automationsInfo.value.trigger_condition_groups)
-    // 动作数据回显
-    actionData.value = echoActionData(automationsInfo.value.actions)
+  if (isFlatRequestFailure(res) || !res.data) return
+
+  try {
+    const sceneData = JSON.parse(JSON.stringify(res.data))
+    if (!Array.isArray(sceneData.trigger_condition_groups) || !Array.isArray(sceneData.actions)) {
+      throw new Error('Invalid scene linkage data')
+    }
+
+    const parsedConditionData = echoIfData(sceneData.trigger_condition_groups)
+    const parsedActionData = echoActionData(sceneData.actions)
+    automationsInfo.value = sceneData
+    configForm.value = sceneData
+    conditionData.value = parsedConditionData
+    actionData.value = parsedActionData
+    editBlocked.value = false
+  } catch {
+    editDataError.value = '场景联动数据损坏，触发条件或动作不是有效格式，无法编辑或保存。'
+    window.$message?.error(editDataError.value)
   }
 }
 
 // 提交时处理条件数据
 const handleIfData = () => {
   if (!editPremise.value) {
-    console.error('EditPremise component ref is not available yet.')
-    return [] // Return empty array if the ref is not ready
+    return []
   }
   const ifGroupsData = JSON.parse(JSON.stringify(editPremise.value.ifGroupsData()))
   ifGroupsData.forEach((ifGroupItem: any) => {
@@ -229,8 +249,7 @@ const handleIfData = () => {
 // 提交时处理动作数据
 const handleActionData = () => {
   if (!editAction.value) {
-    console.error('EditAction component ref is not available yet.')
-    return [] // Return empty array if the ref is not ready
+    return []
   }
   // 处理动作的数据
   const actionGroupsData = JSON.parse(JSON.stringify(editAction.value.actionGroupsReturn()))
@@ -278,25 +297,25 @@ const echoIfData = (ifData: any) => {
       if (ifItem.trigger_conditions_type === '10' || ifItem.trigger_conditions_type === '11') {
         ifItem.ifType = '1'
         if (ifItem.trigger_param_type === 'event') {
-          ifItem.eventParamConditions = []
-          try {
-            const eventMatchConfig = JSON.parse(ifItem.trigger_value || '{}')
-            if (eventMatchConfig.match_mode === 'field') {
-              ifItem.eventParamConditions = (eventMatchConfig.conditions || []).map((condition: any) => ({
-                field: condition.field,
-                operator: condition.operator || '=',
-                value:
-                  condition.operator === 'in' && Array.isArray(condition.value)
-                    ? condition.value.join(',')
-                    : condition.value,
-                minValue:
-                  condition.operator === 'between' && Array.isArray(condition.value) ? condition.value[0] : null,
-                maxValue: condition.operator === 'between' && Array.isArray(condition.value) ? condition.value[1] : null
-              }))
-            }
-          } catch {
-            // 旧版完整 JSON 或空值不按字段级规则回显，保持空条件表示仅按事件名触发。
+          const eventMatchConfig = JSON.parse(ifItem.trigger_value)
+          if (
+            typeof eventMatchConfig !== 'object' ||
+            eventMatchConfig === null ||
+            eventMatchConfig.match_mode !== 'field' ||
+            !Array.isArray(eventMatchConfig.conditions)
+          ) {
+            throw new Error('Invalid event trigger condition')
           }
+          ifItem.eventParamConditions = eventMatchConfig.conditions.map((condition: any) => ({
+            field: condition.field,
+            operator: condition.operator || '=',
+            value:
+              condition.operator === 'in' && Array.isArray(condition.value)
+                ? condition.value.join(',')
+                : condition.value,
+            minValue: condition.operator === 'between' && Array.isArray(condition.value) ? condition.value[0] : null,
+            maxValue: condition.operator === 'between' && Array.isArray(condition.value) ? condition.value[1] : null
+          }))
         } else if (ifItem.trigger_operator === 'between') {
           ifItem.minValue = ifItem.trigger_value.split('-')[0]
           ifItem.maxValue = ifItem.trigger_value.split('-')[1]
@@ -385,7 +404,7 @@ const echoActionData = (actionsData: any) => {
   return actionGroupsData
 }
 if (configId.value) {
-  typeof configId.value === 'string' ? (configForm.value.id = configId.value) : ''
+  if (typeof configId.value === 'string') configForm.value.id = configId.value
   getSceneAutomationsInfo()
 }
 </script>
@@ -400,6 +419,7 @@ if (configId.value) {
         ref="configFormRef"
         :model="configForm"
         :rules="configFormRules"
+        :disabled="editBlocked"
         label-placement="left"
         label-width="80"
         size="small"
@@ -433,7 +453,9 @@ if (configId.value) {
       </NForm>
       <n-divider class="divider-class" />
       <NFlex justify="center">
-        <NButton type="primary" @click="submitData">{{ $t('generate.save-scene-linkage') }}</NButton>
+        <NButton type="primary" :disabled="editBlocked" @click="submitData">
+          {{ $t('generate.save-scene-linkage') }}
+        </NButton>
       </NFlex>
     </NCard>
   </div>

@@ -67,10 +67,10 @@ const onCreate = () => {
               <div class="ml-20px w-68px"></div>
             </div>
             <n-dynamic-input
+              #default="{ index }"
               v-model:value="protocol_config[element.dataKey]"
               item-style="margin-bottom: 0;"
               :on-create="onCreate"
-              #="{ index }"
             >
               <div class="w-full flex justify-between">
                 <template v-for="subElement in element.array" :key="subElement.dataKey">

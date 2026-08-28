@@ -7,6 +7,7 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { NButton, NModal, NCard, NEmpty, NSpace, NSpin, NIcon } from 'naive-ui'
 import { ExpandOutline, ContractOutline, CloseOutline } from '@vicons/ionicons5'
+import { isFlatRequestFailure } from '@sa/axios'
 import { $t } from '@/locales'
 import { getTemplat, putTemplat, telemetryApi, attributesApi, eventsApi, commandsApi } from '@/service/api'
 import ThingsVisWidget from '@/components/thingsvis/ThingsVisWidget.vue'
@@ -62,6 +63,7 @@ const initialConfig = ref<any>(null)
 const platformFields = ref<PlatformField[]>([])
 const hasConfig = ref(false)
 const refreshInterval = ref(5000)
+const configError = ref('')
 
 const unwrapApiList = (payload: unknown): any[] => {
   const data = payload as { data?: unknown }
@@ -89,6 +91,10 @@ const back: () => void = () => {
 
 // 打开编辑器
 const openEditor = () => {
+  if (configError.value) {
+    window.$message?.error(configError.value)
+    return
+  }
   isEditorFullscreen.value = false
   showEditorModal.value = true
 }
@@ -114,9 +120,7 @@ const editorCardStyle = computed(() => ({
   height: 'min(92vh, 1120px)'
 }))
 
-const editorWidgetHeight = computed(() =>
-  isEditorFullscreen.value ? '100vh' : 'calc(min(92vh, 1120px) - 170px)'
-)
+const editorWidgetHeight = computed(() => (isEditorFullscreen.value ? '100vh' : 'calc(min(92vh, 1120px) - 170px)'))
 
 // 下一步 (直接跳过，不强制编辑)
 const next = () => {
@@ -125,7 +129,7 @@ const next = () => {
 
 // 处理保存
 const handleSave = async (payload: any) => {
-  if (saving.value) {
+  if (saving.value || configError.value) {
     return
   }
 
@@ -133,6 +137,7 @@ const handleSave = async (payload: any) => {
   try {
     // 获取当前模板数据
     const res = await getTemplat(props.deviceTemplateId)
+    if (isFlatRequestFailure(res) || !res.data) return
 
     // ⚠️ CRITICAL: 清理 PLATFORM_FIELD datasource 中的 deviceId
     // 这些 ID 在编辑时是模板/虚拟设备 ID，不应该被保存到配置中
@@ -154,11 +159,12 @@ const handleSave = async (payload: any) => {
       refreshInterval: refreshInterval.value
     }
     const configStr = JSON.stringify(configToSave)
-    await putTemplat({
+    const updateResult = await putTemplat({
       ...res.data,
       web_chart_config: configStr,
       app_chart_config: initializeAppChartConfigOnce(res.data.app_chart_config, configStr)
     })
+    if (isFlatRequestFailure(updateResult)) return
 
     window.$message?.success($t('common.saveSuccess'))
 
@@ -180,8 +186,10 @@ const handleSave = async (payload: any) => {
 // 加载模板数据
 const loadTemplateData = async () => {
   loading.value = true
+  configError.value = ''
   try {
     const res = await getTemplat(props.deviceTemplateId)
+    if (isFlatRequestFailure(res) || !res.data) return
 
     if (res.data) {
       // Fetch all platform field types from model APIs: telemetry, attributes, events, commands.
@@ -191,6 +199,7 @@ const loadTemplateData = async () => {
         eventsApi({ page: 1, page_size: 1000, device_template_id: props.deviceTemplateId }),
         commandsApi({ page: 1, page_size: 1000, device_template_id: props.deviceTemplateId })
       ])
+      if ([telemetryRes, attributesRes, eventsRes, commandsRes].some(isFlatRequestFailure)) return
 
       const telemetryList = unwrapApiList(telemetryRes)
       const attributesList = unwrapApiList(attributesRes)
@@ -217,10 +226,11 @@ const loadTemplateData = async () => {
           if (config.refreshInterval !== undefined) {
             refreshInterval.value = config.refreshInterval
           }
-        } catch (e) {
-          console.warn('解析 web_chart_config 失败', e)
+        } catch {
+          configError.value = 'Web 图表配置已损坏，已禁止覆盖保存；请修复原始配置后重试。'
           initialConfig.value = null
           hasConfig.value = false
+          window.$message?.error(configError.value)
         }
       }
     }
@@ -241,7 +251,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('fullscreenchange', handleFullscreenChange)
 })
 
-watch(showEditorModal, visible => {
+watch(showEditorModal, (visible) => {
   if (!visible) {
     isEditorFullscreen.value = false
   }
@@ -254,7 +264,7 @@ watch(showEditorModal, visible => {
     <NCard title="Web 图表配置" class="preview-card">
       <template #header-extra>
         <NSpace align="center">
-          <NButton type="primary" size="small" :disabled="!thingsVisEnabled" @click="openEditor">
+          <NButton type="primary" size="small" :disabled="!thingsVisEnabled || Boolean(configError)" @click="openEditor">
             {{ hasConfig ? '编辑配置' : '创建配置' }}
           </NButton>
         </NSpace>
@@ -262,6 +272,9 @@ watch(showEditorModal, visible => {
 
       <NAlert v-if="!thingsVisEnabled" type="info" title="当前生产 Profile 未启用可视化">
         Web 图表配置将在启用 visualization 或 full Profile 后可用。
+      </NAlert>
+      <NAlert v-else-if="configError" type="error" title="Web 图表配置损坏">
+        {{ configError }}
       </NAlert>
       <NSpin v-else :show="loading" description="加载中...">
         <!-- 有配置时显示预览 -->
@@ -341,7 +354,9 @@ watch(showEditorModal, visible => {
           <template #footer>
             <div class="modal-footer">
               <NButton @click="showEditorModal = false">取消</NButton>
-              <NButton type="primary" :loading="saving" @click="editorRef?.triggerSave()">保存配置</NButton>
+              <NButton type="primary" :loading="saving" :disabled="Boolean(configError)" @click="editorRef?.triggerSave()">
+                保存配置
+              </NButton>
             </div>
           </template>
         </NCard>

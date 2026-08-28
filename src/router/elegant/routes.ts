@@ -246,26 +246,6 @@ export const generatedRoutes: GeneratedRoute[] = [
     ]
   },
   {
-    name: 'data-service',
-    path: '/data-service',
-    component: 'layout.base',
-    meta: {
-      title: 'data-service',
-      i18nKey: 'route.data-service'
-    },
-    children: [
-      {
-        name: 'data-service_rule-engine',
-        path: '/data-service/rule-engine',
-        component: 'view.data-service_rule-engine',
-        meta: {
-          title: 'data-service_rule-engine',
-          i18nKey: 'route.data-service_rule-engine'
-        }
-      }
-    ]
-  },
-  {
     name: 'device',
     path: '/device',
     component: 'layout.base',
@@ -395,15 +375,6 @@ export const generatedRoutes: GeneratedRoute[] = [
         }
       }
     ]
-  },
-  {
-    name: 'device-details-app',
-    path: '/device-details-app',
-    component: 'layout.base$view.device-details-app',
-    meta: {
-      title: 'device-details-app',
-      i18nKey: 'route.device-details-app'
-    }
   },
   {
     name: 'feature-unavailable',
@@ -861,15 +832,6 @@ export const generatedRoutes: GeneratedRoute[] = [
     ]
   },
   {
-    name: 'rule-engine',
-    path: '/rule-engine',
-    component: 'layout.base$view.rule-engine',
-    meta: {
-      title: 'rule-engine',
-      i18nKey: 'route.rule-engine'
-    }
-  },
-  {
     name: 'system-management-user',
     path: '/system-management-user',
     component: 'layout.base',
@@ -966,32 +928,5 @@ export const generatedRoutes: GeneratedRoute[] = [
         }
       }
     ]
-  },
-  {
-    name: 'visualization-app',
-    path: '/visualization-app',
-    component: 'layout.base$view.visualization-app',
-    meta: {
-      title: 'visualization-app',
-      i18nKey: 'route.visualization-app'
-    }
-  },
-  {
-    name: 'visualization-app-dashboards',
-    path: '/visualization-app-dashboards',
-    component: 'layout.base$view.visualization-app-dashboards',
-    meta: {
-      title: 'visualization-app-dashboards',
-      i18nKey: 'route.visualization-app-dashboards'
-    }
-  },
-  {
-    name: 'visualization-app-preview',
-    path: '/visualization-app-preview',
-    component: 'layout.base$view.visualization-app-preview',
-    meta: {
-      title: 'visualization-app-preview',
-      i18nKey: 'route.visualization-app-preview'
-    }
   }
 ];

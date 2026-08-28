@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isFlatRequestFailure } from '@sa/axios'
 import { computed, onMounted, ref } from 'vue'
 import type { SelectOption } from 'naive-ui'
 import { fetchUserList } from '@/service/api/auth'
@@ -17,8 +18,13 @@ async function loadTenants() {
 
   loading.value = true
   try {
-    const { data } = await fetchUserList({ page: 1, page_size: 1000 }, true)
-    const tenants = data?.list || []
+    const response = await fetchUserList({ page: 1, page_size: 1000 }, true)
+    if (isFlatRequestFailure(response) || !response.data || !Array.isArray(response.data.list)) {
+      window.$message?.error('租户列表加载失败，请稍后重试。')
+      return
+    }
+
+    const tenants = response.data.list
     options.value = [
       { label: '全部租户', value: allTenants },
       ...tenants.map((tenant: any) => ({

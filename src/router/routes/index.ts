@@ -1,16 +1,8 @@
 import type { CustomRoute, ElegantConstRoute } from '@elegant-router/types'
-import type { RouteComponent } from 'vue-router'
 import { generatedRoutes } from '../elegant/routes'
 import { layouts, views } from '../elegant/imports'
 import { transformElegantRoutesToVueRoutes } from '../elegant/transform'
 import { registerRouteRuntime } from './runtime'
-
-/** App 嵌入页视图：elegant-router 需独立目录 page，此处兜底注册避免 watcher 覆盖后找不到组件 */
-const appEmbedViews: Record<string, RouteComponent | (() => Promise<RouteComponent>)> = {
-  ...views,
-  'visualization-app-dashboards': () => import('@/views/visualization-app-dashboards/index.vue'),
-  'visualization-app-preview': () => import('@/views/visualization-app-preview/index.vue')
-}
 
 export const ROOT_ROUTE: CustomRoute = {
   name: 'root',
@@ -84,51 +76,10 @@ const customRoutes: ElegantConstRoute[] = [
         }
       }
     ]
-  },
-  {
-    name: 'device-details-app',
-    path: '/device-details-app',
-    component: 'layout.blank$view.device-details-app',
-    meta: {
-      title: 'device-details-app',
-      i18nKey: 'route.device-details-app',
-      constant: true
-    }
-  },
-  {
-    name: 'visualization-app',
-    path: '/visualization-app',
-    component: 'layout.blank$view.visualization-app',
-    meta: {
-      title: 'visualization-app',
-      i18nKey: 'route.visualization-app',
-      constant: true
-    }
-  },
-  {
-    name: 'visualization-app-dashboards',
-    path: '/visualization-app/dashboards',
-    component: 'layout.blank$view.visualization-app-dashboards',
-    meta: {
-      title: 'visualization-app-dashboards',
-      i18nKey: 'route.visualization-app-dashboards',
-      constant: true
-    }
-  },
-  {
-    name: 'visualization-app-preview',
-    path: '/visualization-app/preview',
-    component: 'layout.blank$view.visualization-app-preview',
-    meta: {
-      title: 'visualization-app-preview',
-      i18nKey: 'route.visualization-app-preview',
-      constant: true
-    }
   }
 ]
 
 // ThingsVis 预览页面 - 独立的常量路由，无需登录
-// 使用 as any 绕过类型检查，因为这是新增的路由
 function createThingsvisPreviewRoute(): ElegantConstRoute {
   return {
     name: 'thingsvis-preview-standalone',
@@ -147,18 +98,12 @@ export function createRoutes() {
 
   const authRoutes: ElegantConstRoute[] = []
 
-  const appEmbedRouteNames = new Set([
-    'feature-unavailable',
-    'visualization-app',
-    'visualization-app-dashboards',
-    'visualization-app-preview'
-  ])
+  const constantRouteNames = new Set(['feature-unavailable'])
 
   // 添加独立的常量路由
   constantRoutes.push(createThingsvisPreviewRoute())
   ;[...customRoutes, ...generatedRoutes].forEach(item => {
-    // App 嵌入页已在 customRoutes 中以 blank + constant 注册，跳过 generated 重复项
-    if (appEmbedRouteNames.has(item.name) && !item.meta?.constant) {
+    if (constantRouteNames.has(item.name) && !item.meta?.constant) {
       return
     }
 
@@ -169,7 +114,7 @@ export function createRoutes() {
     }
   })
 
-  const constantVueRoutes = transformElegantRoutesToVueRoutes(constantRoutes, layouts, appEmbedViews)
+  const constantVueRoutes = transformElegantRoutesToVueRoutes(constantRoutes, layouts, views)
 
   return {
     constantVueRoutes,
@@ -183,7 +128,7 @@ export function createRoutes() {
  * @param routes Elegant routes
  */
 export function getAuthVueRoutes(routes: ElegantConstRoute[]) {
-  return transformElegantRoutesToVueRoutes(routes, layouts, appEmbedViews)
+  return transformElegantRoutesToVueRoutes(routes, layouts, views)
 }
 
 registerRouteRuntime({

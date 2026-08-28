@@ -1,10 +1,7 @@
 <script setup lang="tsx">
-import { reactive, ref } from 'vue'
+import { ref } from 'vue'
+import { isFlatRequestFailure } from '@sa/axios'
 import { editFunction, getFunction } from '@/service/api/setting'
-
-const queryParam = reactive({
-  function_id: ''
-})
 
 interface FunctionOption {
   id: string
@@ -13,25 +10,33 @@ interface FunctionOption {
   value: boolean
 }
 
+const updatingId = ref('')
+
 const changeFunc = async (item: FunctionOption) => {
-  queryParam.function_id = item.id
-  const res = await editFunction(queryParam)
-  if (!res.error) {
-    getFunctionOption()
+  if (updatingId.value) return
+
+  updatingId.value = item.id
+  try {
+    const response = await editFunction({ function_id: item.id })
+    if (isFlatRequestFailure(response)) return
+
+    await getFunctionOption()
+  } finally {
+    updatingId.value = ''
   }
 }
 const funcOptions = ref<FunctionOption[]>([])
 async function getFunctionOption() {
-  const { data } = await getFunction()
-  if (data) {
-    localStorage.setItem('enableZcAndYzm', JSON.stringify(data))
-    funcOptions.value = data.map((v: Omit<FunctionOption, 'value'>) => {
-      return {
-        ...v,
-        value: v.enable_flag === 'enable'
-      }
-    })
-  }
+  const response = await getFunction()
+  if (isFlatRequestFailure(response) || !response.data) return
+
+  localStorage.setItem('enableZcAndYzm', JSON.stringify(response.data))
+  funcOptions.value = response.data.map((v: Omit<FunctionOption, 'value'>) => {
+    return {
+      ...v,
+      value: v.enable_flag === 'enable'
+    }
+  })
 }
 
 getFunctionOption()
@@ -42,7 +47,12 @@ getFunctionOption()
     <NForm class="function-setting-form" label-placement="left" :label-width="260">
       <NGrid :cols="24" :x-gap="18">
         <NFormItemGridItem v-for="(item, index) in funcOptions" :key="index" :span="24" :label="item.description">
-          <n-switch v-model:value="item.value" @change="val => changeFunc(item)" />
+          <n-switch
+            :value="item.value"
+            :loading="updatingId === item.id"
+            :disabled="Boolean(updatingId)"
+            @update:value="() => changeFunc(item)"
+          />
         </NFormItemGridItem>
       </NGrid>
       <NSpace class="w-full pt-16px" :size="24" justify="start"></NSpace>

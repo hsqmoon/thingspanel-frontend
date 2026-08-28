@@ -1,5 +1,6 @@
 <script setup lang="tsx">
 import { computed, getCurrentInstance, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { isFlatRequestFailure } from '@sa/axios'
 import type { NumberAnimationInst } from 'naive-ui'
 import dayjs from 'dayjs'
 import { Activity } from '@vicons/tabler'
@@ -87,6 +88,12 @@ const simulationForm = reactive({
   normal_default_data: '{"_data1": 25.5, "_data2": 60}'
 })
 const simulationLoading = ref(false)
+const controlSubmitting = ref(false)
+let logRequestEpoch = 0
+let telemetryRequestEpoch = 0
+let detailRequestEpoch = 0
+let controlListRequestEpoch = 0
+let simulationSession = 0
 
 const token = localStg.get('token')
 
@@ -119,7 +126,7 @@ const { status, send, close } = useWebSocket(wsUrl, {
       const newTelemetry: any[] = []
       for (const key in info) {
         if (key !== 'systime' && !currTelemetryKey.includes(key)) {
-          const { key: _originKey, label: _label, ...rest } = initTelemetryData.value
+          const { key: _originKey, label: _label, ...rest } = initTelemetryData.value || {}
           newTelemetry.push({
             ...rest,
             key,
@@ -165,13 +172,16 @@ const columns = [
     render: row => (row.status === '1' ? $t('custom.devicePage.success') : $t('custom.devicePage.fail'))
   }
 ]
-const requestSimulationInit = async () => {
+const requestSimulationInit = async (session: number) => {
   const defaultData = '{"_data1": 25.5, "_data2": 60}'
   const eventDefaultData = '{"method":"FindAnimal","params":{"count":2,"animalType":"cat"}}'
-  const { data, error } = await getSimulationInit({
+  const response = await getSimulationInit({
     device_id: props.id
   })
-  if (!error && data) {
+  if (isFlatRequestFailure(response) || session !== simulationSession || !showLogDialog.value) return
+
+  const data = response.data
+  if (data) {
     simulationForm.username = data.username || ''
     simulationForm.password = data.password || ''
     simulationForm.client_id = data.client_id || ''
@@ -182,10 +192,6 @@ const requestSimulationInit = async () => {
     simulationForm.default_data = data.default_data || defaultData
     simulationForm.event_default_data = data.event_default_data || eventDefaultData
     simulationForm.normal_default_data = data.default_data || defaultData
-  } else {
-    simulationForm.default_data = defaultData
-    simulationForm.event_default_data = eventDefaultData
-    simulationForm.normal_default_data = defaultData
   }
 }
 
@@ -199,28 +205,51 @@ const openUpLog = () => {
   showError.value = false
   showLogDialog.value = true
   showAdvanced.value = false
-  requestSimulationInit()
+  const session = ++simulationSession
+  void requestSimulationInit(session)
 }
 
 const sendSimulationDataByForm = async () => {
+  if (simulationLoading.value) return
   if (!simulationForm.default_data) {
     window.$message?.error($t('custom.device_details.sendInputData'))
     return
   }
+  const session = simulationSession
   simulationLoading.value = true
-  const { error } = await sendSimulationData({
-    device_id: props.id,
-    data: simulationForm.default_data,
-    topic: simulationForm.topic
-  })
-  simulationLoading.value = false
-  if (!error) {
+  try {
+    const response = await sendSimulationData({
+      device_id: props.id,
+      data: simulationForm.default_data,
+      topic: simulationForm.topic
+    })
+    if (session !== simulationSession || !showLogDialog.value) return
+
+    if (isFlatRequestFailure(response)) {
+      if (response.error.status === 401) return
+
+      showError.value = true
+      erroMessage.value = response.error.message
+      return
+    }
+
     showLogDialog.value = false
     showError.value = false
     window.$message?.success($t('custom.devicePage.success'))
-  } else {
-    showError.value = true
-    erroMessage.value = error?.response?.data?.message || error?.message || ''
+  } catch (error: unknown) {
+    if (session !== simulationSession || !showLogDialog.value) return
+
+    if (isFlatRequestFailure(error)) {
+      if (error.error.status === 401) return
+
+      showError.value = true
+      erroMessage.value = error.error.message
+    } else {
+      showError.value = true
+      erroMessage.value = $t('common.operationFailed')
+    }
+  } finally {
+    if (session === simulationSession) simulationLoading.value = false
   }
 }
 
@@ -247,35 +276,41 @@ const clearSimulationData = () => {
   simulationForm.default_data = ''
 }
 const fetchData = async () => {
+  const requestEpoch = ++logRequestEpoch
   startLoading()
-  const { data, error } = await getTelemetryLogList({
-    page: log_page.value,
-    page_size: 5,
-    device_id: props.id,
-    operation_type: operationType.value,
-    status: sendResult.value
-  })
-  if (!error) {
-    tableData.value = data?.value || data.list
-    total.value = Math.ceil(data.count / 5)
-    endLoading()
+  try {
+    const response = await getTelemetryLogList({
+      page: log_page.value,
+      page_size: 5,
+      device_id: props.id,
+      operation_type: operationType.value,
+      status: sendResult.value
+    })
+    if (isFlatRequestFailure(response) || requestEpoch !== logRequestEpoch) return
+
+    const data = response.data
+    tableData.value = data?.value || data?.list || []
+    total.value = Math.ceil((Number(data?.count ?? data?.total) || 0) / 5)
+  } finally {
+    if (requestEpoch === logRequestEpoch) endLoading()
   }
 }
 
 const fetchTelemetry = async () => {
-  const { data, error } = await telemetryDataCurrent(props.id)
-  if (!error && data) {
-    telemetryData.value = data
-    initTelemetryData.value = data[0] || {} // 存储一份模板
-    initTelemetryData.value.device_id = props.id
-    const dataw = {
+  const requestEpoch = ++telemetryRequestEpoch
+  const response = await telemetryDataCurrent(props.id)
+  if (isFlatRequestFailure(response) || requestEpoch !== telemetryRequestEpoch || !Array.isArray(response.data)) return
 
-      device_id: props.id,
-      token
-    }
-
-    send(JSON.stringify(dataw))
+  const data = response.data
+  telemetryData.value = data
+  initTelemetryData.value = data[0] || {} // 存储一份模板
+  initTelemetryData.value.device_id = props.id
+  const dataw = {
+    device_id: props.id,
+    token
   }
+
+  send(JSON.stringify(dataw))
 }
 const setItemRef = el => {
   if (el) {
@@ -284,20 +319,14 @@ const setItemRef = el => {
   }
 }
 const getDeviceDetail = async () => {
-  const { data, error } = await deviceDetail(props.id)
-  if (!error) {
-    if (data.device_config !== undefined) {
-      if (data.device_config.protocol_type === 'MQTT') {
-        showLog.value = true
-      } else {
-        showLog.value = false
-      }
-    } else {
-      showLog.value = true
-    }
-  }
+  const requestEpoch = ++detailRequestEpoch
+  const response = await deviceDetail(props.id)
+  if (isFlatRequestFailure(response) || requestEpoch !== detailRequestEpoch) return
+
+  const data = response.data
+  showLog.value = data?.device_config === undefined || data.device_config.protocol_type === 'MQTT'
 }
-getDeviceDetail()
+void getDeviceDetail()
 
 const options = ref([
   {
@@ -309,11 +338,10 @@ const options = ref([
 const delparam: any = ref({})
 
 const handleDeleteTable = async () => {
-  const { error }: any = await telemetryDataDel(delparam.value)
+  const response = await telemetryDataDel(delparam.value)
+  if (isFlatRequestFailure(response)) return
 
-  if (!error) {
-    fetchTelemetry()
-  }
+  await fetchTelemetry()
 }
 
 const handleSelect = (key, item) => {
@@ -326,29 +354,29 @@ const handleSelect = (key, item) => {
   }
 }
 const handlePositiveClick = async () => {
-  if (isJSON(formValue.value)) {
-    let res: any
-    if (form.expected) {
-      // 新增期望消息
-      const expiry = new Date().getTime() + (form.time ? form.time * 60 * 60 * 1000 : 0)
-      res = await expectMessageAdd({
-        device_id: props.id,
-        payload: formValue.value,
-        send_type: 'telemetry',
-        expiry: moment(expiry).format('YYYY-MM-DDTHH:mm:ssZ')
-      })
-    } else {
-      // 发送属性的逻辑...
-      res = await telemetryDataPub({
-        device_id: props.id,
-        value: formValue.value
-      })
-    }
-    if (res && !res.error) {
-      showDialog.value = false
-      fetchData()
-      fetchTelemetry()
-    }
+  if (!isJSON(formValue.value) || controlSubmitting.value) return
+
+  controlSubmitting.value = true
+  try {
+    const response = form.expected
+      ? await expectMessageAdd({
+          device_id: props.id,
+          payload: formValue.value,
+          send_type: 'telemetry',
+          expiry: moment(new Date().getTime() + (form.time ? form.time * 60 * 60 * 1000 : 0)).format(
+            'YYYY-MM-DDTHH:mm:ssZ'
+          )
+        })
+      : await telemetryDataPub({
+          device_id: props.id,
+          value: formValue.value
+        })
+    if (isFlatRequestFailure(response)) return
+
+    showDialog.value = false
+    await Promise.all([fetchData(), fetchTelemetry()])
+  } finally {
+    controlSubmitting.value = false
   }
 }
 
@@ -371,25 +399,28 @@ const isColor = (i: any) => {
 }
 
 const controlList = ref<any[]>([])
-const getControlList = () => {
-  if (props.deviceTemplateId) {
-    const queryjson = {
-      device_template_id: props.deviceTemplateId,
-      page: 1,
-      page_size: 100,
-      enable_status: 'enable'
-    }
-    deviceCustomControlList(queryjson).then(({ data }) => {
-      controlList.value = data.list || []
-    })
+const getControlList = async () => {
+  const requestEpoch = ++controlListRequestEpoch
+  if (!props.deviceTemplateId) {
+    controlList.value = []
+    return
   }
+
+  const response = await deviceCustomControlList({
+    device_template_id: props.deviceTemplateId,
+    page: 1,
+    page_size: 100,
+    enable_status: 'enable'
+  })
+  if (isFlatRequestFailure(response) || requestEpoch !== controlListRequestEpoch) return
+
+  controlList.value = Array.isArray(response.data?.list) ? response.data.list : []
 }
 
 watch(
   () => props.deviceTemplateId,
-  val => {
-    if (!val) return
-    getControlList()
+  () => {
+    void getControlList()
   }
 )
 
@@ -405,24 +436,37 @@ watch(
     }
   }
 )
+watch(showLogDialog, visible => {
+  if (!visible) {
+    simulationSession += 1
+    simulationLoading.value = false
+  }
+})
 onMounted(() => {
-  fetchData()
-  fetchTelemetry()
-  getControlList()
+  void fetchData()
+  void fetchTelemetry()
+  void getControlList()
 })
 
 onUnmounted(() => {
+  logRequestEpoch += 1
+  telemetryRequestEpoch += 1
+  detailRequestEpoch += 1
+  controlListRequestEpoch += 1
+  simulationSession += 1
   if (status.value === 'OPEN') {
     close()
   }
 })
 
 const onControlChange = async (row: any) => {
-  await telemetryDataPub({
+  const response = await telemetryDataPub({
     device_id: props.id,
     value: row.content
   })
-  fetchData()
+  if (isFlatRequestFailure(response)) return
+
+  await fetchData()
 }
 
 const getPlatform = computed(() => {
@@ -719,7 +763,11 @@ const inputFeedback = computed(() => {
 
             <n-popconfirm @positive-click="handlePositiveClick">
               <template #trigger>
-                <n-button type="primary" :disabled="!formValue || validationJson === 'error'">
+                <n-button
+                  type="primary"
+                  :disabled="!formValue || validationJson === 'error'"
+                  :loading="controlSubmitting"
+                >
                   {{ $t('generate.send') }}
                 </n-button>
               </template>

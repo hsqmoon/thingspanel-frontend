@@ -20,6 +20,7 @@ import {
   NIcon,
   NButton,
   NCard,
+  NAlert,
   NEllipsis,
   useDialog,
   useMessage
@@ -61,6 +62,8 @@ const { isLoggedIn, getToken, clearToken } = useMarketAuth()
 
 /** 加载状态 */
 const loading = ref(false)
+const listError = ref('')
+let listRequestEpoch = 0
 
 /** Bundle 列表 */
 const bundleList = ref<MarketBundleListItem[]>([])
@@ -139,7 +142,9 @@ const hasMore = computed(() => total.value > searchParams.page_size)
  * 获取 Bundle 列表
  */
 async function fetchBundleList() {
+  const requestEpoch = ++listRequestEpoch
   loading.value = true
+  listError.value = ''
 
   try {
     const params: any = {
@@ -158,14 +163,15 @@ async function fetchBundleList() {
 
     const result = await browseMarketBundles(params)
 
-    if (result.data) {
-      bundleList.value = result.data.list || []
-      total.value = result.data.total || 0
+    if (requestEpoch !== listRequestEpoch) return
+    if (result.error || !result.data) {
+      listError.value = result.error?.message || $t('common.fetchDataFailed')
+      return
     }
-  } catch (err) {
-    console.error('Failed to fetch bundle list:', err)
+    bundleList.value = result.data.list
+    total.value = result.data.total
   } finally {
-    loading.value = false
+    if (requestEpoch === listRequestEpoch) loading.value = false
   }
 }
 
@@ -391,6 +397,9 @@ onMounted(() => {
 
 <template>
   <div :class="props.embedded ? 'h-full' : 'h-full p-4'">
+    <NAlert v-if="listError" type="error" class="mb-4" closable @close="listError = ''">
+      {{ listError }}
+    </NAlert>
     <AdvancedListLayout
       initial-view="card"
       :available-views="availableViews"

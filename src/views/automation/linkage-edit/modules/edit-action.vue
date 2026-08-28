@@ -2,6 +2,7 @@
 import { onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { type FormInst, NButton, NCard, NFlex, useMessage } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 import { deviceGroupTree } from '@/service/api'
 import { warningMessageList } from '@/service/api/alarm'
 import PopUp from '@/views/alarm/warning-message/components/pop-up.vue'
@@ -189,13 +190,14 @@ const actionTypeChange = (instructItem: any, data: any) => {
 
 // 设备分组列表
 const deviceGroupOptions = ref([] as any)
+let groupRequestEpoch = 0
 // 获取设备分组
 const getGroup = async () => {
-  deviceGroupOptions.value = []
+  const epoch = ++groupRequestEpoch
   const res = await deviceGroupTree({})
-  res.data.forEach((item: any) => {
-    deviceGroupOptions.value.push(item.group)
-  })
+  if (epoch !== groupRequestEpoch || isFlatRequestFailure(res) || !Array.isArray(res.data)) return
+
+  deviceGroupOptions.value = res.data.map((item: any) => item.group)
 }
 
 // 设备列表
@@ -205,12 +207,16 @@ const queryDevice = ref({
   device_name: null,
   bind_config: 0
 })
+let deviceRequestEpoch = 0
 
 // 获取设备列表
 const getDevice = async (groupId: any, name: any) => {
+  const epoch = ++deviceRequestEpoch
   queryDevice.value.group_id = groupId || null
   queryDevice.value.device_name = name || null
-  const res = await deviceListAll(queryDevice.value)
+  const res = await deviceListAll({ ...queryDevice.value })
+  if (epoch !== deviceRequestEpoch || isFlatRequestFailure(res) || !Array.isArray(res.data)) return
+
   deviceOptions.value = res.data
 }
 
@@ -220,16 +226,20 @@ const handleFocus = (ifIndex: any) => {
 }
 
 // 设备配置列表
-const deviceConfigOption = ref([])
+const deviceConfigOption = ref<any[]>([])
 // 设备配置列表查询条件
 const queryDeviceConfig = ref({
   device_config_name: ''
 })
+let deviceConfigRequestEpoch = 0
 // 获取设备配置列表
 const getDeviceConfig = async (name: any) => {
+  const epoch = ++deviceConfigRequestEpoch
   queryDeviceConfig.value.device_config_name = name || ''
-  const res = await deviceConfigAll(queryDeviceConfig.value)
-  deviceConfigOption.value = res.data || []
+  const res = await deviceConfigAll({ ...queryDeviceConfig.value })
+  if (epoch !== deviceConfigRequestEpoch || isFlatRequestFailure(res) || !Array.isArray(res.data)) return
+
+  deviceConfigOption.value = res.data
 }
 
 // 选择动作目标
@@ -246,6 +256,8 @@ const actionTargetChange = (instructItem: any) => {
 // 下拉获取的动作标识符
 const actionParamShow = async (instructItem: any) => {
   if (instructItem.action_target) {
+    const epoch = (actionParamRequestEpoch.get(instructItem) || 0) + 1
+    actionParamRequestEpoch.set(instructItem, epoch)
     let res = null as any
     if (instructItem.action_type === '10') {
       res = await deviceMetricsMenu({ device_id: instructItem.action_target })
@@ -254,7 +266,12 @@ const actionParamShow = async (instructItem: any) => {
         device_config_id: instructItem.action_target
       })
     }
-    if (res.data) {
+    if (
+      actionParamRequestEpoch.get(instructItem) === epoch &&
+      res &&
+      !isFlatRequestFailure(res) &&
+      Array.isArray(res.data)
+    ) {
       res.data.forEach((item: any) => {
         item.value = item.data_source_type
         item.label = `${item.data_source_type}${item.label ? `(${item.label})` : ''}`
@@ -295,6 +312,8 @@ const actionParamShow = async (instructItem: any) => {
     }
   }
 }
+
+const actionParamRequestEpoch = new WeakMap<object, number>()
 
 const applyActionData = (actionData: any) => {
   if (!Array.isArray(actionData)) {
@@ -378,13 +397,23 @@ const queryScene = ref({
   page_size: 10,
   name: ''
 })
+let sceneRequestEpoch = 0
+let loadingSelectRequests = 0
 // 获取场景列表
 const getSceneList = async (name: string) => {
+  const epoch = ++sceneRequestEpoch
   queryScene.value.name = name || ''
+  loadingSelectRequests += 1
   loadingSelect.value = true
-  const res = await sceneGet(queryScene.value)
-  sceneList.value = res.data.list
-  loadingSelect.value = false
+  try {
+    const res = await sceneGet({ ...queryScene.value })
+    if (epoch !== sceneRequestEpoch || isFlatRequestFailure(res) || !res.data) return
+
+    sceneList.value = res.data.list || []
+  } finally {
+    loadingSelectRequests -= 1
+    loadingSelect.value = loadingSelectRequests > 0
+  }
 }
 
 // 告警列表
@@ -395,12 +424,21 @@ const queryAlarm = ref({
   page_size: 10,
   name: ''
 })
+let alarmRequestEpoch = 0
 const getAlarmList = async (name: string) => {
+  const epoch = ++alarmRequestEpoch
   queryAlarm.value.name = name || ''
+  loadingSelectRequests += 1
   loadingSelect.value = true
-  const res = await warningMessageList(queryAlarm.value)
-  loadingSelect.value = false
-  alarmList.value = res.data.list
+  try {
+    const res = await warningMessageList({ ...queryAlarm.value })
+    if (epoch !== alarmRequestEpoch || isFlatRequestFailure(res) || !res.data) return
+
+    alarmList.value = res.data.list || []
+  } finally {
+    loadingSelectRequests -= 1
+    loadingSelect.value = loadingSelectRequests > 0
+  }
 }
 
 // 操作设备类型的数据Item

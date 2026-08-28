@@ -10,6 +10,17 @@
       description="当前页面不会连接 ThingsVis；启用 visualization 或 full Profile 后即可使用。"
     />
   </div>
+  <div
+    v-else-if="frameError"
+    class="thingsvis-frame-container flex-center p-24px"
+    :class="{ 'thingsvis-frame-container--auto-height': autoHeight }"
+  >
+    <NResult status="error" title="ThingsVis 加载失败" :description="frameError">
+      <template #footer>
+        <NButton type="primary" @click="initializeFrameToken">重试</NButton>
+      </template>
+    </NResult>
+  </div>
   <div v-else class="thingsvis-frame-container" :class="{ 'thingsvis-frame-container--auto-height': autoHeight }">
     <iframe
       v-if="url"
@@ -28,7 +39,8 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { clearThingsVisToken, getThingsVisToken } from '@/utils/thingsvis'
+import { isFlatRequestFailure } from '@sa/axios'
+import { getThingsVisToken } from '@/utils/thingsvis'
 import {
   deviceGroupTree,
   deviceList,
@@ -176,6 +188,21 @@ const platformDevicesByGroupCache = new Map<string, PlatformDeviceEntry[]>()
 const platformDevicesByGroupPromise = new Map<string, Promise<PlatformDeviceEntry[]>>()
 const SILENT_REQUEST_CONFIG = { silentError: true } as const
 
+function throwIfFlatRequestFailed(response: unknown) {
+  if (isFlatRequestFailure(response)) throw response
+}
+
+function unwrapSettledFlatRequest(result: PromiseSettledResult<unknown>): any {
+  if (result.status === 'rejected') throw result.reason
+  throwIfFlatRequestFailed(result.value)
+  return result.value
+}
+
+function requestErrorMessage(error: unknown, fallback: string) {
+  if (isFlatRequestFailure(error)) return error.error.message || fallback
+  return error instanceof Error ? error.message : String(error || fallback)
+}
+
 function resolvePlatformBufferSize(dataSources: unknown): number {
   if (!Array.isArray(dataSources)) return 0
   return Math.max(
@@ -273,8 +300,7 @@ function connectDeviceWs(device: { deviceId: string; fields: PlatformDeviceField
     try {
       const wsUrl = `${getWebsocketServerUrl()}/telemetry/datas/current/ws`
       entry.ws = new WebSocket(wsUrl)
-    } catch (err) {
-      console.warn('[AppFrame] WS init failed for device', deviceId, err)
+    } catch {
       entry.reconnectTimer = setTimeout(openWs, WS_RECONNECT_DELAY_MS)
       return
     }
@@ -310,7 +336,6 @@ function connectDeviceWs(device: { deviceId: string; fields: PlatformDeviceField
         clearInterval(entry.pingTimer)
         entry.pingTimer = null
       }
-      console.warn('[AppFrame] WS closed for device', deviceId, '- scheduling reconnect')
       entry.reconnectTimer = setTimeout(openWs, WS_RECONNECT_DELAY_MS)
     }
   }
@@ -353,8 +378,7 @@ function connectDeviceStatusWs(deviceId: string) {
     }
     try {
       entry.ws = new WebSocket(`${getWebsocketServerUrl()}/device/online/status/ws`)
-    } catch (err) {
-      console.warn('[AppFrame] Status WS init failed for device', deviceId, err)
+    } catch {
       entry.reconnectTimer = setTimeout(openWs, WS_RECONNECT_DELAY_MS)
       return
     }
@@ -449,6 +473,7 @@ type PlatformSourceDescriptor = {
 
 const token = ref('')
 const url = ref('')
+const frameError = ref('')
 const iframeRef = ref<HTMLIFrameElement>()
 let reportedIframeHeight = 0
 
@@ -520,15 +545,8 @@ let viewerDashboardConfigCache: Record<string, unknown> | null = null
 let viewerDashboardConfigPromise: Promise<Record<string, unknown> | null> | null = null
 let viewerDashboardConfigCacheId: string | null = null
 
-async function fetchDashboardWithRetry(id: string) {
-  let result = await getThingsVisDashboard(id)
-
-  if (result.error?.status === 401) {
-    clearThingsVisToken()
-    result = await getThingsVisDashboard(id)
-  }
-
-  return result
+async function fetchDashboard(id: string) {
+  return getThingsVisDashboard(id)
 }
 
 function cloneDashboardConfig<T>(config: T): T {
@@ -692,6 +710,19 @@ function postToThingsVis(type: string, payload: Record<string, unknown>) {
   win.postMessage({ type, payload }, getThingsVisTargetOrigin())
 }
 
+function postThingsVisRequestFailure(
+  type: string,
+  payload: Record<string, unknown>,
+  error: unknown,
+  fallback: string
+) {
+  postToThingsVis(type, {
+    ...payload,
+    success: false,
+    error: requestErrorMessage(error, fallback)
+  })
+}
+
 function postPlatformData(fields: Record<string, unknown>, deviceId?: string, dataSourceId?: string) {
   if (Object.keys(fields).length === 0) return
 
@@ -814,8 +845,11 @@ async function loadViewerDashboardConfig(): Promise<Record<string, unknown> | nu
 
   viewerDashboardConfigPromise = (async () => {
     try {
-      const { data, error } = await fetchDashboardWithRetry(props.id)
-      if (error || !data) return null
+      const { data, error } = await fetchDashboard(props.id)
+      if (error || !data) {
+        frameError.value = error?.message || '仪表盘配置加载失败，请重试。'
+        return null
+      }
 
       viewerDashboardConfigCacheId = props.id
       viewerDashboardConfigCache = normalizeDashboardConfig({
@@ -828,7 +862,7 @@ async function loadViewerDashboardConfig(): Promise<Record<string, unknown> | nu
       })
       return viewerDashboardConfigCache
     } catch (error) {
-      console.warn('[AppFrame] Failed to load viewer dashboard config for hydration:', props.id, error)
+      frameError.value = requestErrorMessage(error, '仪表盘配置加载失败，请重试。')
       return null
     } finally {
       viewerDashboardConfigPromise = null
@@ -873,15 +907,23 @@ function parseTemplateChartConfig(rawConfig: unknown): Record<string, unknown> |
     if (!rawConfig.trim()) return null
     try {
       const parsed = JSON.parse(rawConfig)
-      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null
-    } catch (error) {
-      console.warn('[AppFrame] Failed to parse template chart config', error)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>
+      }
+      frameError.value = '物模型图表配置格式无效，请先在物模型编辑页修复后重试。'
+      return null
+    } catch {
+      frameError.value = '物模型图表配置已损坏，请先在物模型编辑页修复后重试。'
       return null
     }
   }
 
   if (rawConfig && typeof rawConfig === 'object' && !Array.isArray(rawConfig)) {
     return rawConfig as Record<string, unknown>
+  }
+
+  if (rawConfig !== null && rawConfig !== undefined && rawConfig !== '') {
+    frameError.value = '物模型图表配置格式无效，请先在物模型编辑页修复后重试。'
   }
 
   return null
@@ -977,6 +1019,7 @@ async function loadTemplatePresets(templateId: string | number): Promise<any[]> 
   const promise = (async () => {
     try {
       const res = await getTemplat(templateId)
+      throwIfFlatRequestFailed(res)
       const template = res?.data || {}
       const { fields } = await loadTemplateEntry(templateId)
       const presets = buildDeviceWidgetPresets(cacheKey, template?.web_chart_config, fields)
@@ -984,9 +1027,10 @@ async function loadTemplatePresets(templateId: string | number): Promise<any[]> 
       templatePresetCache.set(cacheKey, presets)
       return presets
     } catch (error) {
-      console.error('[AppFrame] Failed to load template presets', templateId, error)
-      templatePresetCache.set(cacheKey, [])
-      return []
+      if (!isFlatRequestFailure(error)) {
+        console.error('[AppFrame] Failed to load template presets', templateId, error)
+      }
+      throw error
     } finally {
       templatePresetPromise.delete(cacheKey)
     }
@@ -1012,10 +1056,10 @@ async function loadTemplateEntry(templateId: string | number) {
       eventsApi({ page: 1, page_size: EDITOR_TEMPLATE_FIELD_PAGE_SIZE, device_template_id: templateId })
     ])
 
-    const telemetryRes = telemetryResult.status === 'fulfilled' ? telemetryResult.value : null
-    const attributesRes = attributesResult.status === 'fulfilled' ? attributesResult.value : null
-    const commandsRes = commandsResult.status === 'fulfilled' ? commandsResult.value : null
-    const eventsRes = eventsResult.status === 'fulfilled' ? eventsResult.value : null
+    const telemetryRes = unwrapSettledFlatRequest(telemetryResult)
+    const attributesRes = unwrapSettledFlatRequest(attributesResult)
+    const commandsRes = unwrapSettledFlatRequest(commandsResult)
+    const eventsRes = unwrapSettledFlatRequest(eventsResult)
 
     const entry: TemplateEntry = {
       fields: extractPlatformFields({
@@ -1080,9 +1124,11 @@ async function loadCurrentDeviceFields(deviceId: string): Promise<PlatformField[
       telemetryDataCurrent(deviceId, SILENT_REQUEST_CONFIG),
       getAttributeDataSet({ device_id: deviceId }, SILENT_REQUEST_CONFIG)
     ])
+    const telemetryResponse = unwrapSettledFlatRequest(telemetryResult)
+    const attributeResponse = unwrapSettledFlatRequest(attributeResult)
     const fields = buildCurrentDeviceFields(
-      telemetryResult.status === 'fulfilled' ? unwrapList(telemetryResult.value?.data) : [],
-      attributeResult.status === 'fulfilled' ? unwrapList(attributeResult.value?.data) : []
+      unwrapList(telemetryResponse?.data),
+      unwrapList(attributeResponse?.data)
     )
     currentDeviceFieldsCache.set(deviceId, fields)
     return fields
@@ -1138,8 +1184,8 @@ async function buildRequestedFieldDataUncached(
     getAttributeDataSet({ device_id: deviceId }, SILENT_REQUEST_CONFIG)
   ])
 
-  const telemetryRes = telemetryResult.status === 'fulfilled' ? telemetryResult.value : null
-  const attributeRes = attributeResult.status === 'fulfilled' ? attributeResult.value : null
+  const telemetryRes = unwrapSettledFlatRequest(telemetryResult)
+  const attributeRes = unwrapSettledFlatRequest(attributeResult)
 
   const kvMap: Record<string, unknown> = {}
   const collect = (item: any) => {
@@ -1178,36 +1224,32 @@ function isActiveAlarm(row: any) {
 async function buildRequestedAlarmStatusData(fieldIds: string[], deviceId?: string): Promise<Record<string, unknown>> {
   if (!deviceId || fieldIds.length === 0) return {}
 
-  try {
-    const response = await deviceAlarmStatus({ device_id: deviceId, page: 1, page_size: 20 })
-    const payload = response?.data ?? response
-    const rows = Array.isArray(payload?.list)
-      ? payload.list
-      : Array.isArray(payload?.data)
-        ? payload.data
-        : Array.isArray(payload)
-          ? payload
-          : []
-    const activeRows = rows.filter(isActiveAlarm)
-    const latest = rows[0] ?? null
-    const highest = activeRows[0] ?? latest
-    const allFields: Record<string, unknown> = {
-      device_alarm_active: activeRows.length > 0 ? 1 : 0,
-      device_alarm_count: Number(payload?.total ?? activeRows.length ?? 0),
-      device_alarm_highest_level: normalizeAlarmLevel(highest?.alarm_level ?? highest?.level),
-      latest_device_alarm_title: String(latest?.alarm_name ?? latest?.name ?? latest?.title ?? ''),
-      latest_device_alarm_level: normalizeAlarmLevel(latest?.alarm_level ?? latest?.level),
-      latest_device_alarm_time: latest ? normalizeAlarmTime(latest) : ''
-    }
-
-    return fieldIds.reduce<Record<string, unknown>>((acc, fieldId) => {
-      acc[fieldId] = allFields[fieldId]
-      return acc
-    }, {})
-  } catch (error) {
-    console.warn('[AppFrame] Failed to load requested device alarm status:', deviceId, error)
-    return {}
+  const response = await deviceAlarmStatus({ device_id: deviceId, page: 1, page_size: 20 })
+  throwIfFlatRequestFailed(response)
+  const payload = response?.data ?? response
+  const rows = Array.isArray(payload?.list)
+    ? payload.list
+    : Array.isArray(payload?.data)
+      ? payload.data
+      : Array.isArray(payload)
+        ? payload
+        : []
+  const activeRows = rows.filter(isActiveAlarm)
+  const latest = rows[0] ?? null
+  const highest = activeRows[0] ?? latest
+  const allFields: Record<string, unknown> = {
+    device_alarm_active: activeRows.length > 0 ? 1 : 0,
+    device_alarm_count: Number(payload?.total ?? activeRows.length ?? 0),
+    device_alarm_highest_level: normalizeAlarmLevel(highest?.alarm_level ?? highest?.level),
+    latest_device_alarm_title: String(latest?.alarm_name ?? latest?.name ?? latest?.title ?? ''),
+    latest_device_alarm_level: normalizeAlarmLevel(latest?.alarm_level ?? latest?.level),
+    latest_device_alarm_time: latest ? normalizeAlarmTime(latest) : ''
   }
+
+  return fieldIds.reduce<Record<string, unknown>>((acc, fieldId) => {
+    acc[fieldId] = allFields[fieldId]
+    return acc
+  }, {})
 }
 
 async function hydrateConfiguredPlatformSources(): Promise<boolean> {
@@ -1218,6 +1260,7 @@ async function hydrateConfiguredPlatformSources(): Promise<boolean> {
   if (descriptors.length === 0) return true
 
   const handledDeviceIds = new Set<string>()
+  let requestFailed = false
 
   for (const descriptor of descriptors) {
     const requestedFields = descriptor.requestedFields
@@ -1231,11 +1274,21 @@ async function hydrateConfiguredPlatformSources(): Promise<boolean> {
     ensureDeviceWs(descriptor.deviceId)
     ensureDeviceStatusWs(descriptor.deviceId)
 
-    const fields = await buildRequestedFieldData(requestedFields, descriptor.deviceId)
-    postPlatformData(fields, descriptor.deviceId, descriptor.id)
+    try {
+      const fields = await buildRequestedFieldData(requestedFields, descriptor.deviceId)
+      postPlatformData(fields, descriptor.deviceId, descriptor.id)
+    } catch (error) {
+      requestFailed = true
+      postThingsVisRequestFailure(
+        'tv:platform-data',
+        { dataSourceId: descriptor.id, deviceId: descriptor.deviceId },
+        error,
+        'Platform data request failed'
+      )
+    }
   }
 
-  return true
+  return !requestFailed
 }
 
 function scheduleViewerHydration() {
@@ -1395,13 +1448,17 @@ async function handlePlatformWrite(payload: Record<string, unknown>, requestId?:
       return
     }
 
+    throwIfFlatRequestFailed(result)
+
     postPlatformWriteResult(requestId, {
       success: true,
       echo: result?.data ?? data
     })
   } catch (error) {
-    console.error('[AppFrame] Failed to publish platform write:', error)
-    const message = error instanceof Error ? error.message : String(error || 'Platform write failed')
+    if (!isFlatRequestFailure(error)) {
+      console.error('[AppFrame] Failed to publish platform write:', error)
+    }
+    const message = requestErrorMessage(error, 'Platform write failed')
     postPlatformWriteResult(requestId, {
       success: false,
       error: message
@@ -1454,33 +1511,24 @@ async function handleHostSave(payload: Record<string, unknown>) {
 
   pendingHostSaveSignature = saveSignature
   pendingHostSavePromise = (async () => {
-    let result = await updateThingsVisDashboard(props.id, updatePayload)
+    try {
+      const result = await updateThingsVisDashboard(props.id, updatePayload)
 
-    if (result.error?.status === 401) {
-      clearThingsVisToken()
-      result = await updateThingsVisDashboard(props.id, updatePayload)
-    }
+      if (result.error) {
+        ;(window as any).$message?.error(`保存失败: ${result.error.message || '未知错误'}`)
+        return
+      }
 
-    if (!result.error) {
       lastHostSaveSignature = saveSignature
+
+      emit('hostSaveSuccess', {
+        id: props.id,
+        name: typeof updatePayload.name === 'string' ? updatePayload.name : undefined
+      })
+    } catch (error) {
+      console.error('[AppFrame] Failed to save dashboard via host bridge:', error)
+      ;(window as any).$message?.error(`保存失败: ${requestErrorMessage(error, '未知错误')}`)
     }
-
-  // if (result.error) {
-  //   console.error('[AppFrame] Failed to save dashboard via host bridge:', result.error)
-  //   if ((window as any).$message) {
-  //     ;(window as any).$message.error(`保存失败: ${result.error.status} ${result.error.message || '未知错误'}`)
-  //   }
-  //   return
-  // }
-
-  // if ((window as any).$message) {
-  //   ;(window as any).$message.success('保存成功')
-  // }
-
-    emit('hostSaveSuccess', {
-      id: props.id,
-      name: typeof updatePayload.name === 'string' ? updatePayload.name : undefined
-    })
   })().finally(() => {
     if (pendingHostSaveSignature === saveSignature) {
       pendingHostSaveSignature = ''
@@ -1503,6 +1551,7 @@ async function loadDeviceConfigTemplateMap(): Promise<Map<string, string>> {
   deviceConfigTemplateMapPromise = (async () => {
     try {
       const confRes = await getDeviceConfigList({ page: 1, page_size: EDITOR_DEVICE_CONFIG_PAGE_SIZE })
+      throwIfFlatRequestFailed(confRes)
       const configs = unwrapList(confRes?.data)
       const configTemplateMap = new Map<string, string>()
 
@@ -1526,9 +1575,10 @@ async function loadDeviceConfigTemplateMap(): Promise<Map<string, string>> {
       deviceConfigTemplateMapCache = configTemplateMap
       return configTemplateMap
     } catch (err) {
-      console.error('[AppFrame] Failed to load device config template map', err)
-      deviceConfigTemplateMapCache = new Map()
-      return deviceConfigTemplateMapCache
+      if (!isFlatRequestFailure(err)) {
+        console.error('[AppFrame] Failed to load device config template map', err)
+      }
+      throw err
     } finally {
       deviceConfigTemplateMapPromise = null
     }
@@ -1559,21 +1609,21 @@ async function buildDeviceFilterOptions(): Promise<{
     deviceDictProtocolServiceFirstLevel({ language_code: localStg.get('lang') })
   ])
 
-  const deviceConfigs =
-    configRes.status === 'fulfilled'
-      ? unwrapList(configRes.value?.data)
-          .map((config: any): DeviceFilterOption | null => {
-            const configId = firstString(config?.id, config?.device_config_id, config?.deviceConfigId)
-            if (!configId) return null
-            return {
-              value: configId,
-              label: resolveDeviceConfigName(config, configId)
-            }
-          })
-          .filter((item): item is DeviceFilterOption => Boolean(item))
-      : []
+  const configResponse = unwrapSettledFlatRequest(configRes)
+  const serviceResponse = unwrapSettledFlatRequest(serviceRes)
 
-  const serviceData = serviceRes.status === 'fulfilled' ? asRecord(serviceRes.value?.data) : {}
+  const deviceConfigs = unwrapList(configResponse?.data)
+    .map((config: any): DeviceFilterOption | null => {
+      const configId = firstString(config?.id, config?.device_config_id, config?.deviceConfigId)
+      if (!configId) return null
+      return {
+        value: configId,
+        label: resolveDeviceConfigName(config, configId)
+      }
+    })
+    .filter((item): item is DeviceFilterOption => Boolean(item))
+
+  const serviceData = asRecord(serviceResponse?.data)
   const protocolOptions = Array.isArray(serviceData.protocol)
     ? serviceData.protocol.map((item: any): DeviceFilterOption | null => {
         const value = firstString(item?.service_identifier, item?.serviceIdentifier, item?.id)
@@ -1607,6 +1657,7 @@ async function buildPlatformDeviceGroups(): Promise<PlatformDeviceGroupEntry[]> 
   platformDeviceGroupsCachePromise = (async () => {
     try {
       const res = await deviceGroupTree({})
+      throwIfFlatRequestFailed(res)
       const groups = flattenDeviceGroupTree(Array.isArray(res?.data) ? res.data : [])
       groups.unshift({
         groupId: '__all__',
@@ -1616,9 +1667,10 @@ async function buildPlatformDeviceGroups(): Promise<PlatformDeviceGroupEntry[]> 
       platformDeviceGroupsCache = groups
       return groups
     } catch (err) {
-      console.error('[AppFrame] Failed to load platform device groups', err)
-      platformDeviceGroupsCache = []
-      return []
+      if (!isFlatRequestFailure(err)) {
+        console.error('[AppFrame] Failed to load platform device groups', err)
+      }
+      throw err
     } finally {
       platformDeviceGroupsCachePromise = null
     }
@@ -1847,6 +1899,7 @@ async function buildFallbackPlatformDevicesForDefaultGroup(
   }
 
   const deviceRes = await deviceList({ page: 1, page_size: EDITOR_GROUP_DEVICE_PAGE_SIZE })
+  throwIfFlatRequestFailed(deviceRes)
   const rawDevices = unwrapList(deviceRes?.data)
 
   return mapPlatformDevicesForGroup(rawDevices, normalizedGroupId, groupName, groups)
@@ -1872,10 +1925,12 @@ async function buildPlatformDeviceById(deviceId: string): Promise<PlatformDevice
   }
 
     const searchRes = await deviceList({ page: 1, page_size: 20, search: normalizedDeviceId })
+    throwIfFlatRequestFailed(searchRes)
     const searched = await findDevice(unwrapList(searchRes?.data))
     if (searched) return searched
 
     const listRes = await deviceList({ page: 1, page_size: EDITOR_GROUP_DEVICE_PAGE_SIZE })
+    throwIfFlatRequestFailed(listRes)
     const listed = await findDevice(unwrapList(listRes?.data))
     if (listed) return listed
 
@@ -1888,9 +1943,11 @@ async function buildPlatformDeviceById(deviceId: string): Promise<PlatformDevice
     return null
   })()
   platformDeviceByIdPromise.set(normalizedDeviceId, promise)
-  promise.then((device) => platformDeviceByIdCache.set(normalizedDeviceId, device))
   promise.then(
-    () => platformDeviceByIdPromise.delete(normalizedDeviceId),
+    (device) => {
+      platformDeviceByIdCache.set(normalizedDeviceId, device)
+      platformDeviceByIdPromise.delete(normalizedDeviceId)
+    },
     () => platformDeviceByIdPromise.delete(normalizedDeviceId)
   )
   return promise
@@ -1915,6 +1972,7 @@ async function buildPlatformDevicesByGroup(groupId: string): Promise<PlatformDev
         deviceListByGroup({ group_id: normalizedGroupId, page: 1, page_size: EDITOR_GROUP_DEVICE_PAGE_SIZE }),
         buildPlatformDeviceGroups()
       ])
+      throwIfFlatRequestFailed(deviceRes)
 
       const groupName =
         groups.find((group) => group.groupId === normalizedGroupId)?.groupName ||
@@ -1929,9 +1987,10 @@ async function buildPlatformDevicesByGroup(groupId: string): Promise<PlatformDev
       platformDevicesByGroupCache.set(normalizedGroupId, devices)
       return devices
     } catch (err) {
-      console.error('[AppFrame] Failed to assemble platformDevices for group', normalizedGroupId, err)
-      platformDevicesByGroupCache.set(normalizedGroupId, [])
-      return []
+      if (!isFlatRequestFailure(err)) {
+        console.error('[AppFrame] Failed to assemble platformDevices for group', normalizedGroupId, err)
+      }
+      throw err
     } finally {
       platformDevicesByGroupPromise.delete(normalizedGroupId)
     }
@@ -1970,7 +2029,7 @@ async function doInit(): Promise<boolean> {
           variables: props.schema.variables
         }
       : null
-    const fetched = dashboardData ? { data: dashboardData, error: null } : await fetchDashboardWithRetry(props.id)
+    const fetched = dashboardData ? { data: dashboardData, error: null } : await fetchDashboard(props.id)
     const { data, error } = fetched
     if (!error && data) {
       const nodes = Array.isArray(data.nodes) ? data.nodes : []
@@ -1986,11 +2045,11 @@ async function doInit(): Promise<boolean> {
         variables: Array.isArray(data.variables) ? data.variables : []
       })
     } else if (!dashboardData) {
-      console.warn('[AppFrame] Dashboard preload unavailable, deferring init:', props.id, error)
+      frameError.value = error?.message || '仪表盘加载失败，请重试'
       return false
     }
-  } catch (error) {
-    console.warn('[AppFrame] Failed to preload dashboard schema for embed init:', props.id, error)
+  } catch {
+    frameError.value = '仪表盘加载失败，请重试'
     return false
   }
 
@@ -2108,13 +2167,11 @@ const handleMessage = async (event: MessageEvent) => {
 
   if (type === 'thingsvis:requestFieldData') {
     if (!iframeRef.value?.contentWindow) return
+    const fieldIds = Array.isArray((payload as any).fieldIds) ? (payload as any).fieldIds : []
+    const deviceId = typeof (payload as any).deviceId === 'string' ? (payload as any).deviceId : undefined
+    const dataSourceId = typeof (payload as any).dataSourceId === 'string' ? (payload as any).dataSourceId : undefined
 
     try {
-      const fieldIds = Array.isArray((payload as any).fieldIds) ? (payload as any).fieldIds : []
-      const requestedDeviceId = typeof (payload as any).deviceId === 'string' ? (payload as any).deviceId : undefined
-      const dataSourceId = typeof (payload as any).dataSourceId === 'string' ? (payload as any).dataSourceId : undefined
-      const deviceId = requestedDeviceId
-
       if (deviceId && !activePlatformDevices.has(deviceId)) {
         activePlatformDevices.set(deviceId, { deviceId, fields: [] })
       }
@@ -2122,8 +2179,13 @@ const handleMessage = async (event: MessageEvent) => {
       ensureDeviceStatusWs(deviceId)
       const fields = await buildRequestedFieldData(fieldIds, deviceId)
       postPlatformData(fields, deviceId, dataSourceId)
-    } catch {
-      // Best effort only: ignore transient field-request failures to avoid console noise.
+    } catch (error) {
+      postThingsVisRequestFailure(
+        'tv:platform-data',
+        { requestId, dataSourceId, deviceId },
+        error,
+        'Platform data request failed'
+      )
     }
     return
   }
@@ -2133,8 +2195,7 @@ const handleMessage = async (event: MessageEvent) => {
       const groups = await buildPlatformDeviceGroups()
       postToThingsVis('tv:device-groups', { groups })
     } catch (error) {
-      console.warn('[AppFrame] Failed to load requested device groups:', error)
-      postToThingsVis('tv:device-groups', { groups: [] })
+      postThingsVisRequestFailure('tv:device-groups', {}, error, 'Device group request failed')
     }
     return
   }
@@ -2149,12 +2210,7 @@ const handleMessage = async (event: MessageEvent) => {
         ...options
       })
     } catch (error) {
-      console.warn('[AppFrame] Failed to load requested device filter options:', error)
-      postToThingsVis('tv:device-filter-options', {
-        reqId,
-        deviceConfigs: [],
-        serviceOptions: []
-      })
+      postThingsVisRequestFailure('tv:device-filter-options', { reqId }, error, 'Device filter request failed')
     }
     return
   }
@@ -2173,12 +2229,7 @@ const handleMessage = async (event: MessageEvent) => {
         device
       })
     } catch (error) {
-      console.warn('[AppFrame] Failed to load requested device by id:', deviceId, error)
-      postToThingsVis('tv:device-by-id', {
-        reqId,
-        deviceId,
-        device: null
-      })
+      postThingsVisRequestFailure('tv:device-by-id', { reqId, deviceId }, error, 'Device request failed')
     }
     return
   }
@@ -2192,8 +2243,7 @@ const handleMessage = async (event: MessageEvent) => {
       registerActivePlatformDevices(devices)
       postToThingsVis('tv:devices-by-group', { groupId, devices })
     } catch (error) {
-      console.warn('[AppFrame] Failed to load requested device group:', groupId, error)
-      postToThingsVis('tv:devices-by-group', { groupId, devices: [] })
+      postThingsVisRequestFailure('tv:devices-by-group', { groupId }, error, 'Device group request failed')
     }
     return
   }
@@ -2229,6 +2279,7 @@ const handleMessage = async (event: MessageEvent) => {
 
     try {
       const res = await deviceList(searchParams)
+      throwIfFlatRequestFailed(res)
       const groups = await buildPlatformDeviceGroups()
       const fallbackGroupName =
         groupId && groupId !== '__all__'
@@ -2249,14 +2300,12 @@ const handleMessage = async (event: MessageEvent) => {
         pageSize
       })
     } catch (error) {
-      console.warn('[AppFrame] Failed to search devices:', error)
-      postToThingsVis('tv:search-devices-paged-result', {
-        reqId,
-        devices: [],
-        total: 0,
-        page,
-        pageSize
-      })
+      postThingsVisRequestFailure(
+        'tv:search-devices-paged-result',
+        { reqId, page, pageSize },
+        error,
+        'Device search failed'
+      )
     }
     return
   }
@@ -2317,7 +2366,12 @@ const handleMessage = async (event: MessageEvent) => {
         fields: Array.isArray(entry.fields) ? entry.fields : []
       })
     } catch (error) {
-      console.warn('[AppFrame] Failed to load requested device fields:', deviceId, templateId, error)
+      postThingsVisRequestFailure(
+        'tv:device-fields',
+        { deviceId, templateId: templateId || '' },
+        error,
+        'Device field request failed'
+      )
     }
     return
   }
@@ -2348,32 +2402,35 @@ const handleMessage = async (event: MessageEvent) => {
           alert('发布成功')
         }
       } else {
-        console.error('[AppFrame] Publish failed:', res.error)
         if ((window as any).$message) {
           ;(window as any).$message.error(`发布失败: ${res.error?.message || '未知错误'}`)
         }
       }
-    } catch (e) {
-      console.error('[AppFrame] Publish exception:', e)
+    } catch {
+      ;(window as any).$message?.error('发布失败，请重试')
     }
   }
 }
 
-onMounted(async () => {
-  if (!thingsVisEnabled) return
-  window.addEventListener('message', handleMessage)
-
+async function initializeFrameToken() {
+  frameError.value = ''
   try {
     const tokenStr = await getThingsVisToken()
     if (tokenStr) {
       token.value = tokenStr
       url.value = buildThingsVisFrameUrl(tokenStr)
     } else {
-      console.warn('[AppFrame] Token acquisition returned null')
+      frameError.value = '无法获取可视化服务凭据，请重试'
     }
-  } catch (error) {
-    console.error('[AppFrame] Failed to acquire ThingsVis token:', error)
+  } catch {
+    frameError.value = '无法获取可视化服务凭据，请重试'
   }
+}
+
+onMounted(() => {
+  if (!thingsVisEnabled) return
+  window.addEventListener('message', handleMessage)
+  void initializeFrameToken()
 })
 
 watch(

@@ -206,12 +206,6 @@ export interface MarketBundleDetail {
 
 // ========== Helpers ==========
 
-const NOT_IMPLEMENTED: MarketApiError = {
-  code: 'NOT_IMPLEMENTED',
-  message: '该接口尚未接通后端，请等待后续版本',
-  httpStatus: 501
-}
-
 function generateIdempotencyKey(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
 }
@@ -264,35 +258,14 @@ async function marketApiCall<T>(
   }
 }
 
-/**
- * Normalize the catalog response during the API contract transition.
- *
- * The shared request client already unwraps the outer `{ code, data }` envelope.
- * Newer ThingsPanel backends return `{ list, total }`, while older deployments
- * and direct Horizon proxies can still return the list array itself.
- */
 export function normalizeMarketBundleList(payload: unknown): MarketBundleListResult {
-  if (Array.isArray(payload)) {
-    return {
-      list: payload as MarketBundleListItem[],
-      total: payload.length
-    }
-  }
-
   if (payload && typeof payload === 'object') {
     const result = payload as Record<string, unknown>
 
-    if (Array.isArray(result.list)) {
+    if (Array.isArray(result.list) && typeof result.total === 'number') {
       return {
         list: result.list as MarketBundleListItem[],
-        total: typeof result.total === 'number' ? result.total : result.list.length
-      }
-    }
-
-    if (Array.isArray(result.data)) {
-      return {
-        list: result.data as MarketBundleListItem[],
-        total: typeof result.total === 'number' ? result.total : result.data.length
+        total: result.total
       }
     }
   }
@@ -398,19 +371,6 @@ export async function createPublishDraft(params: PublishDraftRequest): Promise<{
   }
 }
 
-/** @deprecated 后端无 confirm-publish 路由，发布已在 publish-draft 一步完成 */
-export async function confirmPublish(_params: {
-  draftId: string
-  idempotentKey?: string
-}): Promise<{ data: PublishedBundle | null; error: MarketApiError | null }> {
-  return { data: null, error: NOT_IMPLEMENTED }
-}
-
-/** @deprecated 后端无 cancel-draft 路由 */
-export async function cancelDraft(_draftId: string): Promise<{ data: null; error: MarketApiError | null }> {
-  return { data: null, error: NOT_IMPLEMENTED }
-}
-
 export async function getBundleVersions(
   bundleKey: string,
   params?: { page?: number; pageSize?: number }
@@ -439,14 +399,6 @@ export async function installBundle(
       overwritePolicy: params.overwritePolicy
     })
   )
-}
-
-/** @deprecated 后端无 HEAD 版本检查路由 */
-export async function checkBundleVersionExists(
-  _bundleKey: string,
-  _version: string
-): Promise<{ exists: boolean; status?: string }> {
-  return { exists: false, status: 'not_implemented' }
 }
 
 /**

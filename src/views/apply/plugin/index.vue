@@ -1,14 +1,16 @@
 <script setup lang="tsx">
 import { onBeforeUnmount, ref, watch } from 'vue'
-import { NButton, NPopconfirm, NSpace, NTag } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
+import { NButton, NPopconfirm, NSpace, NTag, type MessageReactive } from 'naive-ui'
 import { delRegisterService, getServices } from '@/service/api/plugin'
 import { $t } from '@/locales'
-import { componentLogger } from '@/utils/logger'
 import serviceConfigModal from './components/serviceConfigModal.vue'
 import serviceModal from './components/serviceModal.vue'
 const serviceModalRef = ref<any>(null)
 const serviceConfigModalRef = ref<any>(null)
 let listRequestId = 0
+let isActive = true
+let listErrorMessage: MessageReactive | null = null
 
 const pageData = ref<any>({
   loading: false,
@@ -49,6 +51,8 @@ const queryInfo = ref<any>({
 })
 
 async function getList() {
+  if (!isActive) return
+
   const requestId = ++listRequestId
   const params = {
     page: queryInfo.value.page,
@@ -58,32 +62,42 @@ async function getList() {
   pageData.value.loading = true
 
   try {
-    const { data }: { data: any } = await getServices(params)
-    if (requestId !== listRequestId) return
+    const response = await getServices(params)
+    if (!isActive || requestId !== listRequestId) return
 
+    if (isFlatRequestFailure(response)) {
+      if (response.error.status === 401) return
+
+      listErrorMessage?.destroy()
+      listErrorMessage = window.$message?.error(response.error.message || $t('common.operationFailed')) || null
+      return
+    }
+
+    const { data } = response
     pageData.value.tableData = Array.isArray(data?.list) ? data.list : []
     queryInfo.value.itemCount = Number(data?.total || 0)
-  } catch (error: any) {
-    if (requestId !== listRequestId) return
+  } catch {
+    if (!isActive || requestId !== listRequestId) return
 
-    componentLogger.error('Failed to load plugin services', error)
-    window.$message?.destroyAll()
-    window.$message?.error(error?.response?.data?.message || error?.message || $t('common.operationFailed'))
+    listErrorMessage?.destroy()
+    listErrorMessage = window.$message?.error($t('common.operationFailed')) || null
   } finally {
-    if (requestId === listRequestId) {
+    if (isActive && requestId === listRequestId) {
       pageData.value.loading = false
     }
   }
 }
 
-const edit: (row: any) => void = row => {
+const edit: (row: any) => void = (row) => {
   serviceModalRef.value.openModal(row)
 }
-const del: (row: any) => void = async row => {
-  await delRegisterService(row)
+const del: (row: any) => void = async (row) => {
+  const result = await delRegisterService(row)
+  if (!isActive || isFlatRequestFailure(result)) return
+
   await getList()
 }
-const config: (row: any) => void = row => {
+const config: (row: any) => void = (row) => {
   serviceConfigModalRef.value.openModal(row)
 }
 const columns: any = ref([
@@ -97,7 +111,7 @@ const columns: any = ref([
     key: 'service_type',
     minWidth: '140px',
     align: 'center',
-    render: row => {
+    render: (row) => {
       if (row.service_type) {
         return <span>{row.service_type === 1 ? $t('card.accessProtocol') : $t('card.accessService')}</span>
       }
@@ -117,7 +131,7 @@ const columns: any = ref([
     key: 'service_heartbeat',
     minWidth: '140px',
     align: 'center',
-    render: row => {
+    render: (row) => {
       if (row.service_heartbeat) {
         return (
           <NTag type={row.service_heartbeat === 1 ? 'success' : 'error'}>
@@ -133,7 +147,7 @@ const columns: any = ref([
     title: () => $t('common.actions'),
     align: 'left',
     minWidth: '220px',
-    render: row => {
+    render: (row) => {
       return (
         <NSpace justify={'start'}>
           {
@@ -179,7 +193,10 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  isActive = false
   listRequestId += 1
+  listErrorMessage?.destroy()
+  listErrorMessage = null
 })
 
 void getList()

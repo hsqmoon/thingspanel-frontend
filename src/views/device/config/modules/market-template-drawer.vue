@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { isFlatRequestFailure } from '@sa/axios'
 import { NDrawer, NDrawerContent, NButton, NDescriptions, NDescriptionsItem, NTag, NSpace, NSpin } from 'naive-ui'
 import { $t } from '@/locales'
 import { getMarketTemplateDetail } from '@/service/api/market'
@@ -14,42 +15,31 @@ const emit = defineEmits(['update:visible', 'install'])
 
 const loading = ref(false)
 const detail = ref<any>(null)
+let detailRequestId = 0
 
 watch(
-  () => props.templateId,
-  async id => {
-    if (!id || !props.visible) return
+  [() => props.visible, () => props.templateId],
+  async ([visible, id]) => {
+    if (!visible || !id) {
+      detailRequestId += 1
+      detail.value = null
+      loading.value = false
+      return
+    }
+
+    const requestId = ++detailRequestId
+    detail.value = null
     loading.value = true
     try {
       const res: any = await getMarketTemplateDetail(id)
-      if (!res.error) {
-        detail.value = res.data
-      }
-    } catch (e) {
-      console.error(e)
+      if (requestId !== detailRequestId || isFlatRequestFailure(res)) return
+
+      detail.value = res.data
     } finally {
-      loading.value = false
+      if (requestId === detailRequestId) loading.value = false
     }
   },
   { immediate: true }
-)
-
-watch(
-  () => props.visible,
-  v => {
-    if (v && props.templateId) {
-      // Re-fetch on open
-      loading.value = true
-      getMarketTemplateDetail(props.templateId)
-        .then((res: any) => {
-          if (!res.error) detail.value = res.data
-        })
-        .catch(console.error)
-        .finally(() => {
-          loading.value = false
-        })
-    }
-  }
 )
 
 const handleClose = () => {

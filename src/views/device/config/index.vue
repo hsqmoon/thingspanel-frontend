@@ -3,6 +3,7 @@ import { onMounted, ref, computed, h, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { NButton, NInput, NIcon, NPagination, NDataTable, NTag, NSpace, NEmpty, NTooltip } from 'naive-ui'
 import { IosSearch } from '@vicons/ionicons4'
+import { isFlatRequestFailure } from '@sa/axios'
 import { deviceConfig } from '@/service/api/device'
 import { useRouterPush } from '@/hooks/common/router'
 import { $t } from '@/locales'
@@ -35,18 +36,21 @@ const queryData = ref({
 const deviceConfigList = ref([] as any[])
 const dataTotal = ref(0)
 const loading = ref(false)
+let listRequestId = 0
+let activationCount = 0
 
 // 获取数据
 const getData = async () => {
+  const requestId = ++listRequestId
   loading.value = true
   try {
     const res = await deviceConfig(queryData.value)
-    if (!res.error) {
-      deviceConfigList.value = res.data.list
-      dataTotal.value = res.data.total
-    }
+    if (requestId !== listRequestId || isFlatRequestFailure(res)) return
+
+    deviceConfigList.value = Array.isArray(res.data?.list) ? res.data.list : []
+    dataTotal.value = Number(res.data?.total || 0)
   } finally {
-    loading.value = false
+    if (requestId === listRequestId) loading.value = false
   }
 }
 
@@ -211,12 +215,13 @@ const handleRefresh = () => {
 
 // 组件挂载时获取数据
 onMounted(() => {
-  getData()
+  void getData()
 })
 
 // 打开时自动刷新页面
 onActivated(() => {
-  getData()
+  if (activationCount > 0) void getData()
+  activationCount += 1
 })
 import { CreateOutline, CloudUploadOutline, ListOutline, GridOutline as CardIcon } from '@vicons/ionicons5'
 import SvgIcon from '@/components/custom/svg-icon.vue'
@@ -360,7 +365,6 @@ const availableViews = [
                     <SvgIcon v-else local-icon="default-config" class="config-image" />
                   </div>
                 </template>
-
               </ItemCard>
             </n-gi>
           </n-grid>

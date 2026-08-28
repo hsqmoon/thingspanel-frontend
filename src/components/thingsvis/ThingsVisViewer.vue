@@ -7,6 +7,7 @@
 
 import { ref, onMounted, onBeforeUnmount, watch, computed } from 'vue'
 import { NSpin } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 import { getThingsVisToken } from '@/utils/thingsvis'
 import { getPlatformApiBase, getThingsVisApiBase } from '@/utils/thingsvis/constants'
 import { telemetryDataCurrent, getAttributeDataSet } from '@/service/api/device'
@@ -52,6 +53,14 @@ type PlatformSourceDescriptor = {
   id: string
   deviceId?: string
   requestedFields: string[]
+}
+
+function unwrapSettledFlatRequest(result: PromiseSettledResult<unknown>): any {
+  if (result.status === 'rejected') throw result.reason
+  if (isFlatRequestFailure(result.value)) {
+    throw result.value
+  }
+  return result.value
 }
 
 /** 缁勪欢 timeRangePreset 鈫?API time_range + aggregate_window 鏄犲皠 */
@@ -123,8 +132,7 @@ function connectDeviceWs(deviceId: string) {
 
     try {
       entry.ws = new WebSocket(`${getWebsocketServerUrl()}/telemetry/datas/current/ws`)
-    } catch (err) {
-      console.warn('[ThingsVisViewer] WS init failed for device', deviceId, err)
+    } catch {
       entry.reconnectTimer = setTimeout(openWs, WS_RECONNECT_DELAY_MS)
       return
     }
@@ -196,8 +204,7 @@ function connectDeviceStatusWs(deviceId: string) {
 
     try {
       entry.ws = new WebSocket(`${getWebsocketServerUrl()}/device/online/status/ws`)
-    } catch (err) {
-      console.warn('[ThingsVisViewer] Status WS init failed for device', deviceId, err)
+    } catch {
       entry.reconnectTimer = setTimeout(openWs, WS_RECONNECT_DELAY_MS)
       return
     }
@@ -352,8 +359,8 @@ async function fetchAllCurrentFieldsForDevice(deviceId: string): Promise<Record<
     getAttributeDataSet({ device_id: deviceId })
   ])
 
-  const telemetryRes = telemetryResult.status === 'fulfilled' ? telemetryResult.value : null
-  const attributeRes = attributeResult.status === 'fulfilled' ? attributeResult.value : null
+  const telemetryRes = unwrapSettledFlatRequest(telemetryResult)
+  const attributeRes = unwrapSettledFlatRequest(attributeResult)
 
   const kvMap: Record<string, unknown> = {}
   const collect = (item: any) => {
@@ -386,13 +393,17 @@ async function hydrateConfiguredPlatformSources() {
     ensureDeviceWs(descriptor.deviceId)
     ensureDeviceStatusWs(descriptor.deviceId)
 
-    const fields =
-      requestedFields.length > 0
-        ? await buildRequestedFieldData(requestedFields, descriptor.deviceId)
-        : await fetchAllCurrentFieldsForDevice(descriptor.deviceId)
-    if (Object.keys(fields).length === 0) continue
+    try {
+      const fields =
+        requestedFields.length > 0
+          ? await buildRequestedFieldData(requestedFields, descriptor.deviceId)
+          : await fetchAllCurrentFieldsForDevice(descriptor.deviceId)
+      if (Object.keys(fields).length === 0) continue
 
-    win.postMessage({ type: 'tv:platform-data', payload: { deviceId: descriptor.deviceId, fields } }, '*')
+      win.postMessage({ type: 'tv:platform-data', payload: { deviceId: descriptor.deviceId, fields } }, '*')
+    } catch (requestError) {
+      postPlatformDataFailure(descriptor.deviceId, descriptor.id, requestError)
+    }
   }
 }
 
@@ -411,8 +422,8 @@ async function buildRequestedFieldData(fieldIds: unknown[], deviceId?: string): 
     getAttributeDataSet({ device_id: deviceId })
   ])
 
-  const telemetryRes = telemetryResult.status === 'fulfilled' ? telemetryResult.value : null
-  const attributeRes = attributeResult.status === 'fulfilled' ? attributeResult.value : null
+  const telemetryRes = unwrapSettledFlatRequest(telemetryResult)
+  const attributeRes = unwrapSettledFlatRequest(attributeResult)
 
   const kvMap: Record<string, unknown> = {}
   const collect = (item: any) => {
@@ -428,6 +439,37 @@ async function buildRequestedFieldData(fieldIds: unknown[], deviceId?: string): 
     if (kvMap[fieldId] !== undefined) result[fieldId] = kvMap[fieldId]
   })
   return result
+}
+
+function postPlatformDataFailure(
+  deviceId: string | undefined,
+  dataSourceId: string | undefined,
+  requestError: unknown,
+  requestId?: string
+) {
+  const win = iframeRef.value?.contentWindow
+  if (!win) return
+  if (!isFlatRequestFailure(requestError)) {
+    console.error('[ThingsVisViewer] Platform data request failed:', requestError)
+  }
+  const message = isFlatRequestFailure(requestError)
+    ? requestError.error.message
+    : requestError instanceof Error
+      ? requestError.message
+      : String(requestError || 'Platform data request failed')
+  win.postMessage(
+    {
+      type: 'tv:platform-data',
+      requestId,
+      payload: {
+        deviceId,
+        dataSourceId,
+        success: false,
+        error: message
+      }
+    },
+    '*'
+  )
 }
 const embedUrl = computed(() => {
   // 鍩虹 URL - 鐩存帴鎸囧悜 /embed 璺敱
@@ -460,6 +502,7 @@ const handleMessage = (event: MessageEvent) => {
     if (!iframeRef.value?.contentWindow) return
 
     const payload = data.payload || {}
+    const requestId = typeof data.requestId === 'string' ? data.requestId : undefined
     ensureDeviceWs(payload.deviceId)
     ensureDeviceStatusWs(payload.deviceId)
 
@@ -479,15 +522,14 @@ const handleMessage = (event: MessageEvent) => {
           '*'
         )
       })
-      .catch(() => {
-        // Best effort only.
+      .catch(requestError => {
+        postPlatformDataFailure(payload.deviceId, payload.dataSourceId, requestError, requestId)
       })
     return
   }
 
   // EmbedPage 灏辩华
   if (data.type === 'READY') {
-    console.log('[ThingsVisViewer] EmbedPage ready')
     ready.value = true
     loading.value = false
 
@@ -498,13 +540,11 @@ const handleMessage = (event: MessageEvent) => {
 
   // 鍔犺浇瀹屾垚
   if (data.type === 'LOADED') {
-    console.log('[ThingsVisViewer] 浠〃鏉垮姞杞藉畬鎴?', data.payload)
     void hydrateConfiguredPlatformSources()
   }
 
   // 鍔犺浇閿欒
   if (data.type === 'ERROR') {
-    console.error('[ThingsVisViewer] 鍔犺浇閿欒:', data.payload)
     error.value = data.payload
     emit('error', data.payload)
   }
@@ -515,7 +555,6 @@ const handleMessage = (event: MessageEvent) => {
  */
 const sendConfig = () => {
   if (!iframeRef.value?.contentWindow || !props.config) {
-    console.warn('[ThingsVisViewer] Cannot send config: iframe or config unavailable')
     return
   }
 
@@ -545,8 +584,7 @@ const sendConfig = () => {
       },
       '*'
     )
-  } catch (e) {
-    console.error('[ThingsVisViewer] 閰嶇疆搴忓垪鍖栧け璐?', e)
+  } catch {
     error.value = '閰嶇疆鏁版嵁鏃犳晥'
     emit('error', '閰嶇疆鏁版嵁鏃犳晥')
   }
@@ -556,7 +594,6 @@ const sendConfig = () => {
  * iframe 鍔犺浇瀹屾垚
  */
 const handleIframeLoad = () => {
-  console.log('[ThingsVisViewer] iframe onload')
   // 绛夊緟 READY 娑堟伅
 }
 
@@ -577,14 +614,16 @@ onMounted(async () => {
   // 鑾峰彇 Token
   try {
     token.value = await getThingsVisToken()
-  } catch (e) {
-    console.warn('[ThingsVisViewer] Token 鑾峰彇澶辫触', e)
+  } catch {
+    error.value = 'ThingsVis 认证失败，请重试'
+    loading.value = false
+    emit('error', error.value)
+    return
   }
 
   // 澧炲姞杩炴帴瓒呮椂妫€娴?
   setTimeout(() => {
     if (loading.value && !ready.value) {
-      console.warn('[ThingsVisViewer] Editor connection timeout')
       error.value = 'Editor connection timeout'
       loading.value = false
     }

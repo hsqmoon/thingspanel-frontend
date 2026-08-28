@@ -17,7 +17,7 @@ const thingsVisRequest = axios.create({
 
 // 请求拦截器 - 添加 ThingsVis Bearer Token
 thingsVisRequest.interceptors.request.use(
-  async config => {
+  async (config) => {
     // 获取或刷新 ThingsVis token
     const token = await getThingsVisToken()
     if (token) {
@@ -25,24 +25,18 @@ thingsVisRequest.interceptors.request.use(
     }
     return config
   },
-  error => Promise.reject(error)
+  (error) => Promise.reject(error)
 )
 
-// 响应拦截器 - 处理 401 错误时自动刷新 token（仅重试一次，避免死循环）
+// 401 仅失效发起该请求时使用的 token；旧身份请求不得清除新 token，也不得跨身份自动重试。
 thingsVisRequest.interceptors.response.use(
-  response => response,
-  async error => {
-    const originalRequest = error.config
-    // 仅在首次 401 时重试，避免无限循环
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true
-      // Clear cached token and retry with a fresh one
-      clearThingsVisToken()
-      const token = await getThingsVisToken()
-      if (token) {
-        originalRequest.headers.Authorization = `Bearer ${token}`
-        return thingsVisRequest(originalRequest)
-      }
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      const headers = error.config?.headers
+      const authorization = typeof headers?.get === 'function' ? headers.get('Authorization') : headers?.Authorization
+      const failedToken = typeof authorization === 'string' ? authorization.replace(/^Bearer\s+/i, '') : ''
+      if (failedToken) clearThingsVisToken(failedToken)
     }
     return Promise.reject(error)
   }
@@ -282,13 +276,6 @@ export function createThingsVisDashboard(data: CreateDashboardData) {
  */
 export function updateThingsVisDashboard(id: string, data: UpdateDashboardData) {
   return wrapRequest<ThingsVisDashboard>(thingsVisRequest.put(`/dashboards/${id}`, data))
-}
-
-/**
- * 删除 Dashboard
- */
-export function deleteThingsVisDashboard(id: string) {
-  return wrapRequest<void>(thingsVisRequest.delete(`/dashboards/${id}`))
 }
 
 /**

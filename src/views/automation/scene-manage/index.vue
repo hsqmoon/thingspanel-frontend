@@ -5,6 +5,7 @@ import { NButton, NCard, NFlex, NPagination, NPopconfirm, NSpace, useDialog, use
 import type { DataTableColumns } from 'naive-ui'
 import { IosSearch } from '@vicons/ionicons4'
 import moment from 'moment'
+import { isFlatRequestFailure } from '@sa/axios'
 import { sceneActive, sceneDel, sceneGet, sceneLog } from '@/service/api/automation'
 import { useRouterPush } from '@/hooks/common/router'
 import { $t } from '@/locales'
@@ -28,26 +29,10 @@ const sceneEdit = (item: any) => {
 
 // 激活场景
 const sceneActivation = async (item: any) => {
-  // dialog.warning({
-  //   title: $t('common.activationPrompt'),
-  //   content: $t('common.activateSceneInfo'),
-  //   positiveText: $t('device_template.confirm'),
-  //   negativeText: $t('common.cancel'),
-  //   onPositiveClick: async () => {
-  //     const res = await sceneActive(item.id);
-  //     if (!res.error) {
-  //       // eslint-disable-next-line @typescript-eslint/no-use-before-define
-  //       await getData();
-  //       // message.success($t('custom.grouping_details.operationSuccess'));
-  //      return false;
-  //     }
-  //     return false;
-  //   }
-  // });
   const res = await sceneActive(item.id)
-  if (!res.error) {
-    await getData()
-  }
+  if (isFlatRequestFailure(res)) return
+
+  await getData()
 }
 const tableData = ref([])
 const queryData = ref({
@@ -56,11 +41,16 @@ const queryData = ref({
   page_size: 10
 })
 const dataTotal = ref(0)
+let sceneListRequestEpoch = 0
 
 const getData = async () => {
-  const { data } = await sceneGet(queryData.value)
-  tableData.value = data.list
-  dataTotal.value = data.total
+  const epoch = ++sceneListRequestEpoch
+  const response = await sceneGet({ ...queryData.value })
+  if (epoch !== sceneListRequestEpoch || isFlatRequestFailure(response) || !response.data) return false
+
+  tableData.value = response.data.list || []
+  dataTotal.value = response.data.total
+  return true
 }
 const handleQuery = async () => {
   queryData.value.page = 1
@@ -75,20 +65,26 @@ const logQuery = ref({
   execution_end_time: '',
   execution_result: ''
 })
+let logListRequestEpoch = 0
 const getLogList = async () => {
   if (logQuery.value.time) {
     logQuery.value.execution_start_time = moment(logQuery.value.time[0]).format()
     logQuery.value.execution_end_time = moment(logQuery.value.time[1]).format()
   }
-  const res = await sceneLog(logQuery.value)
+  const epoch = ++logListRequestEpoch
+  const res = await sceneLog({ ...logQuery.value })
+  if (epoch !== logListRequestEpoch || isFlatRequestFailure(res) || !res.data) return false
+
   logData.value = res.data.list
   logDataTotal.value = res.data.total
+  return true
 }
 // 查看日志
-const openLog = (item: any) => {
+const openLog = async (item: any) => {
   logQuery.value.id = item.id
-  getLogList()
-  showLog.value = true
+  if (await getLogList()) {
+    showLog.value = true
+  }
 }
 // 删除场景
 const deleteScene = async (item: any) => {
@@ -99,10 +95,10 @@ const deleteScene = async (item: any) => {
     negativeText: $t('common.cancel'),
     onPositiveClick: async () => {
       const res = await sceneDel(item.id)
-      if (!res.error) {
-        await getData()
-        message.success($t('custom.grouping_details.operationSuccess'))
-      }
+      if (isFlatRequestFailure(res)) return
+
+      await getData()
+      message.success($t('custom.grouping_details.operationSuccess'))
     }
   })
 }

@@ -582,7 +582,6 @@ declare namespace App {
         irrigation_rotation: string
         personal_center: string
         'space-management': string
-        'system-management-user_equipment-map': string
         'edit-area': string
         'new-area': string
         device_service_access: string
@@ -590,7 +589,6 @@ declare namespace App {
         'data-services': string
         'data-services_data-forward': string
         'data-services_forward-config': string
-        'device-details-app': string
         'alarm_warning-message': string
         'personal-center': string
         apply_plugin: string
@@ -1747,7 +1745,6 @@ declare namespace App {
         'enter-sub-device-address': string
         'sub-device-address-setting': string
         'add-extension-info': string
-        'rule-engine': string
         'device-group': string
         operation: string
         'api-support-flag': string
@@ -2018,7 +2015,7 @@ declare namespace App {
     type EnvType = 'dev' | 'test' | 'prod'
 
     /** Other baseURL key */
-    type OtherBaseURLKey = 'demo' | 'mock'
+    type OtherBaseURLKey = 'demo'
 
     /** The backend service config */
     interface ServiceConfig<T extends OtherBaseURLKey = OtherBaseURLKey> {

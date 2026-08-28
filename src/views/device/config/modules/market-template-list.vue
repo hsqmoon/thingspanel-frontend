@@ -4,6 +4,7 @@ import { useDebounceFn } from '@vueuse/core'
 import { NInput, NSelect, NSpin, NEmpty, NPagination, NIcon } from 'naive-ui'
 import { IosSearch } from '@vicons/ionicons4'
 import { GridOutline, ListOutline } from '@vicons/ionicons5'
+import { isFlatRequestFailure } from '@sa/axios'
 import { $t } from '@/locales'
 import AdvancedListLayout from '@/components/list-page/index.vue'
 import { getMarketTemplates, installFromMarket } from '@/service/api/market'
@@ -14,7 +15,7 @@ import MarketLoginModal from './market-login-modal.vue'
 
 const emit = defineEmits(['installed'])
 
-const { isLoggedIn, getToken, clearToken } = useMarketAuth()
+const { isLoggedIn, getToken, refreshAccessToken } = useMarketAuth()
 
 const loading = ref(false)
 const installingId = ref('')
@@ -66,12 +67,10 @@ const fetchMarketTemplates = async () => {
     if (searchParams.category) params.category = searchParams.category
 
     const res: any = await getMarketTemplates(params)
-    if (!res.error) {
-      templateList.value = res.data?.list || (Array.isArray(res.data) ? res.data : [])
-      total.value = res.data?.total ?? 0
-    }
-  } catch (e) {
-    console.error(e)
+    if (isFlatRequestFailure(res)) return
+
+    templateList.value = res.data?.list || (Array.isArray(res.data) ? res.data : [])
+    total.value = res.data?.total ?? 0
   } finally {
     loading.value = false
   }
@@ -127,8 +126,12 @@ const handleInstall = (id: string) => {
 }
 
 const doInstall = async (id: string) => {
-  const token = getToken()
-  if (!token) return
+  const token = getToken() || (await refreshAccessToken())
+  if (!token) {
+    pendingInstallId.value = id
+    marketLoginRef.value?.open()
+    return
+  }
 
   installingId.value = id
   try {
@@ -136,7 +139,7 @@ const doInstall = async (id: string) => {
       market_template_id: id,
       market_token: token
     })
-    if (!res.error) {
+    if (!isFlatRequestFailure(res)) {
       // Check for missing plugins
       const data = res.data
       if (data?.missing_plugins && data.missing_plugins.length > 0) {
@@ -156,7 +159,9 @@ const doInstall = async (id: string) => {
       window.$message?.success($t('market.installSuccess'))
       emit('installed')
     } else {
-      const msg = res.error?.msg || ''
+      if (res.error.status === 401) return
+
+      const msg = res.error.message || ''
       if (msg.includes('已存在') || msg.includes('duplicate')) {
         window.$message?.warning($t('market.alreadyInstalled'))
       } else {
@@ -164,14 +169,7 @@ const doInstall = async (id: string) => {
       }
     }
   } catch (e: any) {
-    if (e?.response?.status === 401) {
-      clearToken()
-      window.$message?.error($t('market.tokenExpired'))
-      pendingInstallId.value = id
-      marketLoginRef.value?.open()
-    } else {
-      window.$message?.error($t('market.installFailed') + ': ' + (e?.message || ''))
-    }
+    window.$message?.error($t('market.installFailed') + ': ' + (e?.message || ''))
   } finally {
     installingId.value = ''
   }

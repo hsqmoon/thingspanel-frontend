@@ -129,9 +129,9 @@ async function createAuthRouteGuard(
   }
 
   // 5. init auth route
-  let initSuccess: boolean
+  let initResult: Awaited<ReturnType<typeof initAuthRoute>>
   try {
-    initSuccess = await initAuthRoute()
+    initResult = await initAuthRoute()
   } catch {
     next(false)
     return false
@@ -140,7 +140,12 @@ async function createAuthRouteGuard(
   // If init failed, clear the stale session and explicitly finish this pending
   // navigation. Relying on resetStore's current-route check can leave the guard
   // unresolved when a stale token redirects /login to the dynamic root route.
-  if (!initSuccess) {
+  if (initResult === 'stale') {
+    next(false)
+    return false
+  }
+
+  if (initResult === 'failed') {
     const authStore = useAuthStore()
     await authStore.resetStore(false)
     next({ name: 'login', params: { module: 'pwd-login' }, replace: true })

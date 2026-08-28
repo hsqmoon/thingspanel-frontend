@@ -8,6 +8,13 @@ export interface DashboardMenuConfig {
   parent_code: string
 }
 
+export interface DashboardDeleteResult {
+  operation_id: string
+  dashboard_id: string
+  status: 'pending' | 'delivered'
+  attempts: number
+}
+
 export function fetchDashboardMenuConfig(dashboardId: string) {
   return request.get<DashboardMenuConfig | null>(`/dashboard-menu/${dashboardId}`)
 }
@@ -26,4 +33,12 @@ export function saveDashboardMenuConfig(
 
 export function deleteDashboardMenuConfig(dashboardId: string) {
   return request.delete(`/dashboard-menu/${dashboardId}`)
+}
+
+export function requestDashboardDeletion(dashboardId: string) {
+  return request.delete<DashboardDeleteResult>(`/thingsvis-dashboard/${dashboardId}`)
+}
+
+export function fetchDashboardDeletion(dashboardId: string) {
+  return request.get<DashboardDeleteResult>(`/thingsvis-dashboard/${dashboardId}`)
 }

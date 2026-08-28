@@ -5,6 +5,7 @@ import { NButton, NFlex } from 'naive-ui'
 import type { FormInst } from 'naive-ui'
 import { IosAlert, IosRefresh } from '@vicons/ionicons4'
 import { repeat } from 'seemly'
+import { isFlatRequestFailure } from '@sa/axios'
 import { deviceGroupTree } from '@/service/api'
 import {
   configMetricsConditionMenu,
@@ -172,6 +173,7 @@ const deviceConditionOptions = computed(() => [
 ])
 const deviceConfigDisabled = ref(false)
 const triggerConditionsTypeChange = (ifItem: any, data: any) => {
+  triggerParamRequestEpoch.set(ifItem, (triggerParamRequestEpoch.get(ifItem) || 0) + 1)
   ifItem.trigger_source = null
   ifItem.trigger_param_type = null
   ifItem.trigger_param = null
@@ -183,6 +185,8 @@ const triggerConditionsTypeChange = (ifItem: any, data: any) => {
   ifItem.eventParamsRaw = null
   ifItem.eventParamOptions = []
   ifItem.eventParamConditions = []
+  ifItem.triggerParamOptions = []
+  ifItem.triggerParamOptionsLoaded = false
   deviceConfigDisabled.value = false
 
   if (data === '11') {
@@ -193,13 +197,14 @@ const triggerConditionsTypeChange = (ifItem: any, data: any) => {
 
 // 设备分组列表
 const deviceGroupOptions = ref([] as any)
+let groupRequestEpoch = 0
 // 获取设备分组
 const getGroup = async () => {
-  deviceGroupOptions.value = []
+  const epoch = ++groupRequestEpoch
   const res = await deviceGroupTree({})
-  res.data.forEach((item: any) => {
-    deviceGroupOptions.value.push(item.group)
-  })
+  if (epoch !== groupRequestEpoch || isFlatRequestFailure(res) || !Array.isArray(res.data)) return
+
+  deviceGroupOptions.value = res.data.map((item: any) => item.group)
 }
 
 // 设备列表
@@ -210,6 +215,7 @@ const queryDevice = ref({
   bind_config: 0
 })
 const btnloading = ref(false)
+let deviceRequestEpoch = 0
 
 const selectInstRef = ref({})
 const onKeydownEnter = e => {
@@ -225,19 +231,27 @@ const onDeviceKeydownEnter = (e: any, ifIndex: number) => {
 }
 // 获取设备列表
 const getDevice = async (groupId: any, name: any) => {
+  const epoch = ++deviceRequestEpoch
   queryDevice.value.group_id = groupId || null
   queryDevice.value.device_name = name || null
   btnloading.value = false
-  deviceOptions.value = []
-  const res = await deviceListAll(queryDevice.value)
+  const res = await deviceListAll({ ...queryDevice.value })
+  if (epoch !== deviceRequestEpoch) return
+
+  if (isFlatRequestFailure(res) || !Array.isArray(res.data)) {
+    btnloading.value = deviceOptions.value.length > 0
+    return
+  }
+
   btnloading.value = true
-  deviceOptions.value = res.data || []
+  deviceOptions.value = res.data
   // if (!deviceOptions.value.length) {
   //   selectInstRef.value = false;
   // }
 }
 // 选择设备
 const triggerSourceChange = (ifItem: any, ifIndex: number) => {
+  triggerParamRequestEpoch.set(ifItem, (triggerParamRequestEpoch.get(ifItem) || 0) + 1)
   ifItem.trigger_param_type = null
   ifItem.trigger_param = null
   ifItem.trigger_param_key = null
@@ -248,6 +262,8 @@ const triggerSourceChange = (ifItem: any, ifIndex: number) => {
   ifItem.eventParamsRaw = null
   ifItem.eventParamOptions = []
   ifItem.eventParamConditions = []
+  ifItem.triggerParamOptions = []
+  ifItem.triggerParamOptionsLoaded = false
   selectInstRef.value[ifIndex] = false
   // ifItem.action_param_type = null;
   // ifItem.action_param = null;
@@ -277,71 +293,77 @@ const setQueryDeviceNameRef = (el: any, index: number) => {
 const handleFocus = (ifIndex: any) => {
   if (queryDeviceName.value[ifIndex]) {
     queryDeviceName.value[ifIndex].focus()
-  } else {
-    console.error(`Ref for queryDeviceName at index ${ifIndex} not found.`)
   }
 }
 
 // 设备配置列表
-const deviceConfigOption = ref([])
+const deviceConfigOption = ref<any[]>([])
 // 设备配置列表查询条件
 const queryDeviceConfig = ref({
   device_config_name: ''
 })
+let deviceConfigRequestEpoch = 0
 // 获取设备配置列表
 const getDeviceConfig = async (name: string) => {
+  const epoch = ++deviceConfigRequestEpoch
   queryDeviceConfig.value.device_config_name = name || ''
-  const res = await deviceConfigAll(queryDeviceConfig.value)
-  deviceConfigOption.value = res.data || []
+  const res = await deviceConfigAll({ ...queryDeviceConfig.value })
+  if (epoch !== deviceConfigRequestEpoch || isFlatRequestFailure(res) || !Array.isArray(res.data)) return
+
+  deviceConfigOption.value = res.data
 }
 
+const triggerParamRequestEpoch = new WeakMap<object, number>()
 // 新增：主动加载选项的函数
 const loadTriggerParamOptions = async (ifItem: any) => {
   // 避免重复加载，如果选项已存在则不重新加载
-  if (ifItem.triggerParamOptions && ifItem.triggerParamOptions.length > 0) {
+  if (ifItem.triggerParamOptionsLoaded === true) {
     syncSelectedEventParams(ifItem)
     return
   }
 
   if (ifItem.trigger_source && (ifItem.trigger_conditions_type === '10' || ifItem.trigger_conditions_type === '11')) {
-    ifItem.triggerParamOptions = [] // 初始化为空数组
+    const epoch = (triggerParamRequestEpoch.get(ifItem) || 0) + 1
+    triggerParamRequestEpoch.set(ifItem, epoch)
+    const existingOptions = Array.isArray(ifItem.triggerParamOptions) ? ifItem.triggerParamOptions : []
+    ifItem.triggerParamOptions = existingOptions.some(opt => opt.value === 'status')
+      ? existingOptions
+      : [...existingOptions, statusData.value]
     let res = null as any
-    try {
-      if (ifItem.trigger_conditions_type === '10') {
-        res = await deviceMetricsConditionMenu({
-          device_id: ifItem.trigger_source
-        })
-      } else if (ifItem.trigger_conditions_type === '11') {
-        res = await configMetricsConditionMenu({
-          device_config_id: ifItem.trigger_source
-        })
-      }
-
-      if (res && res.data) {
-        // (Processing logic copied from actionParamShow)
-        res.data.forEach((item: any) => {
-          item.value = item.data_source_type
-          item.label = `${item.data_source_type}${item.label ? `(${item.label})` : ''}`
-          item.options.forEach((subItem: any) => {
-            subItem.value = `${item.value}/${subItem.key}`
-            subItem.label = `${subItem.key}${subItem.label ? `(${subItem.label})` : ''}`
-          })
-        })
-        ifItem.triggerParamOptions = res.data // Assign processed data
-      } else {
-        ifItem.triggerParamOptions = [] // Ensure array on API failure
-      }
-    } catch (error) {
-      console.error('Error loading trigger param options during echo:', error)
-      ifItem.triggerParamOptions = [] // Ensure array on error
-    } finally {
-      // Add statusData regardless of API outcome
-      // Ensure statusData is not added multiple times if loaded elsewhere
-      if (!ifItem.triggerParamOptions.some(opt => opt.value === 'status')) {
-        ifItem.triggerParamOptions.push(statusData.value)
-      }
-      syncSelectedEventParams(ifItem)
+    if (ifItem.trigger_conditions_type === '10') {
+      res = await deviceMetricsConditionMenu({
+        device_id: ifItem.trigger_source
+      })
+    } else if (ifItem.trigger_conditions_type === '11') {
+      res = await configMetricsConditionMenu({
+        device_config_id: ifItem.trigger_source
+      })
     }
+
+    if (
+      triggerParamRequestEpoch.get(ifItem) !== epoch ||
+      !res ||
+      isFlatRequestFailure(res) ||
+      !Array.isArray(res.data)
+    ) {
+      syncSelectedEventParams(ifItem)
+      return
+    }
+
+    res.data.forEach((item: any) => {
+      item.value = item.data_source_type
+      item.label = `${item.data_source_type}${item.label ? `(${item.label})` : ''}`
+      item.options.forEach((subItem: any) => {
+        subItem.value = `${item.value}/${subItem.key}`
+        subItem.label = `${subItem.key}${subItem.label ? `(${subItem.label})` : ''}`
+      })
+    })
+    ifItem.triggerParamOptions = res.data
+    if (!ifItem.triggerParamOptions.some(opt => opt.value === 'status')) {
+      ifItem.triggerParamOptions.push(statusData.value)
+    }
+    ifItem.triggerParamOptionsLoaded = true
+    syncSelectedEventParams(ifItem)
   }
 }
 

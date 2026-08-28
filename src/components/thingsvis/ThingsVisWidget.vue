@@ -6,11 +6,15 @@
       description="当前页面不会连接 ThingsVis；启用 visualization 或 full Profile 后即可使用。"
     />
   </div>
+  <div v-else-if="authError" class="thingsvis-widget-container flex-center p-24px">
+    <NResult status="error" title="ThingsVis 认证失败" :description="authError" />
+  </div>
   <div v-else ref="container" class="thingsvis-widget-container"></div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { isFlatRequestFailure } from '@sa/axios'
 import { ThingsVisClient } from '@/utils/thingsvis/sdk/client'
 import {
   attributeDataPub,
@@ -89,6 +93,7 @@ const emit = defineEmits<{
 
 const container = ref<HTMLElement | null>(null)
 const thingsVisEnabled = isThingsVisEnabled()
+const authError = ref('')
 let client: ThingsVisClient | null = null
 
 const getPreviewDeviceId = () => {
@@ -494,24 +499,21 @@ const fetchTelemetryHistoryField = async (deviceId: string, fieldId: string, con
   const fieldDataTypeMap = getFieldDataTypeMap()
   if (fieldDataTypeMap[fieldId] && fieldDataTypeMap[fieldId] !== 'telemetry') return []
 
-  try {
-    const historyConfig = normalizeHistoryConfig(config)
-    const response = await telemetryDataHistoryList(
-      {
-        device_id: deviceId,
-        key: fieldId,
-        time_range: historyConfig.timeRange,
-        aggregate_window: historyConfig.aggWindow,
-        aggregate_function: historyConfig.aggFunction
-      },
-      { silentError: true } as any
-    )
-    if (response?.error) return []
-    return normalizeTelemetryHistoryRows(response)
-  } catch (error) {
-    console.warn('[ThingsVisWidget] telemetry history request failed:', fieldId, error)
-    return []
+  const historyConfig = normalizeHistoryConfig(config)
+  const response = await telemetryDataHistoryList(
+    {
+      device_id: deviceId,
+      key: fieldId,
+      time_range: historyConfig.timeRange,
+      aggregate_window: historyConfig.aggWindow,
+      aggregate_function: historyConfig.aggFunction
+    },
+    { silentError: true } as any
+  )
+  if (isFlatRequestFailure(response)) {
+    throw response
   }
+  return normalizeTelemetryHistoryRows(response)
 }
 
 const getFieldRoot = (fieldPath?: string) => {
@@ -628,36 +630,34 @@ const buildRequestedAlarmStatusData = async (fieldIds: string[], deviceId?: stri
   const requestedAlarmFields = fieldIds.filter(fieldId => DEVICE_ALARM_STATUS_FIELD_IDS.has(fieldId))
   if (!deviceId || deviceId === TEMPLATE_DEVICE_ID || requestedAlarmFields.length === 0) return {}
 
-  try {
-    const response = await deviceAlarmStatus({ device_id: deviceId, page: 1, page_size: 20 })
-    const payload = response?.data ?? response
-    const rows = Array.isArray(payload?.list)
-      ? payload.list
-      : Array.isArray(payload?.data)
-        ? payload.data
-        : Array.isArray(payload)
-          ? payload
-          : []
-    const activeRows = rows.filter(isActiveAlarm)
-    const latest = rows[0] ?? null
-    const highest = activeRows[0] ?? latest
-    const allFields: Record<string, unknown> = {
-      device_alarm_active: activeRows.length > 0 ? 1 : 0,
-      device_alarm_count: Number(payload?.total ?? activeRows.length ?? 0),
-      device_alarm_highest_level: normalizeAlarmLevel(highest?.alarm_level ?? highest?.level),
-      latest_device_alarm_title: String(latest?.alarm_name ?? latest?.name ?? latest?.title ?? ''),
-      latest_device_alarm_level: normalizeAlarmLevel(latest?.alarm_level ?? latest?.level),
-      latest_device_alarm_time: latest ? normalizeAlarmTime(latest) : ''
-    }
-
-    return requestedAlarmFields.reduce<Record<string, unknown>>((acc, fieldId) => {
-      acc[fieldId] = allFields[fieldId]
-      return acc
-    }, {})
-  } catch (error) {
-    console.warn('[ThingsVisWidget] device alarm status request failed:', deviceId, error)
-    return {}
+  const response = await deviceAlarmStatus({ device_id: deviceId, page: 1, page_size: 20 })
+  if (isFlatRequestFailure(response)) {
+    throw response
   }
+  const payload = response?.data ?? response
+  const rows = Array.isArray(payload?.list)
+    ? payload.list
+    : Array.isArray(payload?.data)
+      ? payload.data
+      : Array.isArray(payload)
+        ? payload
+        : []
+  const activeRows = rows.filter(isActiveAlarm)
+  const latest = rows[0] ?? null
+  const highest = activeRows[0] ?? latest
+  const allFields: Record<string, unknown> = {
+    device_alarm_active: activeRows.length > 0 ? 1 : 0,
+    device_alarm_count: Number(payload?.total ?? activeRows.length ?? 0),
+    device_alarm_highest_level: normalizeAlarmLevel(highest?.alarm_level ?? highest?.level),
+    latest_device_alarm_title: String(latest?.alarm_name ?? latest?.name ?? latest?.title ?? ''),
+    latest_device_alarm_level: normalizeAlarmLevel(latest?.alarm_level ?? latest?.level),
+    latest_device_alarm_time: latest ? normalizeAlarmTime(latest) : ''
+  }
+
+  return requestedAlarmFields.reduce<Record<string, unknown>>((acc, fieldId) => {
+    acc[fieldId] = allFields[fieldId]
+    return acc
+  }, {})
 }
 
 function normalizeViewerConfig(config: any) {
@@ -780,7 +780,6 @@ const handlePlatformWrite = async (event: MessageEvent) => {
   }
   const targetDeviceId = deviceId || props.deviceId
   if (!targetDeviceId) {
-    console.warn('[ThingsVisWidget] tv:platform-write received but deviceId prop is not set')
     postPlatformWriteResult(requestId, event.source, {
       success: false,
       error: 'Missing deviceId'
@@ -799,6 +798,9 @@ const handlePlatformWrite = async (event: MessageEvent) => {
 
     if (fieldType === 'attribute') {
       const result = await attributeDataPub({ device_id: targetDeviceId, value: valueStr })
+      if (isFlatRequestFailure(result)) {
+        throw result
+      }
       postPlatformWriteResult(requestId, event.source, {
         success: true,
         echo: result?.data ?? normalizedData
@@ -820,6 +822,9 @@ const handlePlatformWrite = async (event: MessageEvent) => {
         identify: commandWrite.identify,
         value: commandWrite.value
       })
+      if (isFlatRequestFailure(result)) {
+        throw result
+      }
       postPlatformWriteResult(requestId, event.source, {
         success: true,
         echo: result?.data ?? normalizedData
@@ -828,18 +833,55 @@ const handlePlatformWrite = async (event: MessageEvent) => {
     }
 
     const result = await telemetryDataPub({ device_id: targetDeviceId, value: valueStr })
+    if (isFlatRequestFailure(result)) {
+      throw result
+    }
     postPlatformWriteResult(requestId, event.source, {
       success: true,
       echo: result?.data ?? normalizedData
     })
   } catch (e) {
-    console.error('[ThingsVisWidget] telemetryDataPub failed for tv:platform-write:', e)
-    const message = e instanceof Error ? e.message : String(e || 'Platform write failed')
+    if (!isFlatRequestFailure(e)) {
+      console.error('[ThingsVisWidget] telemetryDataPub failed for tv:platform-write:', e)
+    }
+    const message = isFlatRequestFailure(e)
+      ? e.error.message
+      : e instanceof Error
+        ? e.message
+        : String(e || 'Platform write failed')
     postPlatformWriteResult(requestId, event.source, {
       success: false,
       error: message
     })
   }
+}
+
+const postPlatformFieldError = (
+  event: MessageEvent,
+  dataSourceId: string | undefined,
+  deviceId: string | undefined,
+  error: unknown
+) => {
+  if (!event.source || !('postMessage' in event.source)) return
+  const requestId = typeof event.data?.requestId === 'string' ? event.data.requestId : undefined
+  const message = isFlatRequestFailure(error)
+    ? error.error.message
+    : error instanceof Error
+      ? error.message
+      : String(error || 'Platform data request failed')
+  ;(event.source as Window).postMessage(
+    {
+      type: 'tv:platform-data',
+      requestId,
+      payload: {
+        dataSourceId,
+        deviceId,
+        success: false,
+        error: message
+      }
+    },
+    '*'
+  )
 }
 
 const handleFieldDataRequest = async (event: MessageEvent) => {
@@ -902,35 +944,39 @@ const handleFieldDataRequest = async (event: MessageEvent) => {
     registerHistoryTimeRange(historyRequests, fieldId, timeRange)
   })
 
-  const fields = {
-    ...(await buildRequestedFieldData(currentFieldIds, targetDeviceId)),
-    ...(await buildRequestedAlarmStatusData(currentFieldIds, targetDeviceId))
-  }
+  try {
+    const fields = {
+      ...(await buildRequestedFieldData(currentFieldIds, targetDeviceId)),
+      ...(await buildRequestedAlarmStatusData(currentFieldIds, targetDeviceId))
+    }
 
-  if (historyRequests.size > 0 && targetDeviceId) {
-    const historyEntries = await Promise.all(
-      Array.from(historyRequests.entries()).map(async ([fieldId, timeRange]) => {
-        const rows = await fetchTelemetryHistoryField(targetDeviceId, fieldId, {
-          ...(payload?.historyConfig || {}),
-          timeRange: payload?.historyConfig?.timeRange || timeRange || 'last_30d'
+    if (historyRequests.size > 0 && targetDeviceId) {
+      const historyEntries = await Promise.all(
+        Array.from(historyRequests.entries()).map(async ([fieldId, timeRange]) => {
+          const rows = await fetchTelemetryHistoryField(targetDeviceId, fieldId, {
+            ...(payload?.historyConfig || {}),
+            timeRange: payload?.historyConfig?.timeRange || timeRange || 'last_30d'
+          })
+          return [fieldId, rows] as const
         })
-        return [fieldId, rows] as const
+      )
+
+      historyEntries.forEach(([fieldId, rows]) => {
+        if (rows.length > 0) {
+          pushPlatformFieldHistory(fieldId, rows, targetDeviceId)
+        }
+        if (explicitHistoryFieldIds.includes(`${fieldId}${HISTORY_FIELD_SUFFIX}`)) {
+          fields[`${fieldId}${HISTORY_FIELD_SUFFIX}`] = rows
+        }
       })
-    )
+    }
 
-    historyEntries.forEach(([fieldId, rows]) => {
-      if (rows.length > 0) {
-        pushPlatformFieldHistory(fieldId, rows, targetDeviceId)
-      }
-      if (explicitHistoryFieldIds.includes(`${fieldId}${HISTORY_FIELD_SUFFIX}`)) {
-        fields[`${fieldId}${HISTORY_FIELD_SUFFIX}`] = rows
-      }
-    })
+    if (Object.keys(fields).length === 0) return
+
+    pushPlatformFieldData(fields, targetDeviceId)
+  } catch (error) {
+    postPlatformFieldError(event, payload?.dataSourceId, targetDeviceId, error)
   }
-
-  if (Object.keys(fields).length === 0) return
-
-  pushPlatformFieldData(fields, targetDeviceId)
 }
 
 // 辅助函数: 深拷贝以去除 Vue Proxy，防止 DataCloneError
@@ -961,11 +1007,16 @@ onMounted(async () => {
   if (hashIdx !== -1) baseUrl = baseUrl.substring(0, hashIdx)
 
   // 获取 Token 以便 URL 优先鉴权
-  let token = ''
+  let token: string
   try {
     token = (await getThingsVisToken()) || ''
-  } catch (error) {
-    console.error('[ThingsVisWidget] getThingsVisToken failed, continuing without URL token:', error)
+  } catch {
+    authError.value = '无法获取可视化服务凭据，请刷新后重试'
+    return
+  }
+  if (!token) {
+    authError.value = '无法获取可视化服务凭据，请刷新后重试'
+    return
   }
   const tokenParams = token ? `&token=${token}` : ''
   const thingsvisApiBaseUrl = encodeURIComponent(getThingsVisApiBase())

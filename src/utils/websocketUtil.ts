@@ -54,8 +54,7 @@ export function useWebsocketUtil(cr: Ref<ICardRender | undefined>, token: string
       // Pass data as is if it's an object, otherwise pass an empty object.
       // The component itself should handle missing keys within the data object.
       const payload = data && typeof data === 'object' ? data : {}
-      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-      cardComponent?.updateData && cardComponent.updateData(deviceId, metricsId, payload)
+      cardComponent?.updateData?.(deviceId, metricsId, payload)
     }
   }
 

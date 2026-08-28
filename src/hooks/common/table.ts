@@ -1,5 +1,6 @@
 import { computed, effectScope, onScopeDispose, reactive, ref, watch } from 'vue'
 import type { Ref } from 'vue'
+import { isFlatRequestFailure } from '@sa/axios'
 import type { DataTableBaseColumn, DataTableExpandColumn, DataTableSelectionColumn, PaginationProps } from 'naive-ui'
 import type { TableColumnGroup } from 'naive-ui/es/data-table/src/interface'
 import { useBoolean, useLoading } from '@sa/hooks'
@@ -104,15 +105,19 @@ export function useTable<TableData extends BaseData, Fn extends ApiFn, CustomCol
   async function getData() {
     startLoading()
 
-    const response = await apiFn(searchParams)
+    try {
+      const response = await apiFn(searchParams)
+      if (isFlatRequestFailure(response)) return
 
-    const { data: tableData, pageNum, pageSize, total } = transformer(response as Awaited<ReturnType<Fn>>)
+      const { data: tableData, pageNum, pageSize, total } = transformer(response as Awaited<ReturnType<Fn>>)
 
-    data.value = tableData
+      data.value = tableData
 
-    setEmpty(tableData.length === 0)
-    updatePagination({ page: pageNum, pageSize, itemCount: total })
-    endLoading()
+      setEmpty(tableData.length === 0)
+      updatePagination({ page: pageNum, pageSize, itemCount: total })
+    } finally {
+      endLoading()
+    }
   }
 
   /**

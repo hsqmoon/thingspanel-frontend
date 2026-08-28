@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import type { FormInst } from 'naive-ui'
 import { useDialog, useMessage } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 import { deviceAdd } from '@/service/api/device'
 import { getMarketTemplates, installFromMarket } from '@/service/api/market'
 import { $t } from '@/locales'
@@ -17,7 +18,7 @@ const props = defineProps<{
 const formRef = ref<FormInst | null>(null)
 const message = useMessage()
 const dialog = useDialog()
-const { isLoggedIn, getToken, clearToken } = useMarketAuth()
+const { isLoggedIn, getToken, refreshAccessToken } = useMarketAuth()
 const marketLoginRef = ref<InstanceType<typeof MarketLoginModal>>()
 const marketOptions = ref<any[]>([])
 const installedLocalOptions = ref<any[]>([])
@@ -25,6 +26,7 @@ const selectedTemplateValue = ref('')
 const pendingMarketOption = ref<any | null>(null)
 const marketLoading = ref(false)
 const installLoading = ref(false)
+const creating = ref(false)
 const formValue = ref({
   name: '',
   label: [],
@@ -40,7 +42,7 @@ const rules = {
 
 const localOptions = computed(() => {
   const optionMap = new Map<string, any>()
-  ;[...(props.configOptions || []), ...installedLocalOptions.value].forEach(option => {
+  ;[...(props.configOptions || []), ...installedLocalOptions.value].forEach((option) => {
     if (option?.id) {
       optionMap.set(option.id, option)
     }
@@ -61,7 +63,7 @@ const templateOptions = computed(() => {
       type: 'group',
       label: $t('device_template.localTemplates'),
       key: 'local-templates',
-      children: localOptions.value.map(option => ({
+      children: localOptions.value.map((option) => ({
         label: option.name,
         value: `local:${option.id}`,
         source: 'local',
@@ -75,7 +77,7 @@ const templateOptions = computed(() => {
       type: 'group',
       label: $t('device_template.marketTemplates'),
       key: 'market-templates',
-      children: marketOptions.value.map(option => ({
+      children: marketOptions.value.map((option) => ({
         label: option.name,
         value: `market:${option.id}`,
         source: 'market',
@@ -96,7 +98,9 @@ const fetchMarketTemplateOptions = async () => {
       page_size: 99,
       sort_by: 'latest'
     })
-    if (res.error) {
+    if (isFlatRequestFailure(res)) {
+      if (res.error.status === 401) return
+
       message.warning($t('market.loadFailed'))
       return
     }
@@ -116,7 +120,7 @@ const applyLocalSelection = (value: string) => {
 
 function applyInitialConfigSelection() {
   const configId = props.initialConfigId
-  if (!configId || formValue.value.device_config_id || !localOptions.value.some(option => option.id === configId)) {
+  if (!configId || formValue.value.device_config_id || !localOptions.value.some((option) => option.id === configId)) {
     return
   }
   applyLocalSelection(`local:${configId}`)
@@ -128,7 +132,7 @@ const showMissingPlugins = (plugins: any[]) => {
   if (!plugins?.length) return
 
   const pluginNames = plugins
-    .map(plugin => {
+    .map((plugin) => {
       const version = plugin.min_version ? ` (≥${plugin.min_version})` : ''
       const required = plugin.required ? $t('market.pluginRequired') : $t('market.pluginOptional')
       return `${plugin.plugin_name}${version} [${required}]`
@@ -144,8 +148,13 @@ const showMissingPlugins = (plugins: any[]) => {
 
 const doInstallPendingTemplate = async () => {
   const option = pendingMarketOption.value
-  const token = getToken()
-  if (!option || !token || installLoading.value) return
+  if (!option || installLoading.value) return
+
+  const token = getToken() || (await refreshAccessToken())
+  if (!token) {
+    marketLoginRef.value?.open()
+    return
+  }
 
   installLoading.value = true
   try {
@@ -154,8 +163,12 @@ const doInstallPendingTemplate = async () => {
       version: option.version,
       market_token: token
     })
-    if (res.error) {
-      throw new Error(res.error?.msg || $t('market.installFailed'))
+    if (isFlatRequestFailure(res)) {
+      if (res.error.status !== 401) {
+        pendingMarketOption.value = null
+        message.error(`${$t('market.installFailed')}: ${res.error.message}`)
+      }
+      return
     }
 
     const data = res.data
@@ -172,13 +185,6 @@ const doInstallPendingTemplate = async () => {
     message.success($t('market.installSuccess'))
     showMissingPlugins(data?.missing_plugins || [])
   } catch (error: any) {
-    if (error?.response?.status === 401) {
-      clearToken()
-      installLoading.value = false
-      message.error($t('market.tokenExpired'))
-      marketLoginRef.value?.open()
-      return
-    }
     pendingMarketOption.value = null
     message.error(`${$t('market.installFailed')}: ${error?.message || ''}`)
   } finally {
@@ -202,7 +208,7 @@ const handleTemplateChange = (value: string) => {
   }
 
   const marketTemplateId = value.slice('market:'.length)
-  const option = marketOptions.value.find(item => item.id === marketTemplateId)
+  const option = marketOptions.value.find((item) => item.id === marketTemplateId)
   if (!option) return
 
   dialog.warning({
@@ -220,20 +226,28 @@ const onMarketLoginSuccess = () => {
   void doInstallPendingTemplate()
 }
 
-function handleValidateClick(e: MouseEvent) {
+async function handleValidateClick(e: MouseEvent) {
   e.preventDefault()
-  if (installLoading.value) return
-  formRef.value?.validate(async errors => {
-    if (!errors) {
-      const res = await deviceAdd({ ...formValue.value, label: formValue.value.label.join(','), access_way: 'A' })
-      const configId = formValue.value.device_config_id
-      const deviceId = res.data.id
-      props.setIdCallback(deviceId, configId, res.data.voucher)
-      props.nextCallback()
-    } else {
-      message.error($t('custom.devicePage.validationFailed'))
-    }
-  })
+  if (installLoading.value || creating.value) return
+
+  try {
+    await formRef.value?.validate()
+  } catch {
+    message.error($t('custom.devicePage.validationFailed'))
+    return
+  }
+
+  creating.value = true
+  try {
+    const res = await deviceAdd({ ...formValue.value, label: formValue.value.label.join(','), access_way: 'A' })
+    if (isFlatRequestFailure(res) || !res.data?.id) return
+
+    const configId = formValue.value.device_config_id
+    props.setIdCallback(res.data.id, configId, res.data.voucher)
+    props.nextCallback()
+  } finally {
+    creating.value = false
+  }
 }
 
 onMounted(() => {
@@ -266,8 +280,8 @@ onMounted(() => {
           <n-button
             type="primary"
             attr-type="button"
-            :loading="installLoading"
-            :disabled="installLoading"
+            :loading="installLoading || creating"
+            :disabled="installLoading || creating"
             @click="handleValidateClick"
           >
             {{ $t('custom.devicePage.saveAndNext') }}

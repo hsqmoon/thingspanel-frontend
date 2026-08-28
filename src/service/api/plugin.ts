@@ -48,25 +48,22 @@ export const putServiceDrop = async (params: any) => {
 }
 
 // 三方服务设备列表查询
-export const getServiceListDrop = async (params: any) => {
+export const getServiceListDrop = async (params: any, requestConfig: Record<string, unknown> = {}) => {
   return await request.get<Panel.Data>('/service/access/device/list', {
+    ...(requestConfig as any),
     params
   })
 }
 
 // 设备配置下拉菜单✅
-export const getSelectServiceMenuList = async (params: any) => {
+export const getSelectServiceMenuList = async (params: any, requestConfig: Record<string, unknown> = {}) => {
   return await request.get<Panel.Data>('/device_config/menu', {
+    ...(requestConfig as any),
     params
   })
 }
 
 // 批量添加服务
-export const batchAddServiceMenuList = async (params: any) => {
-  return await request.post<Panel.Data>('/device/service/access/batch', params)
+export const batchAddServiceMenuList = async (params: any, requestConfig: Record<string, unknown> = {}) => {
+  return await request.post<Panel.Data>('/device/service/access/batch', params, requestConfig as any)
 }
-
-// // 修改三方接入点
-// export const putServiceMenuDrop = async (params: any) => {
-//   return await request.put<Panel.Data>("/service/access", params);
-// };

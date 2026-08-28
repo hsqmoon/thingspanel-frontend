@@ -44,8 +44,6 @@ export function cleanupLocalStorage(): void {
  * 清理所有localStorage（危险操作）
  */
 export function clearAllLocalStorage(): void {
-  console.error('⚠️ 正在清理所有localStorage...')
-
   try {
     localStorage.clear()
   } catch (error) {

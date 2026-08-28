@@ -55,6 +55,7 @@
 <script setup lang="ts">
 import { computed, ref, watch, onMounted } from 'vue'
 import type { SelectOption } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 import { deviceListForPanel, deviceMetricsList } from '@/service/api'
 import { $t } from '@/locales'
 
@@ -259,9 +260,12 @@ const loadMetricsOptions = async () => {
   try {
     isLoadingMetrics.value = true
     const res = await deviceMetricsList(selectedDeviceId.value)
+    if (isFlatRequestFailure(res)) {
+      throw res
+    }
 
     // 检查返回的数据结构
-    if (res && res.data && Array.isArray(res.data)) {
+    if (Array.isArray(res.data)) {
       // 根据数据类型过滤指标
       const allMetrics = res.data
       metricsOptions.value = allMetrics.filter(metric => {
@@ -277,14 +281,14 @@ const loadMetricsOptions = async () => {
         return true
       })
     } else {
-      console.error('API返回数据格式异常:', res)
-      metricsOptions.value = []
+      throw new Error('API返回数据格式异常')
     }
 
     metricsOptionsFetched.value = true
   } catch (error) {
-    console.error('加载指标失败:', error)
-    metricsOptions.value = []
+    if (!isFlatRequestFailure(error)) {
+      console.error('加载指标失败:', error)
+    }
   } finally {
     isLoadingMetrics.value = false
   }
@@ -322,10 +326,17 @@ const loadDeviceOptions = async () => {
   try {
     isLoadingDevices.value = true
     const res = await deviceListForPanel({})
-    internalDeviceOptions.value = res.data || []
+    if (isFlatRequestFailure(res)) {
+      throw res
+    }
+    if (!Array.isArray(res.data)) {
+      throw new Error('API返回设备列表格式异常')
+    }
+    internalDeviceOptions.value = res.data
   } catch (error) {
-    console.error('加载设备列表失败:', error)
-    internalDeviceOptions.value = []
+    if (!isFlatRequestFailure(error)) {
+      console.error('加载设备列表失败:', error)
+    }
   } finally {
     isLoadingDevices.value = false
   }

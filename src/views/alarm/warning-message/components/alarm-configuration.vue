@@ -13,6 +13,7 @@ import { NButton, NCard, NFlex, NInput } from 'naive-ui'
 import type { DataTableColumns, PaginationProps } from 'naive-ui'
 import dayjs from 'dayjs'
 import moment from 'moment'
+import { isFlatRequestFailure } from '@sa/axios'
 import { alarmHistory } from '@/service/api/alarm'
 import { $t } from '@/locales'
 import { deviceAlarmHistoryPut } from '@/service/api'
@@ -133,10 +134,14 @@ const pagination: PaginationProps = reactive({
 const getAlarmHistory = async () => {
   queryData.value.page = pagination.page as number
   queryData.value.page_size = pagination.pageSize as number
-  const { data } = await alarmHistory(queryData.value)
-  if (data) {
-    pagination.itemCount = data.total
-    tableData.value = data.list
+  loading.value = true
+  try {
+    const response = await alarmHistory(queryData.value)
+    if (isFlatRequestFailure(response) || !response.data) return
+
+    pagination.itemCount = response.data.total
+    tableData.value = response.data.list
+  } finally {
     loading.value = false
   }
 }
@@ -218,7 +223,9 @@ const submitCallback = async () => {
     id: infoData.value.id,
     description: description.value
   }
-  await deviceAlarmHistoryPut(putData)
+  const response = await deviceAlarmHistoryPut(putData)
+  if (isFlatRequestFailure(response)) return
+
   cancelCallback()
   await getAlarmHistory()
 }

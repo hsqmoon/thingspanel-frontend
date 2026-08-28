@@ -7,8 +7,7 @@
 export enum LogLevel {
   DEBUG = 0,
   INFO = 1,
-  WARN = 2,
-  ERROR = 3
+  ERROR = 2
 }
 
 // 日志配置接口
@@ -19,10 +18,10 @@ interface LoggerConfig {
   timestamp?: boolean
 }
 
-// 默认配置：开发环境启用所有日志，生产环境只启用警告和错误
+// 默认配置：开发环境启用所有日志，生产环境只启用错误
 const DEFAULT_CONFIG: LoggerConfig = {
   enabled: true,
-  level: import.meta.env.DEV ? LogLevel.DEBUG : LogLevel.WARN,
+  level: import.meta.env.DEV ? LogLevel.DEBUG : LogLevel.ERROR,
   prefix: '[ThingsPanel]',
   timestamp: true
 }
@@ -75,15 +74,6 @@ export default class Logger {
   info(...args: any[]): void {
     if (this.isLevelEnabled(LogLevel.INFO)) {
       console.info(this.formatPrefix('INFO'), ...args)
-    }
-  }
-
-  /**
-   * Warning级别日志
-   */
-  warn(...args: any[]): void {
-    if (this.isLevelEnabled(LogLevel.WARN)) {
-      console.warn(this.formatPrefix('WARN'), ...args)
     }
   }
 

@@ -7,9 +7,9 @@
   <div
     class="grid-layout-plus-wrapper grid-background-base"
     :class="{
-      readonly: readonly,
+      readonly: props.readonly,
       'dark-theme': isDarkTheme,
-      'show-grid': showGrid && !readonly
+      'show-grid': props.showGrid && !props.readonly
     }"
   >
     <!-- 网格核心组件 -->
@@ -17,8 +17,8 @@
       ref="gridCoreRef"
       :layout="normalizedLayout"
       :config="config"
-      :readonly="readonly"
-      :show-title="showTitle"
+      :readonly="props.readonly"
+      :show-title="props.showTitle"
       @layout-created="handleLayoutCreated"
       @layout-before-mount="handleLayoutBeforeMount"
       @layout-mounted="handleLayoutMounted"
@@ -41,8 +41,8 @@
 
     <!-- 拖拽区域组件 -->
     <GridDropZone
-      :readonly="readonly"
-      :show-drop-zone="showDropZone"
+      :readonly="props.readonly"
+      :show-drop-zone="props.showDropZone"
       @drag-enter="handleDragEnter"
       @drag-over="handleDragOver"
       @drag-leave="handleDragLeave"
@@ -71,6 +71,8 @@ import { validateExtendedGridConfig, validateLargeGridPerformance, optimizeItemF
 
 // Props
 interface Props extends GridLayoutPlusProps {
+  layout: GridLayoutPlusItem[]
+  idKey?: string
   /** 网格尺寸预设 */
   gridSize?: 'mini' | 'standard' | 'large' | 'mega' | 'extended' | 'custom'
   /** 自定义列数（当 gridSize 为 'custom' 时使用） */
@@ -78,7 +80,6 @@ interface Props extends GridLayoutPlusProps {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  layout: () => [],
   readonly: false,
   showGrid: true,
   showDropZone: false,
@@ -180,10 +181,6 @@ const gridValidation = computed(() => {
 
   // 大网格性能验证
   const performanceCheck = validateLargeGridPerformance(props.layout, colNum)
-  if (performanceCheck.success && (performanceCheck.data?.warning || performanceCheck.data?.recommendation)) {
-    console.error('Grid performance warning:', performanceCheck.data.warning)
-    console.info('Grid performance recommendation:', performanceCheck.data.recommendation)
-  }
 
   return {
     isValid: configValidation.success,
@@ -349,7 +346,7 @@ const getAllItems = () => {
 
 // 工具函数
 const generateId = (): string => {
-  return `item-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  return `item-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
 }
 
 const findAvailablePosition = (w: number, h: number): { x: number; y: number } => {

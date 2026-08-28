@@ -159,7 +159,7 @@ export function findAvailablePosition(
  * 生成唯一ID
  */
 export function generateId(prefix: string = 'item'): string {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
 }
 
 /**

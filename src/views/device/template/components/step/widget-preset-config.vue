@@ -1,6 +1,7 @@
 <script setup lang="tsx">
 import { ref, watch } from 'vue'
 import { NModal, NButton } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 import { $t } from '@/locales'
 import { getTemplat, putTemplat } from '@/service/api'
 import ThingsVisWidget from '@/components/thingsvis/ThingsVisWidget.vue'
@@ -42,11 +43,13 @@ const loading = ref(false)
 const saving = ref(false)
 const platformFields = ref<PlatformField[]>([])
 const initialConfig = ref<any>(null)
+const configError = ref('')
 
 const getPlatformFieldType = (dataType: string): PlatformField['type'] => {
   const normalizedType = dataType.toLowerCase()
   if (normalizedType.includes('bool')) return 'boolean'
-  if (normalizedType.includes('json') || normalizedType.includes('object') || normalizedType.includes('array')) return 'json'
+  if (normalizedType.includes('json') || normalizedType.includes('object') || normalizedType.includes('array'))
+    return 'json'
   if (/int|float|double|number/.test(normalizedType)) return 'number'
   return 'string'
 }
@@ -54,9 +57,11 @@ const getPlatformFieldType = (dataType: string): PlatformField['type'] => {
 // Load preset data
 const loadPresetData = async () => {
   loading.value = true
+  initialConfig.value = null
+  configError.value = ''
   try {
     const res = await getTemplat(props.deviceTemplateId)
-    if (res.data) {
+    if (!isFlatRequestFailure(res) && res.data) {
       // 1. Prepare platform fields (only showing the current property)
       platformFields.value = [
         {
@@ -83,8 +88,9 @@ const loadPresetData = async () => {
         initialConfig.value = null
       }
     }
-  } catch (err) {
-    console.error('[widget-preset-config] Failed to load preset:', err)
+  } catch (error) {
+    configError.value = error instanceof Error ? error.message : $t('common.fetchDataFailed')
+    window.$message?.error(configError.value)
   } finally {
     loading.value = false
   }
@@ -92,7 +98,7 @@ const loadPresetData = async () => {
 
 watch(
   () => props.presetModalVisible,
-  visible => {
+  (visible) => {
     if (visible && props.deviceTemplateId && props.property.identifier) {
       loadPresetData()
     } else {
@@ -104,12 +110,14 @@ watch(
 
 // Handle Save
 const handleSave = async (payload: any) => {
-  if (saving.value) return
+  if (saving.value || configError.value) return
   saving.value = true
 
   try {
     // 1. Get current template data
     const res = await getTemplat(props.deviceTemplateId)
+    if (isFlatRequestFailure(res) || !res.data) return
+
     const rawConfig = parseTemplateChartConfig(res.data.web_chart_config)
     const presets = rawConfig.device_widget_presets || {}
 
@@ -133,16 +141,17 @@ const handleSave = async (payload: any) => {
 
     // 3. Update the template
     rawConfig.device_widget_presets = presets
-    await putTemplat({
+    const updateResult = await putTemplat({
       ...res.data,
       web_chart_config: JSON.stringify(rawConfig)
     })
+    if (isFlatRequestFailure(updateResult)) return
 
     window.$message?.success($t('common.saveSuccess'))
     emit('update:presetModalVisible', false)
   } catch (error) {
-    console.error('[widget-preset-config] Save Failed:', error)
-    window.$message?.error($t('common.saveFailed'))
+    configError.value = error instanceof Error ? error.message : $t('common.saveFailed')
+    window.$message?.error(configError.value)
   } finally {
     saving.value = false
   }
@@ -162,6 +171,9 @@ const close = () => {
     :segmented="{ content: 'soft' }"
     @update:show="close"
   >
+    <NAlert v-if="configError" type="error" title="组件预设配置损坏" class="mb-12px">
+      {{ configError }}
+    </NAlert>
     <div v-if="presetModalVisible" class="preset-editor-content">
       <ThingsVisWidget
         v-if="!loading"
@@ -178,7 +190,7 @@ const close = () => {
     <template #footer>
       <div class="modal-footer">
         <NButton @click="close">{{ $t('generate.cancel') }}</NButton>
-        <NButton type="primary" :loading="saving" @click="editorRef?.triggerSave()">
+        <NButton type="primary" :loading="saving" :disabled="Boolean(configError)" @click="editorRef?.triggerSave()">
           {{ $t('common.save') }}
         </NButton>
       </div>

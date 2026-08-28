@@ -1,4 +1,5 @@
 import type { RouteRecordRaw } from 'vue-router'
+import { isFlatRequestFailure } from '@sa/axios'
 import type { CustomRoute, ElegantConstRoute, LastLevelRouteKey, RouteKey, RouteMap } from '@elegant-router/types'
 import { isThingsVisEnabled } from '@/config/runtime-features'
 import { fetchGetUserRoutes, fetchIsRouteExist } from '@/service/api/route'
@@ -15,29 +16,94 @@ import { getRouteName, getRoutePath } from './elegant/transform'
 import { router } from './instance'
 import { getRouteRuntime } from './routes/runtime'
 
-export async function initAuthRoute(): Promise<boolean> {
+let authRouteInitEpoch = 0
+let routeTransitionBarrier: Promise<void> | null = null
+
+export type AuthRouteInitResult = 'success' | 'failed' | 'stale'
+
+export async function initAuthRoute(): Promise<AuthRouteInitResult> {
+  while (routeTransitionBarrier) {
+    await routeTransitionBarrier
+  }
+
+  const epoch = ++authRouteInitEpoch
+  return initializeAuthRoute(epoch)
+}
+
+async function initializeAuthRoute(epoch: number): Promise<AuthRouteInitResult> {
+  const identityToken = localStg.get('token')
+  if (!identityToken) return 'failed'
+
   const routeStore = useRouteStore()
   const success =
-    routeStore.authRouteMode === 'static' ? await initStaticAuthRoute() : await initDynamicAuthRoute()
+    routeStore.authRouteMode === 'static'
+      ? await initStaticAuthRoute(epoch, identityToken)
+      : await initDynamicAuthRoute(epoch, identityToken)
+
+  if (epoch !== authRouteInitEpoch) return 'stale'
 
   if (success && routeStore.hasAuthRoutes) {
     useTabStore().initHomeTab()
   }
 
-  return success
+  return success ? 'success' : 'failed'
 }
 
 /** Clear routes and tabs owned by the current identity before replacing its session. */
 export async function resetAuthRoute() {
-  await useTabStore().clearTabs()
-  await useRouteStore().resetStore()
+  await replaceAuthRoutes(false)
 }
 
-async function initStaticAuthRoute(): Promise<boolean> {
+/** Invalidate pending initialization and rebuild routes without closing the current identity's tabs. */
+export async function resetAuthRouteStore() {
+  const release = await acquireRouteTransition()
+  authRouteInitEpoch += 1
+  try {
+    await useRouteStore().resetStore()
+  } finally {
+    release()
+  }
+}
+
+/** Replace one identity's routes atomically so guards cannot initialize inside the reset window. */
+export async function resetAndInitAuthRoute() {
+  return replaceAuthRoutes(true)
+}
+
+async function replaceAuthRoutes(initialize: boolean): Promise<AuthRouteInitResult> {
+  const release = await acquireRouteTransition()
+  const epoch = ++authRouteInitEpoch
+  try {
+    await useTabStore().clearTabs()
+    await useRouteStore().resetStore()
+    return initialize ? await initializeAuthRoute(epoch) : 'success'
+  } finally {
+    release()
+  }
+}
+
+async function acquireRouteTransition() {
+  while (routeTransitionBarrier) {
+    await routeTransitionBarrier
+  }
+
+  let releaseBarrier!: () => void
+  routeTransitionBarrier = new Promise<void>(resolve => {
+    releaseBarrier = resolve
+  })
+  return () => {
+    routeTransitionBarrier = null
+    releaseBarrier()
+  }
+}
+
+async function initStaticAuthRoute(epoch: number, identityToken: string): Promise<boolean> {
   const routeStore = useRouteStore()
   const { createRoutes } = getRouteRuntime()
   const { authRoutes } = createRoutes()
   const filteredAuthRoutes = filterAuthRoutesByRoles(authRoutes, getUserInfo().roles as string[])
+
+  if (epoch !== authRouteInitEpoch || localStg.get('token') !== identityToken) return false
 
   routeStore.hasAuthRoutes = filteredAuthRoutes.length > 0
   if (routeStore.hasAuthRoutes) {
@@ -48,18 +114,21 @@ async function initStaticAuthRoute(): Promise<boolean> {
   return true
 }
 
-async function initDynamicAuthRoute(): Promise<boolean> {
+async function initDynamicAuthRoute(epoch: number, identityToken: string): Promise<boolean> {
   const routeStore = useRouteStore()
 
   try {
-    const { data, error } = await fetchGetUserRoutes()
+    const response = await fetchGetUserRoutes()
 
-    if (error) {
+    if (epoch !== authRouteInitEpoch || localStg.get('token') !== identityToken) return false
+
+    if (isFlatRequestFailure(response)) {
       routeStore.hasAuthRoutes = false
-      if (!localStg.get('token') || error.response?.status === 401) return false
-      throw error
+      if (!localStg.get('token') || response.error.status === 401) return false
+      throw response
     }
 
+    const { data } = response
     const routes = data?.list || []
     routeStore.hasAuthRoutes = routes.length > 0
 
@@ -71,9 +140,14 @@ async function initDynamicAuthRoute(): Promise<boolean> {
 
     routeStore.setIsInitAuthRoute(true)
     return true
-  } catch (error) {
+  } catch (error: unknown) {
+    if (epoch !== authRouteInitEpoch || localStg.get('token') !== identityToken) return false
+
     routeStore.hasAuthRoutes = false
-    if (!localStg.get('token')) return false
+    if (!localStg.get('token') || (isFlatRequestFailure(error) && error.error.status === 401)) return false
+    if (error instanceof Error) {
+      window.$message?.error(error.message)
+    }
     throw error
   }
 }

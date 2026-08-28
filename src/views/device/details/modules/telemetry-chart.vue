@@ -10,6 +10,7 @@
  */
 
 import { onMounted, onBeforeUnmount, ref, watch, computed } from 'vue'
+import { isFlatRequestFailure } from '@sa/axios'
 import { NEmpty, NCard, NSkeleton } from 'naive-ui'
 import ThingsVisWidget from '@/components/thingsvis/ThingsVisWidget.vue'
 import { extractPlatformFields } from '@/utils/thingsvis/platform-fields'
@@ -187,6 +188,7 @@ const visWidgetRef = ref<InstanceType<typeof ThingsVisWidget> | null>(null)
 // 当前数据（轮询回退使用）
 const currentData = ref<Record<string, any>>({})
 const currentDataDeviceId = ref('')
+let dataRequestEpoch = 0
 const viewerPlatformDevices = computed(() => {
   if (!props.id || platformFields.value.length === 0) return []
   return [
@@ -211,16 +213,25 @@ const hasLoadedInitialSnapshot = computed(() => {
 const fetchAndUpdateData = async () => {
   if (!props.id || platformFields.value.length === 0) return
 
-  try {
-    const hasAttributes = platformFields.value.some(f => f.dataType === 'attribute')
+  const requestEpoch = ++dataRequestEpoch
+  const deviceId = props.id
+  const hasAttributes = platformFields.value.some(f => f.dataType === 'attribute')
 
-    const [telemetryRes, attributeRes] = await Promise.all([
-      telemetryDataCurrent(props.id),
-      hasAttributes ? getAttributeDataSet({ device_id: props.id }) : Promise.resolve({ data: [] })
-    ])
+  const [telemetryRes, attributeRes] = await Promise.all([
+    telemetryDataCurrent(deviceId),
+    hasAttributes ? getAttributeDataSet({ device_id: deviceId }) : Promise.resolve({ data: [], error: null })
+  ])
+  if (
+    isFlatRequestFailure(telemetryRes) ||
+    isFlatRequestFailure(attributeRes) ||
+    requestEpoch !== dataRequestEpoch ||
+    deviceId !== props.id
+  ) {
+    return
+  }
 
-    const telemetryList = telemetryRes?.data || []
-    const attributeList = attributeRes?.data || []
+    const telemetryList = telemetryRes.data || []
+    const attributeList = attributeRes.data || []
     const kvMap: Record<string, any> = {}
 
     const processItem = (item: any) => {
@@ -244,12 +255,9 @@ const fetchAndUpdateData = async () => {
         ...currentData.value,
         ...dataMap
       }
-      currentDataDeviceId.value = props.id
+      currentDataDeviceId.value = deviceId
       pushDataToVis(dataMap)
     }
-  } catch (err) {
-    console.error('[TelemetryChart] 获取设备实时数据失败:', err)
-  }
 }
 
 // WebSocket 推送数据到 ThingsVis
@@ -269,7 +277,7 @@ let initSequence = 0
 
 // ─── 加载模板和配置 ───────────────────────────────────────────────────────────
 
-const initTemplateData = async (deviceTemplateId: string) => {
+const initTemplateData = async (deviceTemplateId: string, sequence: number) => {
   if (!deviceTemplateId) {
     hasTemplate.value = false
     chartLoading.value = false
@@ -278,6 +286,7 @@ const initTemplateData = async (deviceTemplateId: string) => {
 
   try {
     const res = await getCachedDeviceTemplateDetail(deviceTemplateId)
+    if (sequence !== initSequence) return
 
     if (res.data) {
       const [telemetryRes, attributesRes, eventsRes, commandsRes] = await Promise.all([
@@ -286,6 +295,12 @@ const initTemplateData = async (deviceTemplateId: string) => {
         eventsApi({ page: 1, page_size: 1000, device_template_id: deviceTemplateId }),
         commandsApi({ page: 1, page_size: 1000, device_template_id: deviceTemplateId })
       ])
+      if (
+        sequence !== initSequence ||
+        [telemetryRes, attributesRes, eventsRes, commandsRes].some(isFlatRequestFailure)
+      ) {
+        return
+      }
 
       const telemetryList = getDeviceModelList(telemetryRes.data)
       const attributesList = getDeviceModelList(attributesRes.data)
@@ -317,19 +332,17 @@ const initTemplateData = async (deviceTemplateId: string) => {
           initialConfig.value = configJson
           hasTemplate.value = true
           await fetchAndUpdateData()
-        } catch (e) {
-          console.warn('[TelemetryChart] 解析 web_chart_config 失败', e)
+        } catch {
           hasTemplate.value = false
         }
       } else {
         hasTemplate.value = false
       }
     }
-  } catch (error) {
-    console.error('[TelemetryChart] 加载模板数据失败:', error)
-    hasTemplate.value = false
+  } catch {
+    if (sequence === initSequence) hasTemplate.value = false
   } finally {
-    chartLoading.value = false
+    if (sequence === initSequence) chartLoading.value = false
   }
 }
 
@@ -350,6 +363,7 @@ watch(
   [() => props.deviceTemplateId, templateContextResolved, () => props.id],
   async ([newVal]) => {
     const currentSequence = ++initSequence
+    dataRequestEpoch += 1
 
     // 先停止旧的推送
     realtimePush.value?.stop()
@@ -374,7 +388,7 @@ watch(
 
     chartLoading.value = true
 
-    await initTemplateData(newVal)
+    await initTemplateData(newVal, currentSequence)
 
     if (currentSequence !== initSequence || !hasTemplate.value) {
       return
@@ -408,6 +422,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  initSequence += 1
+  dataRequestEpoch += 1
   realtimePush.value?.stop()
   alarmPush.value?.stop()
   resizeObserver?.disconnect()

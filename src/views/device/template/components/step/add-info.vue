@@ -1,6 +1,7 @@
 <script setup lang="tsx">
 import { reactive, ref, watchEffect } from 'vue'
 import type { UploadFileInfo } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 import { localStg } from '@/utils/storage'
 import { addTemplat, getTemplat, putTemplat } from '@/service/api/system-data'
 import { $t } from '@/locales'
@@ -24,6 +25,7 @@ const props = defineProps({
 })
 const deviceTemplateId = ref(props.deviceTemplateId)
 const formRef: any = ref(null)
+const submitting = ref(false)
 
 interface AddFrom {
   name: string
@@ -82,7 +84,7 @@ const tagBlur: () => void = () => {
   }
 }
 
-const tagsClose: (index: number) => void = index => {
+const tagsClose: (index: number) => void = (index) => {
   addFrom.templateTage.splice(index, 1)
 }
 
@@ -104,16 +106,21 @@ const customRequest = ({ event }: { file: UploadFileInfo; event?: ProgressEvent 
 // 新增设备功能模板
 const next: () => void = async () => {
   await formRef.value?.validate()
-  if (addFrom.id) {
+  if (submitting.value) return
+
+  submitting.value = true
+  try {
     addFrom.label = addFrom.templateTage.join(',')
-    const response: any = await putTemplat(addFrom)
+    const response: any = addFrom.id ? await putTemplat(addFrom) : await addTemplat(addFrom)
+    if (isFlatRequestFailure(response)) return
+
+    const templateId = addFrom.id || response.data?.id
+    if (!templateId) return
+
     emit('update:stepCurrent', 2)
-    emit('update:deviceTemplateId', response.data.id)
-  } else {
-    addFrom.label = addFrom.templateTage.join(',')
-    const response: any = await addTemplat(addFrom)
-    emit('update:stepCurrent', 2)
-    emit('update:deviceTemplateId', response.data.id)
+    emit('update:deviceTemplateId', templateId)
+  } finally {
+    submitting.value = false
   }
 }
 
@@ -244,8 +251,8 @@ watchEffect(async () => {
     </n-form>
   </div>
   <div class="box1 m-t2">
-    <n-button type="primary" @click="next">{{ $t('device_template.nextStep') }}</n-button>
-    <n-button class="m-r3" @click="cancellation">{{ $t('generate.cancel') }}</n-button>
+    <n-button type="primary" :loading="submitting" @click="next">{{ $t('device_template.nextStep') }}</n-button>
+    <n-button class="m-r3" :disabled="submitting" @click="cancellation">{{ $t('generate.cancel') }}</n-button>
   </div>
 </template>
 

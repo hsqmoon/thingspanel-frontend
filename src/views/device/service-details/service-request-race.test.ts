@@ -14,13 +14,10 @@ const pluginApi = vi.hoisted(() => ({
 const deviceApi = vi.hoisted(() => ({
   deviceConfigMenu: vi.fn()
 }))
-const componentLogger = vi.hoisted(() => ({
-  error: vi.fn()
-}))
+const messageDestroy = vi.fn()
 
 vi.mock('@/service/api/plugin', () => pluginApi)
 vi.mock('@/service/api/device', () => deviceApi)
-vi.mock('@/utils/logger', () => ({ componentLogger }))
 vi.mock('@/locales', () => ({ $t: (key: string) => key }))
 vi.mock('vue-router', () => ({
   useRoute: () => ({
@@ -55,13 +52,36 @@ vi.mock('naive-ui', () => {
       return () => h('button', attrs, slots.default?.())
     }
   })
+  const select = defineComponent({
+    inheritAttrs: false,
+    setup(_, { attrs }) {
+      return () => h('select', { ...attrs, class: 'device-config-select' })
+    }
+  })
+  const popconfirm = defineComponent({
+    inheritAttrs: false,
+    setup(_, { attrs, slots }) {
+      return () =>
+        h('div', [
+          slots.trigger?.(),
+          h(
+            'button',
+            {
+              class: 'confirm-delete',
+              onClick: () => (attrs.onPositiveClick as (() => void) | undefined)?.()
+            },
+            'confirm delete'
+          )
+        ])
+    }
+  })
 
   return {
     NAlert: passthrough,
     NButton: button,
     NInput: passthrough,
-    NPopconfirm: passthrough,
-    NSelect: passthrough,
+    NPopconfirm: popconfirm,
+    NSelect: select,
     NSpace: passthrough,
     NTag: passthrough
   }
@@ -87,6 +107,18 @@ function deferred<T>(): Deferred<T> {
   return { promise, reject, resolve }
 }
 
+function requestFailure(message: string, status = 500) {
+  return {
+    data: null,
+    error: {
+      message,
+      status,
+      code: 'ERR_BAD_RESPONSE',
+      data: { message }
+    }
+  }
+}
+
 const passthrough = defineComponent({
   setup(_, { slots }) {
     return () => h('div', slots.default?.())
@@ -104,13 +136,21 @@ const dataTable = defineComponent({
   props: {
     data: { type: Array, default: () => [] },
     loading: Boolean,
+    columns: { type: Array, default: () => [] },
     pagination: { type: Object, default: () => ({}) }
   },
   emits: ['update:checkedRowKeys'],
   setup(props, { emit }) {
-    return () =>
-      h('div', { class: 'data-table', 'data-loading': String(props.loading) }, [
+    return () => {
+      const actionColumn = props.columns.find((column: any) => column.key === 'actions') as any
+      const actions = props.data[0] && actionColumn ? actionColumn.render(props.data[0]) : null
+      const configColumn = props.columns.find((column: any) => column.key === 'create_at') as any
+      const config = props.data[0] && configColumn ? configColumn.render(props.data[0]) : null
+
+      return h('div', { class: 'data-table', 'data-loading': String(props.loading) }, [
         h('pre', { class: 'table-rows' }, JSON.stringify(props.data)),
+        actions,
+        config,
         h(
           'button',
           {
@@ -131,6 +171,7 @@ const dataTable = defineComponent({
           'select'
         )
       ])
+    }
   }
 })
 
@@ -185,18 +226,20 @@ describe('service list request sequencing', () => {
 
   beforeEach(() => {
     document.body.innerHTML = ''
-    Object.values(pluginApi).forEach(mock => mock.mockReset())
-    Object.values(deviceApi).forEach(mock => mock.mockReset())
-    componentLogger.error.mockReset()
+    Object.values(pluginApi).forEach((mock) => mock.mockReset())
+    Object.values(deviceApi).forEach((mock) => mock.mockReset())
+    messageDestroy.mockReset()
     window.$message = {
       destroyAll: vi.fn(),
-      error: vi.fn(),
-      success: vi.fn()
+      error: vi.fn(() => ({ destroy: messageDestroy })),
+      success: vi.fn(),
+      warning: vi.fn()
     } as any
   })
 
   afterEach(() => {
     mountedApps.splice(0).forEach(({ app }) => app.unmount())
+    vi.useRealTimers()
   })
 
   it('keeps the newest plugin list when an older page response arrives late', async () => {
@@ -212,25 +255,24 @@ describe('service list request sequencing', () => {
     await flushUI()
     expect(mounted.root.querySelector('.table-rows')!.textContent).toContain('new-plugin')
 
-    first.reject(new Error('stale plugin request'))
+    first.resolve(requestFailure('stale plugin request'))
     await flushUI()
     expect(mounted.root.querySelector('.table-rows')!.textContent).toContain('new-plugin')
     expect(window.$message?.error).not.toHaveBeenCalled()
-    expect(componentLogger.error).not.toHaveBeenCalled()
   })
 
   it('handles a current plugin-list rejection without an unhandled promise', async () => {
-    const error = new Error('plugin list unavailable')
-    pluginApi.getServices.mockRejectedValue(error)
+    const error = requestFailure('plugin list unavailable', 503)
+    pluginApi.getServices.mockResolvedValue(error)
 
     const mounted = mount(PluginIndex)
-    mountedApps.push(mounted)
     await flushUI()
 
-    expect(componentLogger.error).toHaveBeenCalledWith('Failed to load plugin services', error)
-    expect(window.$message?.destroyAll).toHaveBeenCalledOnce()
+    expect(window.$message?.destroyAll).not.toHaveBeenCalled()
     expect(window.$message?.error).toHaveBeenCalledWith('plugin list unavailable')
     expect(mounted.root.querySelector('.data-table')!.getAttribute('data-loading')).toBe('false')
+    mounted.app.unmount()
+    expect(messageDestroy).toHaveBeenCalledOnce()
   })
 
   it('handles a plugin-list rejection after unmount without showing a stale error', async () => {
@@ -239,10 +281,9 @@ describe('service list request sequencing', () => {
 
     const mounted = mount(PluginIndex)
     mounted.app.unmount()
-    request.reject(new Error('request completed after unmount'))
+    request.resolve(requestFailure('request completed after unmount'))
     await flushUI()
 
-    expect(componentLogger.error).not.toHaveBeenCalled()
     expect(window.$message?.error).not.toHaveBeenCalled()
   })
 
@@ -265,23 +306,77 @@ describe('service list request sequencing', () => {
   })
 
   it('handles a current access-point rejection without an unhandled promise', async () => {
-    const error = { response: { data: { message: 'Access points unavailable' } } }
-    pluginApi.getServiceAccess.mockRejectedValue(error)
+    const error = requestFailure('Access points unavailable', 503)
+    pluginApi.getServiceAccess.mockResolvedValue(error)
+
+    const mounted = mount(ServiceDetails)
+    await flushUI()
+
+    expect(window.$message?.destroyAll).not.toHaveBeenCalled()
+    expect(window.$message?.error).toHaveBeenCalledWith('Access points unavailable')
+    expect(mounted.root.querySelector('.data-table')!.getAttribute('data-loading')).toBe('false')
+    mounted.app.unmount()
+    expect(messageDestroy).toHaveBeenCalledOnce()
+  })
+
+  it('leaves a plugin-list 401 entirely to the authentication layer', async () => {
+    pluginApi.getServices.mockResolvedValue(requestFailure('Session expired', 401))
+
+    const mounted = mount(PluginIndex)
+    mountedApps.push(mounted)
+    await flushUI()
+
+    expect(window.$message?.error).not.toHaveBeenCalled()
+  })
+
+  it('leaves an access-point 401 entirely to the authentication layer', async () => {
+    pluginApi.getServiceAccess.mockResolvedValue(requestFailure('Session expired', 401))
 
     const mounted = mount(ServiceDetails)
     mountedApps.push(mounted)
     await flushUI()
 
-    expect(componentLogger.error).toHaveBeenCalledWith('Failed to load service access points', error)
-    expect(window.$message?.destroyAll).toHaveBeenCalledOnce()
-    expect(window.$message?.error).toHaveBeenCalledWith('Access points unavailable')
-    expect(mounted.root.querySelector('.data-table')!.getAttribute('data-loading')).toBe('false')
+    expect(window.$message?.error).not.toHaveBeenCalled()
+  })
+
+  it('does not refresh the plugin list when deletion completes after unmount', async () => {
+    const deletion = deferred<any>()
+    pluginApi.getServices.mockResolvedValue({ data: { list: [{ id: 'plugin-to-delete' }], total: 1 } })
+    pluginApi.delRegisterService.mockImplementation(() => deletion.promise)
+
+    const mounted = mount(PluginIndex)
+    await flushUI()
+    mounted.root.querySelector<HTMLButtonElement>('.confirm-delete')!.click()
+    expect(pluginApi.delRegisterService).toHaveBeenCalledWith('plugin-to-delete')
+
+    mounted.app.unmount()
+    deletion.resolve({})
+    await flushUI()
+    expect(pluginApi.getServices).toHaveBeenCalledOnce()
+  })
+
+  it('does not refresh access points when deletion completes after unmount', async () => {
+    const deletion = deferred<any>()
+    pluginApi.getServiceAccess.mockResolvedValue({ data: { list: [{ id: 'access-to-delete' }], total: 1 } })
+    pluginApi.delServiceAccess.mockImplementation(() => deletion.promise)
+
+    const mounted = mount(ServiceDetails)
+    await flushUI()
+    mounted.root.querySelector<HTMLButtonElement>('.confirm-delete')!.click()
+    expect(pluginApi.delServiceAccess).toHaveBeenCalledWith('access-to-delete')
+
+    mounted.app.unmount()
+    deletion.resolve({})
+    await flushUI()
+    expect(pluginApi.getServiceAccess).toHaveBeenCalledOnce()
   })
 
   it('invalidates an earlier modal session without clearing the current loading state', async () => {
     const first = deferred<any>()
     const second = deferred<any>()
-    pluginApi.getServiceListDrop.mockImplementationOnce(() => first.promise).mockImplementationOnce(() => second.promise)
+    pluginApi.getServiceListDrop
+      .mockImplementationOnce(() => first.promise)
+      .mockImplementationOnce(() => second.promise)
     pluginApi.getSelectServiceMenuList.mockResolvedValue({ data: [{ id: 'template-1', name: 'Template' }] })
 
     const mounted = mount(ServiceConfigModal)
@@ -301,12 +396,121 @@ describe('service list request sequencing', () => {
     expect(mounted.root.querySelector('.table-rows')!.textContent).toContain('current-device')
   })
 
-  it('blocks every close path during submission, then closes and refreshes after success', async () => {
+  it('uses the unique access-point id and never falls back to unrelated templates', async () => {
+    pluginApi.getServiceListDrop.mockResolvedValue({ data: { list: [], total: 0 }, error: null })
+    pluginApi.getSelectServiceMenuList.mockResolvedValue({ data: [], error: null })
+    deviceApi.deviceConfigMenu.mockResolvedValue({ data: [], error: null })
+
+    const mounted = mount(ServiceConfigModal)
+    mountedApps.push(mounted)
+    const vm = mounted.vm as unknown as { openModal: (voucher: string, row: any, edit: boolean) => void }
+    vm.openModal('voucher', { id: 'access' }, false)
+    await flushUI()
+
+    expect(pluginApi.getServiceListDrop).toHaveBeenCalledWith(
+      expect.objectContaining({ service_access_id: 'access' }),
+      { silentError: true }
+    )
+    expect(pluginApi.getSelectServiceMenuList).toHaveBeenCalledWith(
+      expect.objectContaining({ protocol_type: 'protocol-1' }),
+      { silentError: true }
+    )
+    expect(deviceApi.deviceConfigMenu).not.toHaveBeenCalled()
+  })
+
+  it('shows the real modal list failure through its own message handle', async () => {
+    const failure = requestFailure('Upstream device list unavailable', 503)
+    pluginApi.getServiceListDrop.mockResolvedValue(failure)
+    pluginApi.getSelectServiceMenuList.mockResolvedValue({ data: [], error: null })
+
+    const mounted = mount(ServiceConfigModal)
+    const vm = mounted.vm as unknown as { openModal: (voucher: string, row: any, edit: boolean) => void }
+    vm.openModal('voucher', { id: 'access' }, false)
+    await flushUI()
+
+    expect(window.$message?.error).toHaveBeenCalledWith('Upstream device list unavailable')
+    expect(window.$message?.destroyAll).not.toHaveBeenCalled()
+    mounted.app.unmount()
+    expect(messageDestroy).toHaveBeenCalledOnce()
+  })
+
+  it('leaves a modal list 401 entirely to the authentication layer', async () => {
+    pluginApi.getServiceListDrop.mockResolvedValue(requestFailure('Session expired', 401))
+    pluginApi.getSelectServiceMenuList.mockResolvedValue({ data: [], error: null })
+
+    const mounted = mount(ServiceConfigModal)
+    mountedApps.push(mounted)
+    const vm = mounted.vm as unknown as { openModal: (voucher: string, row: any, edit: boolean) => void }
+    vm.openModal('voucher', { id: 'access' }, false)
+    await flushUI()
+
+    expect(window.$message?.error).not.toHaveBeenCalled()
+  })
+
+  it('clears rows and every retained selection when the current device list fails', async () => {
+    pluginApi.getServiceListDrop
+      .mockResolvedValueOnce({
+        data: {
+          list: [
+            { device_number: 'device-1', device_name: 'Device 1', device_config_id: 'template-1', is_bind: false }
+          ],
+          total: 1
+        },
+        error: null
+      })
+      .mockResolvedValueOnce(requestFailure('page unavailable', 503))
+    pluginApi.getSelectServiceMenuList.mockResolvedValue({
+      data: [{ id: 'template-1', name: 'Template' }],
+      error: null
+    })
+
+    const mounted = mount(ServiceConfigModal)
+    mountedApps.push(mounted)
+    const vm = mounted.vm as unknown as { openModal: (voucher: string, row: any, edit: boolean) => void }
+    vm.openModal('secret-voucher', { id: 'access' }, false)
+    await flushUI()
+    mounted.root.querySelector<HTMLButtonElement>('.select-device')!.click()
+    mounted.root.querySelector<HTMLButtonElement>('.next-page')!.click()
+    await flushUI()
+
+    expect(mounted.root.querySelector('.table-rows')!.textContent).toBe('[]')
+    mounted.root.querySelector<HTMLButtonElement>('.btn')!.click()
+    await flushUI()
+    expect(pluginApi.batchAddServiceMenuList).not.toHaveBeenCalled()
+    expect(window.$message?.success).not.toHaveBeenCalled()
+  })
+
+  it('renders the configuration selector read-only for an already bound device', async () => {
+    pluginApi.getServiceListDrop.mockResolvedValue({
+      data: {
+        list: [{ device_number: 'device-1', device_name: 'Device 1', device_config_id: 'template-1', is_bind: true }],
+        total: 1
+      },
+      error: null
+    })
+    pluginApi.getSelectServiceMenuList.mockResolvedValue({
+      data: [{ id: 'template-1', name: 'Template' }],
+      error: null
+    })
+
+    const mounted = mount(ServiceConfigModal)
+    mountedApps.push(mounted)
+    const vm = mounted.vm as unknown as { openModal: (voucher: string, row: any, edit: boolean) => void }
+    vm.openModal('secret-voucher', { id: 'access' }, false)
+    await flushUI()
+
+    expect(mounted.root.querySelector<HTMLSelectElement>('.device-config-select')!.disabled).toBe(true)
+  })
+
+  it('blocks every close path during submission, then closes after delivered plugin synchronization', async () => {
     const submit = deferred<any>()
     const getList = vi.fn()
     const goBack = vi.fn()
     pluginApi.getServiceListDrop.mockResolvedValue({
-      data: { list: [{ device_number: 'device-1', device_name: 'Device 1' }], total: 1 }
+      data: {
+        list: [{ device_number: 'device-1', device_name: 'Device 1', device_config_id: 'template-1' }],
+        total: 1
+      }
     })
     pluginApi.getSelectServiceMenuList.mockResolvedValue({ data: [{ id: 'template-1', name: 'Template' }] })
     pluginApi.batchAddServiceMenuList.mockImplementation(() => submit.promise)
@@ -328,7 +532,7 @@ describe('service list request sequencing', () => {
     expect(renderedModal.getAttribute('data-mask-closable')).toBe('false')
     expect(renderedModal.getAttribute('data-close-on-esc')).toBe('false')
     mounted.root.querySelector<HTMLButtonElement>('.modal-dismiss')!.click()
-    mounted.root.querySelectorAll<HTMLButtonElement>('.footer button:not(.btn)').forEach(closeButton => {
+    mounted.root.querySelectorAll<HTMLButtonElement>('.footer button:not(.btn)').forEach((closeButton) => {
       expect(closeButton.disabled).toBe(true)
       closeButton.click()
     })
@@ -337,20 +541,36 @@ describe('service list request sequencing', () => {
     expect(mounted.root.querySelector('.modal')!.getAttribute('data-show')).toBe('true')
     expect(goBack).not.toHaveBeenCalled()
 
-    submit.resolve({ data: true })
+    submit.resolve({
+      data: {
+        devices: [{ id: 'device-id-1', device_number: 'device-1' }],
+        delivery: {
+          event_id: '12345678-delivered',
+          status: 'delivered',
+          attempts: 1,
+          next_retry_at: null,
+          last_error: null
+        }
+      },
+      error: null
+    })
     await flushUI()
     expect(mounted.root.querySelector('.modal')!.getAttribute('data-show')).toBe('false')
     expect(window.$message?.success).toHaveBeenCalledWith('common.operationSuccess')
     expect(getList).toHaveBeenCalledOnce()
     expect(goBack).not.toHaveBeenCalled()
+    expect(pluginApi.batchAddServiceMenuList).toHaveBeenCalledWith(expect.any(Object), { silentError: true })
   })
 
-  it('shows the generic operation failure when a submission has no backend message', async () => {
+  it('requires a device configuration for every selected device before submitting', async () => {
     pluginApi.getServiceListDrop.mockResolvedValue({
-      data: { list: [{ device_number: 'device-1', device_name: 'Device 1' }], total: 1 }
+      data: { list: [{ device_number: 'device-1', device_name: 'Device 1', is_bind: false }], total: 1 },
+      error: null
     })
-    pluginApi.getSelectServiceMenuList.mockResolvedValue({ data: [{ id: 'template-1', name: 'Template' }] })
-    pluginApi.batchAddServiceMenuList.mockResolvedValue({})
+    pluginApi.getSelectServiceMenuList.mockResolvedValue({
+      data: [{ id: 'template-1', name: 'Template' }],
+      error: null
+    })
 
     const mounted = mount(ServiceConfigModal)
     mountedApps.push(mounted)
@@ -362,19 +582,321 @@ describe('service list request sequencing', () => {
     mounted.root.querySelector<HTMLButtonElement>('.btn')!.click()
     await flushUI()
 
-    expect(componentLogger.error).toHaveBeenCalledWith('Service configuration submission failed', {})
-    expect(window.$message?.destroyAll).toHaveBeenCalledOnce()
-    expect(window.$message?.error).toHaveBeenCalledWith('common.operationFailed')
+    expect(pluginApi.batchAddServiceMenuList).not.toHaveBeenCalled()
+    expect(window.$message?.error).toHaveBeenCalledWith('请选择设备配置模板后再提交（device-1）')
     expect(mounted.root.querySelector('.modal')!.getAttribute('data-show')).toBe('true')
   })
 
-  it('logs a rejected submission and replaces the request-layer message with its specific error', async () => {
-    const error = { response: { data: { message: 'Backend rejected this device' } } }
+  it('requires a non-empty device name before submitting', async () => {
     pluginApi.getServiceListDrop.mockResolvedValue({
-      data: { list: [{ device_number: 'device-1', device_name: 'Device 1' }], total: 1 }
+      data: { list: [{ device_number: 'device-1', device_name: '   ', device_config_id: 'template-1' }], total: 1 },
+      error: null
     })
     pluginApi.getSelectServiceMenuList.mockResolvedValue({ data: [{ id: 'template-1', name: 'Template' }] })
-    pluginApi.batchAddServiceMenuList.mockRejectedValue(error)
+
+    const mounted = mount(ServiceConfigModal)
+    mountedApps.push(mounted)
+    const vm = mounted.vm as unknown as { openModal: (voucher: string, row: any, edit: boolean) => void }
+    vm.openModal('voucher', { id: 'access' }, false)
+    await flushUI()
+    mounted.root.querySelector<HTMLButtonElement>('.select-device')!.click()
+    mounted.root.querySelector<HTMLButtonElement>('.btn')!.click()
+    await flushUI()
+
+    expect(pluginApi.batchAddServiceMenuList).not.toHaveBeenCalled()
+    expect(window.$message?.error).toHaveBeenCalledWith('请输入设备名称后再提交（device-1）')
+  })
+
+  it('sends only fields defined by the batch-create contract', async () => {
+    pluginApi.getServiceListDrop.mockResolvedValue({
+      data: {
+        list: [{
+          device_number: 'device-1', device_name: ' Device 1 ', device_config_id: 'template-1',
+          description: 'description', protocol_config: '{"ignored":true}', additional_info: '{"ignored":true}'
+        }],
+        total: 1
+      }
+    })
+    pluginApi.getSelectServiceMenuList.mockResolvedValue({ data: [{ id: 'template-1', name: 'Template' }] })
+    pluginApi.batchAddServiceMenuList.mockResolvedValue({
+      data: {
+        devices: [{ id: 'device-id-1', device_number: 'device-1' }],
+        delivery: { event_id: 'delivered-event', status: 'delivered', attempts: 1 }
+      },
+      error: null
+    })
+
+    const mounted = mount(ServiceConfigModal)
+    mountedApps.push(mounted)
+    const vm = mounted.vm as unknown as { openModal: (voucher: string, row: any, edit: boolean) => void }
+    vm.openModal('voucher', { id: 'access' }, false)
+    await flushUI()
+    mounted.root.querySelector<HTMLButtonElement>('.select-device')!.click()
+    mounted.root.querySelector<HTMLButtonElement>('.btn')!.click()
+    await flushUI()
+
+    const requestBody = pluginApi.batchAddServiceMenuList.mock.calls[0][0]
+    expect(requestBody.device_list[0]).toEqual({
+      device_number: 'device-1',
+      device_name: 'Device 1',
+      description: 'description',
+      device_config_id: 'template-1'
+    })
+  })
+
+  it('shows a deterministic 4xx rejection without reconciliation or locking the modal', async () => {
+    pluginApi.getServiceListDrop.mockResolvedValue({
+      data: { list: [{ device_number: 'device-1', device_name: 'Device 1', device_config_id: 'template-1' }], total: 1 }
+    })
+    pluginApi.getSelectServiceMenuList.mockResolvedValue({ data: [{ id: 'template-1', name: 'Template' }] })
+    pluginApi.batchAddServiceMenuList.mockResolvedValue(requestFailure('Template does not match protocol', 400))
+
+    const mounted = mount(ServiceConfigModal)
+    mountedApps.push(mounted)
+    const vm = mounted.vm as unknown as { openModal: (voucher: string, row: any, edit: boolean) => void }
+    vm.openModal('voucher', { id: 'access' }, false)
+    await flushUI()
+    mounted.root.querySelector<HTMLButtonElement>('.select-device')!.click()
+    mounted.root.querySelector<HTMLButtonElement>('.btn')!.click()
+    await flushUI()
+
+    expect(pluginApi.getServiceListDrop).toHaveBeenCalledOnce()
+    expect(window.$message?.error).toHaveBeenCalledWith('Template does not match protocol')
+    expect(mounted.root.querySelector('.modal')!.getAttribute('data-show')).toBe('true')
+    expect(mounted.root.querySelector('.modal')!.getAttribute('data-closable')).toBe('true')
+  })
+
+  it.each([100005, 204004, 204006])(
+    'uses backend business code %s to reject an HTTP 200 response without reconciliation or locking',
+    async backendCode => {
+    pluginApi.getServiceListDrop.mockResolvedValue({
+      data: { list: [{ device_number: 'device-1', device_name: 'Device 1', device_config_id: 'template-1' }], total: 1 }
+    })
+    pluginApi.getSelectServiceMenuList.mockResolvedValue({ data: [{ id: 'template-1', name: 'Template' }] })
+    pluginApi.batchAddServiceMenuList.mockResolvedValue({
+      data: null,
+      error: {
+        message: '设备参数错误',
+        status: 200,
+        code: 'BACKEND_ERROR',
+        data: { code: backendCode, message: '设备参数错误' }
+      }
+    })
+
+    const mounted = mount(ServiceConfigModal)
+    mountedApps.push(mounted)
+    const vm = mounted.vm as unknown as { openModal: (voucher: string, row: any, edit: boolean) => void }
+    vm.openModal('voucher', { id: 'access' }, false)
+    await flushUI()
+    mounted.root.querySelector<HTMLButtonElement>('.select-device')!.click()
+    mounted.root.querySelector<HTMLButtonElement>('.btn')!.click()
+    await flushUI()
+
+    expect(pluginApi.getServiceListDrop).toHaveBeenCalledOnce()
+    expect(window.$message?.error).toHaveBeenCalledWith('设备参数错误')
+    expect(mounted.root.querySelector('.modal')!.getAttribute('data-show')).toBe('true')
+    expect(mounted.root.querySelector('.modal')!.getAttribute('data-closable')).toBe('true')
+    }
+  )
+
+  it.each(['pending', 'processing'])(
+    'reports %s plugin delivery without claiming full synchronization',
+    async (status) => {
+      const getList = vi.fn()
+      pluginApi.getServiceListDrop.mockResolvedValue({
+        data: {
+          list: [
+            { device_number: 'device-1', device_name: 'Device 1', device_config_id: 'template-1', is_bind: false }
+          ],
+          total: 1
+        }
+      })
+      pluginApi.getSelectServiceMenuList.mockResolvedValue({ data: [{ id: 'template-1', name: 'Template' }] })
+      const delivery = {
+        event_id: 'abcdef12-3456-7890',
+        status,
+        attempts: status === 'pending' ? 0 : 1,
+        next_retry_at: '2026-08-28T05:00:00Z',
+        last_error: null
+      }
+      pluginApi.batchAddServiceMenuList.mockResolvedValue({
+        data: { devices: [{ id: 'device-id-1', device_number: 'device-1' }], delivery },
+        error: null
+      })
+
+      const mounted = mount(ServiceConfigModal, { onGetList: getList })
+      mountedApps.push(mounted)
+      const vm = mounted.vm as unknown as { openModal: (voucher: string, row: any, edit: boolean) => void }
+      vm.openModal('voucher', { id: 'access' }, false)
+      await flushUI()
+      mounted.root.querySelector<HTMLButtonElement>('.select-device')!.click()
+      await flushUI()
+      mounted.root.querySelector<HTMLButtonElement>('.btn')!.click()
+      await flushUI()
+
+      expect(window.$message?.warning).toHaveBeenCalledWith('设备已创建，插件同步中（事件 abcdef12）')
+      expect(window.$message?.success).not.toHaveBeenCalled()
+      expect(getList).toHaveBeenCalledOnce()
+      expect(mounted.root.querySelector('.modal')!.getAttribute('data-show')).toBe('false')
+    }
+  )
+
+  it('treats an unknown delivery status as invalid and reconciles the persisted devices', async () => {
+    const getList = vi.fn()
+    pluginApi.getServiceListDrop
+      .mockResolvedValueOnce({
+        data: {
+          list: [
+            { device_number: 'device-1', device_name: 'Device 1', device_config_id: 'template-1', is_bind: false }
+          ],
+          total: 1
+        }
+      })
+      .mockResolvedValueOnce({
+        data: { list: [{ device_number: 'device-1', device_name: 'Device 1', is_bind: true }], total: 1 }
+      })
+    pluginApi.getSelectServiceMenuList.mockResolvedValue({ data: [{ id: 'template-1', name: 'Template' }] })
+    const invalidResponse = {
+      data: {
+        devices: [{ id: 'device-id-1', device_number: 'device-1' }],
+        delivery: { event_id: 'unknown-event', status: 'unknown', attempts: 1 }
+      },
+      error: null
+    }
+    pluginApi.batchAddServiceMenuList.mockResolvedValue(invalidResponse)
+
+    const mounted = mount(ServiceConfigModal, { onGetList: getList })
+    mountedApps.push(mounted)
+    const vm = mounted.vm as unknown as { openModal: (voucher: string, row: any, edit: boolean) => void }
+    vm.openModal('voucher', { id: 'access' }, false)
+    await flushUI()
+    mounted.root.querySelector<HTMLButtonElement>('.select-device')!.click()
+    await flushUI()
+    mounted.root.querySelector<HTMLButtonElement>('.btn')!.click()
+    await flushUI()
+
+    expect(pluginApi.getServiceListDrop).toHaveBeenCalledTimes(2)
+    expect(window.$message?.warning).toHaveBeenCalledWith('设备已创建，插件同步状态未知，请稍后刷新检查。')
+    expect(window.$message?.success).not.toHaveBeenCalled()
+    expect(getList).toHaveBeenCalledOnce()
+    expect(mounted.root.querySelector('.modal')!.getAttribute('data-show')).toBe('false')
+  })
+
+  it('stays locked when repeated reconciliation cannot prove that submission was not persisted', async () => {
+    vi.useFakeTimers()
+    const getList = vi.fn()
+    pluginApi.getServiceListDrop.mockResolvedValue({
+      data: {
+        list: [{ device_number: 'device-1', device_name: 'Device 1', device_config_id: 'template-1', is_bind: false }],
+        total: 1
+      }
+    })
+    pluginApi.getSelectServiceMenuList.mockResolvedValue({ data: [{ id: 'template-1', name: 'Template' }] })
+    const failure = requestFailure('Backend rejected this device', 503)
+    pluginApi.batchAddServiceMenuList.mockResolvedValue(failure)
+
+    const mounted = mount(ServiceConfigModal, { onGetList: getList })
+    mountedApps.push(mounted)
+    const vm = mounted.vm as unknown as { openModal: (voucher: string, row: any, edit: boolean) => void }
+    vm.openModal('voucher', { id: 'access' }, false)
+    await flushUI()
+    mounted.root.querySelector<HTMLButtonElement>('.select-device')!.click()
+    await flushUI()
+    mounted.root.querySelector<HTMLButtonElement>('.btn')!.click()
+    await flushUI()
+    await vi.runAllTimersAsync()
+    await flushUI()
+
+    expect(pluginApi.getServiceListDrop).toHaveBeenCalledTimes(4)
+    expect(getList).toHaveBeenCalledOnce()
+    expect(window.$message?.destroyAll).not.toHaveBeenCalled()
+    expect(window.$message?.error).toHaveBeenCalledWith(
+      '无法确认提交是否落库，请刷新页面检查。为避免重复创建设备，当前已禁止再次提交。'
+    )
+    expect(mounted.root.querySelector('.modal')!.getAttribute('data-show')).toBe('true')
+    expect(mounted.root.querySelector('.modal')!.getAttribute('data-closable')).toBe('false')
+  })
+
+  it('treats an uncertain submission as successful when reconciliation finds the binding', async () => {
+    const getList = vi.fn()
+    pluginApi.getServiceListDrop
+      .mockResolvedValueOnce({
+        data: {
+          list: [
+            { device_number: 'device-1', device_name: 'Device 1', device_config_id: 'template-1', is_bind: false }
+          ],
+          total: 1
+        }
+      })
+      .mockResolvedValueOnce({
+        data: { list: [{ device_number: 'device-1', device_name: 'Device 1', is_bind: true }], total: 1 }
+      })
+    pluginApi.getSelectServiceMenuList.mockResolvedValue({ data: [{ id: 'template-1', name: 'Template' }] })
+    pluginApi.batchAddServiceMenuList.mockResolvedValue(requestFailure('Response lost', 504))
+
+    const mounted = mount(ServiceConfigModal, { onGetList: getList })
+    mountedApps.push(mounted)
+    const vm = mounted.vm as unknown as { openModal: (voucher: string, row: any, edit: boolean) => void }
+    vm.openModal('voucher', { id: 'access' }, false)
+    await flushUI()
+    mounted.root.querySelector<HTMLButtonElement>('.select-device')!.click()
+    await flushUI()
+    mounted.root.querySelector<HTMLButtonElement>('.btn')!.click()
+    await flushUI()
+
+    expect(pluginApi.getServiceListDrop).toHaveBeenCalledTimes(2)
+    expect(getList).toHaveBeenCalledOnce()
+    expect(window.$message?.warning).toHaveBeenCalledWith('设备已创建，插件同步状态未知，请稍后刷新检查。')
+    expect(window.$message?.error).not.toHaveBeenCalled()
+    expect(window.$message?.destroyAll).not.toHaveBeenCalled()
+    expect(mounted.root.querySelector('.modal')!.getAttribute('data-show')).toBe('false')
+  })
+
+  it('stays locked when reconciliation itself fails and forbids a blind retry', async () => {
+    const getList = vi.fn()
+    pluginApi.getServiceListDrop
+      .mockResolvedValueOnce({
+        data: {
+          list: [
+            { device_number: 'device-1', device_name: 'Device 1', device_config_id: 'template-1', is_bind: false }
+          ],
+          total: 1
+        }
+      })
+      .mockResolvedValueOnce(requestFailure('Reconciliation unavailable', 503))
+    pluginApi.getSelectServiceMenuList.mockResolvedValue({ data: [{ id: 'template-1', name: 'Template' }] })
+    pluginApi.batchAddServiceMenuList.mockResolvedValue(requestFailure('Response lost', 504))
+
+    const mounted = mount(ServiceConfigModal, { onGetList: getList })
+    mountedApps.push(mounted)
+    const vm = mounted.vm as unknown as { openModal: (voucher: string, row: any, edit: boolean) => void }
+    vm.openModal('voucher', { id: 'access' }, false)
+    await flushUI()
+    mounted.root.querySelector<HTMLButtonElement>('.select-device')!.click()
+    await flushUI()
+    mounted.root.querySelector<HTMLButtonElement>('.btn')!.click()
+    await flushUI()
+
+    expect(getList).toHaveBeenCalledOnce()
+    expect(window.$message?.error).toHaveBeenCalledWith(
+      '无法确认提交结果：Reconciliation unavailable。请刷新页面后检查，当前已禁止再次提交。'
+    )
+    expect(window.$message?.destroyAll).not.toHaveBeenCalled()
+    expect(mounted.root.querySelector('.modal')!.getAttribute('data-closable')).toBe('false')
+    mounted.root.querySelector<HTMLButtonElement>('.btn')!.click()
+    await flushUI()
+    expect(pluginApi.batchAddServiceMenuList).toHaveBeenCalledOnce()
+  })
+
+  it('leaves a submission 401 to the authentication layer without discarding the modal draft', async () => {
+    pluginApi.getServiceListDrop.mockResolvedValue({
+      data: {
+        list: [{ device_number: 'device-1', device_name: 'Device 1', device_config_id: 'template-1', is_bind: false }],
+        total: 1
+      }
+    })
+    pluginApi.getSelectServiceMenuList.mockResolvedValue({ data: [{ id: 'template-1', name: 'Template' }] })
+    pluginApi.batchAddServiceMenuList.mockResolvedValue(requestFailure('Session expired', 401))
 
     const mounted = mount(ServiceConfigModal)
     mountedApps.push(mounted)
@@ -386,8 +908,9 @@ describe('service list request sequencing', () => {
     mounted.root.querySelector<HTMLButtonElement>('.btn')!.click()
     await flushUI()
 
-    expect(componentLogger.error).toHaveBeenCalledWith('Failed to submit service configuration', error)
-    expect(window.$message?.destroyAll).toHaveBeenCalledOnce()
-    expect(window.$message?.error).toHaveBeenCalledWith('Backend rejected this device')
+    expect(window.$message?.error).not.toHaveBeenCalled()
+    expect(pluginApi.getServiceListDrop).toHaveBeenCalledOnce()
+    expect(mounted.root.querySelector('.modal')!.getAttribute('data-show')).toBe('true')
+    expect(mounted.root.querySelector('.modal')!.getAttribute('data-closable')).toBe('true')
   })
 })

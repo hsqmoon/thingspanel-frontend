@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   NButton,
@@ -28,7 +28,6 @@ import {
   createThingsVisDashboard,
   duplicateThingsVisDashboard,
   applySuperAdminHomeTemplate,
-  deleteThingsVisDashboard,
   setHomeThingsVisDashboard,
   getThingsVisDashboardThumbnail,
   type DashboardListItem,
@@ -36,7 +35,9 @@ import {
 } from '@/service/api/thingsvis'
 import {
   deleteDashboardMenuConfig,
+  fetchDashboardDeletion,
   fetchDashboardMenuConfig,
+  requestDashboardDeletion,
   saveDashboardMenuConfig,
   type DashboardMenuConfig
 } from '@/service/api/dashboard-menu'
@@ -57,6 +58,9 @@ const projectId = computed(() => route.query.projectId as string)
 // 状态
 const loading = ref(false)
 const deletingId = ref<string | null>(null)
+const pendingDeletionIds = ref(new Set<string>())
+const deletionPollTimers = new Map<string, ReturnType<typeof setTimeout>>()
+let componentUnmounted = false
 const project = ref<ThingsVisProject | null>(null)
 const allDashboards = ref<DashboardListItem[]>([])
 const showModal = ref(false)
@@ -247,6 +251,7 @@ const handleCreateDashboard = async () => {
 
 /** 删除 Dashboard */
 const openDeleteConfirm = (id: string, name: string) => {
+  if (pendingDeletionIds.value.has(id)) return
   pendingDeleteDashboard.value = { id, name }
   deleteConfirmModal.value = true
 }
@@ -256,22 +261,24 @@ const handleDeleteDashboard = async () => {
   deletingId.value = pendingDeleteDashboard.value.id
   try {
     const { id } = pendingDeleteDashboard.value
-    const { error: menuError } = await deleteDashboardMenuConfig(id)
-    if (menuError) {
-      message.error('删除失败：无法清理关联菜单')
+    const { data, error } = await requestDashboardDeletion(id)
+    if (error || !data) {
+      message.error(`删除任务提交失败${error?.message ? `：${error.message}` : ''}`)
+      return
+    }
+    if (data.status !== 'delivered' && data.status !== 'pending') {
+      message.error('删除任务返回了无效状态')
       return
     }
 
-    const { error } = await deleteThingsVisDashboard(id)
-    if (!error) {
-      deleteConfirmModal.value = false
-      pendingDeleteDashboard.value = null
-      await refreshAuthRoutes(route.fullPath)
-      clearThingsVisHomeCache()
-      await fetchDashboards()
+    deleteConfirmModal.value = false
+    pendingDeleteDashboard.value = null
+    if (data.status === 'delivered') {
+      await completeDashboardDeletion(id)
     } else {
-      console.warn(`[handleDeleteDashboard] 菜单 ${id} 已删除，但 ThingsVis 仪表盘删除失败`)
-      message.error('删除失败')
+      pendingDeletionIds.value = new Set(pendingDeletionIds.value).add(id)
+      message.warning('删除任务已提交，关联菜单将在仪表盘确认删除后自动清理')
+      scheduleDashboardDeletionPoll(id)
     }
   } catch (e) {
     message.error('删除失败')
@@ -279,6 +286,50 @@ const handleDeleteDashboard = async () => {
   } finally {
     deletingId.value = null
   }
+}
+
+const completeDashboardDeletion = async (dashboardId: string) => {
+  deletionPollTimers.delete(dashboardId)
+  const nextPendingIds = new Set(pendingDeletionIds.value)
+  nextPendingIds.delete(dashboardId)
+  pendingDeletionIds.value = nextPendingIds
+  if (componentUnmounted) return
+
+  await refreshAuthRoutes(route.fullPath)
+  if (componentUnmounted) return
+  clearThingsVisHomeCache()
+  await fetchDashboards()
+  if (!componentUnmounted) message.success('仪表盘已删除')
+}
+
+const scheduleDashboardDeletionPoll = (dashboardId: string, failedAttempts = 0) => {
+  if (componentUnmounted) return
+  deletionPollTimers.set(
+    dashboardId,
+    setTimeout(async () => {
+      deletionPollTimers.delete(dashboardId)
+      const { data, error } = await fetchDashboardDeletion(dashboardId)
+      if (componentUnmounted) return
+      if (error || !data || (data.status !== 'pending' && data.status !== 'delivered')) {
+        const nextFailedAttempts = failedAttempts + 1
+        if (nextFailedAttempts < 3) {
+          scheduleDashboardDeletionPoll(dashboardId, nextFailedAttempts)
+          return
+        }
+
+        const nextPendingIds = new Set(pendingDeletionIds.value)
+        nextPendingIds.delete(dashboardId)
+        pendingDeletionIds.value = nextPendingIds
+        message.error('无法获取删除任务状态，请重试删除或刷新页面检查')
+        return
+      }
+      if (data.status === 'delivered') {
+        await completeDashboardDeletion(dashboardId)
+        return
+      }
+      scheduleDashboardDeletionPoll(dashboardId)
+    }, 1000)
+  )
 }
 
 /** 设为首页 */
@@ -326,6 +377,19 @@ const handleSaveMenuConfig = async () => {
     let resultError: string | null = null
 
     if (menuForm.value.enabled) {
+      const otherEnabledMenuEntries = Object.entries(menuConfigs.value).filter(
+        ([id, config]) => id !== menuForm.value.dashboardId && config?.enabled
+      )
+      let homeDashboard: { id: string; name: string } | null = null
+      if (otherEnabledMenuEntries.length === 0) {
+        const { data: homeResult, error: homeLookupError } = await getThingsVisHomeDashboard()
+        if (homeLookupError) {
+          message.error(`菜单配置保存失败: ${homeLookupError.message}`)
+          return
+        }
+        homeDashboard = homeResult?.data ?? null
+      }
+
       // 启用菜单：先保存当前仪表盘的菜单配置
       const { data, error } = await saveDashboardMenuConfig(menuForm.value.dashboardId, {
         menu_name: menuForm.value.menuName.trim(),
@@ -344,29 +408,25 @@ const handleSaveMenuConfig = async () => {
         return
       }
 
-      // 检查这是否是第一个加入菜单的仪表盘
       // 第一个加入时，自动把首页仪表盘也追加到菜单里（避免 home 节点变成展开式）
-      const currentMenuEntries = Object.entries(menuConfigs.value).filter(([, cfg]) => cfg?.enabled)
-      if (currentMenuEntries.length === 1) {
-        // 第一个加入时，从 API 查首页仪表盘（可能不在 allDashboards 里，因为可能属于其他项目）
-        const { data: homeResult } = await getThingsVisHomeDashboard()
-        const homeDashboard = homeResult?.data
-        if (homeDashboard && homeDashboard.id !== menuForm.value.dashboardId) {
-          // 首页仪表盘存在且不是当前正要保存的这个，才追加
-          const alreadyInMenu = Object.keys(menuConfigs.value).some(
-            (id) => id === homeDashboard.id && menuConfigs.value[id]?.enabled
-          )
-          if (!alreadyInMenu) {
-            const { error: homeError } = await saveDashboardMenuConfig(homeDashboard.id, {
-              menu_name: homeDashboard.name,
-              dashboard_name: homeDashboard.name,
-              sort: (menuForm.value.menuSort || 1) - 1,
-              enabled: true
-            })
-            if (!homeError) {
-              message.success(`已将首页仪表盘"${homeDashboard.name}"也添加到菜单`)
-            }
+      if (homeDashboard && homeDashboard.id !== menuForm.value.dashboardId) {
+        const alreadyInMenu = Boolean(menuConfigs.value[homeDashboard.id]?.enabled)
+        if (!alreadyInMenu) {
+          const { data: homeMenuConfig, error: homeError } = await saveDashboardMenuConfig(homeDashboard.id, {
+            menu_name: homeDashboard.name,
+            dashboard_name: homeDashboard.name,
+            sort: (menuForm.value.menuSort || 1) - 1,
+            enabled: true
+          })
+          if (homeError) {
+            message.error(`菜单配置保存失败: ${homeError.message}`)
+            return
           }
+          menuConfigs.value = {
+            ...menuConfigs.value,
+            [homeDashboard.id]: homeMenuConfig
+          }
+          message.success(`已将首页仪表盘"${homeDashboard.name}"也添加到菜单`)
         }
       }
 
@@ -389,6 +449,9 @@ const handleSaveMenuConfig = async () => {
         message.error(`菜单配置保存失败: ${resultError}`)
       }
     }
+  } catch (error) {
+    console.error('[handleSaveMenuConfig] 菜单配置保存失败:', error)
+    message.error('菜单配置保存失败')
   } finally {
     menuSaving.value = false
   }
@@ -465,6 +528,12 @@ onMounted(async () => {
   if (projectLoaded) {
     await fetchDashboards()
   }
+})
+
+onBeforeUnmount(() => {
+  componentUnmounted = true
+  deletionPollTimers.forEach(timer => clearTimeout(timer))
+  deletionPollTimers.clear()
 })
 </script>
 
@@ -570,6 +639,7 @@ onMounted(async () => {
                     </h3>
                     <NTag v-if="dashboard.isPublished" size="small" type="success">已发布</NTag>
                     <NTag v-if="menuConfigs[dashboard.id]?.enabled" size="small" type="info">系统菜单</NTag>
+                    <NTag v-if="pendingDeletionIds.has(dashboard.id)" size="small" type="warning">删除中</NTag>
                   </div>
 
                   <!-- 底部信息 -->
@@ -678,6 +748,8 @@ onMounted(async () => {
                     size="small"
                     secondary
                     type="error"
+                    :loading="pendingDeletionIds.has(dashboard.id)"
+                    :disabled="pendingDeletionIds.has(dashboard.id)"
                     @click.stop="openDeleteConfirm(dashboard.id, dashboard.name)"
                   >
                     <template #icon>

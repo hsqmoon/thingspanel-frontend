@@ -1,3 +1,4 @@
+import { isFlatRequestFailure } from '@sa/axios'
 import { deviceTemplateDetail } from '@/service/api/device'
 
 const templateDetailCache = new Map<string, Promise<any>>()
@@ -21,10 +22,17 @@ export function getCachedDeviceTemplateDetail(templateId?: string | number) {
   const cached = templateDetailCache.get(normalizedTemplateId)
   if (cached) return cached
 
-  const request = deviceTemplateDetail({ id: normalizedTemplateId }).catch(error => {
-    templateDetailCache.delete(normalizedTemplateId)
-    throw error
-  })
+  const request = deviceTemplateDetail({ id: normalizedTemplateId })
+    .then(response => {
+      if (isFlatRequestFailure(response)) {
+        throw response
+      }
+      return response
+    })
+    .catch(error => {
+      templateDetailCache.delete(normalizedTemplateId)
+      throw error
+    })
 
   templateDetailCache.set(normalizedTemplateId, request)
   return request

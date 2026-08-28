@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import type { AxiosError } from 'axios'
+import { isFlatRequestFailure } from '@sa/axios'
 import type { FormInst, SelectOption, FormRules, SelectGroupOption } from 'naive-ui'
 import { NTooltip, NIcon, NFlex, useMessage } from 'naive-ui'
 import { HelpCircle } from '@vicons/ionicons5'
@@ -119,14 +119,11 @@ const queryTemplate = ref({
 const deviceTemplateOptions = ref([{ name: () => $t('generate.unbind'), id: '' }])
 
 const getDeviceTemplate = async () => {
-  try {
-    const res = await deviceTemplate(queryTemplate.value)
-    deviceTemplateOptions.value = deviceTemplateOptions.value.concat(res.data.list)
-    queryTemplate.value.total = res.data.total
-  } catch (error) {
-    console.error('Failed to get device templates:', error)
-    message.error($t('generate.failedToLoadDeviceTemplates'))
-  }
+  const res = await deviceTemplate(queryTemplate.value)
+  if (isFlatRequestFailure(res)) return
+
+  deviceTemplateOptions.value = deviceTemplateOptions.value.concat(Array.isArray(res.data?.list) ? res.data.list : [])
+  queryTemplate.value.total = Number(res.data?.total || 0)
 }
 
 const deviceTemplateScroll = (e: Event) => {
@@ -150,6 +147,7 @@ const handleClose = () => {
 // 提交表单
 const handleSubmit = async () => {
   await configFormRef?.value?.validate()
+  if (loading.value) return
 
   loading.value = true
 
@@ -159,63 +157,39 @@ const handleSubmit = async () => {
   // 2. 单独处理 protocol_config，将其从对象转换为 JSON 字符串
   postData.protocol_config = JSON.stringify(protocol_config.value || {})
 
-  if (!configId.value) {
-    // 添加模式
-    // 确保添加时不传递 id (defaultConfigForm 已将 id 设为 null)
-    const res = await deviceConfigAdd(postData)
+  try {
+    const res = configId.value ? await deviceConfigEdit(postData) : await deviceConfigAdd(postData)
+    if (isFlatRequestFailure(res)) return
 
+    handleClose()
+  } finally {
     loading.value = false
-
-    if (!res.error) {
-      handleClose()
-    } else {
-      message.error((res as any)?.message || $t('generate.addFailed'))
-    }
-  } else {
-    // 编辑模式
-    // 确保 postData 中包含正确的 id (来自 configForm.value)
-    const res = await deviceConfigEdit(postData).catch((error: AxiosError) => {
-      message.error((error && 'message' in error && error.message) || $t('generate.editFailed'))
-      return { error: true }
-    })
-
-    loading.value = false
-
-    if (!res.error) {
-      handleClose()
-    } else {
-      message.error((res as any)?.message || $t('generate.editFailed'))
-    }
   }
 }
 
 const getConfig = async () => {
-  try {
-    const res = await deviceConfigInfo({ id: configId.value })
-    configForm.value = { ...res.data }
+  const res = await deviceConfigInfo({ id: configId.value })
+  if (isFlatRequestFailure(res) || !res.data) return
 
-    try {
-      if (typeof res.data.protocol_config === 'string') {
-        protocol_config.value = JSON.parse(res.data.protocol_config)
-      } else if (typeof res.data.protocol_config === 'object' && res.data.protocol_config !== null) {
-        protocol_config.value = res.data.protocol_config
-      } else {
-        protocol_config.value = {}
-      }
-    } catch (e) {
-      console.error('Failed to parse protocol_config:', e)
-      message.error($t('generate.failedToParseProtocolConfig'))
+  configForm.value = { ...res.data }
+
+  try {
+    if (typeof res.data.protocol_config === 'string') {
+      protocol_config.value = JSON.parse(res.data.protocol_config)
+    } else if (typeof res.data.protocol_config === 'object' && res.data.protocol_config !== null) {
+      protocol_config.value = res.data.protocol_config
+    } else {
       protocol_config.value = {}
     }
-  } catch (error) {
-    console.error('Failed to get device config info:', error)
-    message.error($t('generate.failedToLoadConfig'))
+  } catch {
+    message.error($t('generate.failedToParseProtocolConfig'))
+    protocol_config.value = {}
   }
 }
 
 watch(
   () => configId.value,
-  async newId => {
+  async (newId) => {
     if (newId) {
       modalTitle.value = 'common.edit'
     }
@@ -224,7 +198,7 @@ watch(
 const getProtocolList = async (deviceCode: string | number) => {
   const queryData = { device_type: deviceCode }
   const res = await deviceProtocalServiceList(queryData)
-  if (res.data) {
+  if (!isFlatRequestFailure(res) && res.data) {
     // 明确数组元素的类型
     typeOptions.value = [
       {
@@ -249,12 +223,14 @@ const getProtocolList = async (deviceCode: string | number) => {
   }
 }
 
-const getConfigForm = async data => {
+const getConfigForm = async (data) => {
   const res = await protocolPluginConfigForm({
     device_type: configForm?.value?.device_type,
     protocol_type: data
   })
-  formElements.value = res.data || []
+  if (isFlatRequestFailure(res)) return
+
+  formElements.value = Array.isArray(res.data) ? res.data : []
 }
 
 const getVoucherType = async (data: any) => {
@@ -263,15 +239,15 @@ const getVoucherType = async (data: any) => {
     device_type: configForm?.value?.device_type,
     protocol_type: data
   })
-  if (res.data) {
+  if (!isFlatRequestFailure(res) && res.data) {
     // 明确 map 返回类型
-    connectOptions.value = Object.keys(res.data).map(key => {
+    connectOptions.value = Object.keys(res.data).map((key) => {
       return { label: key, value: res.data[key] } as SelectOption
     })
   }
 }
 
-const choseProtocolType = async data => {
+const choseProtocolType = async (data) => {
   configForm.value.voucher_type = null
   await getVoucherType(data)
   await getConfigForm(data)
@@ -295,7 +271,7 @@ function getTooltipText(i18nKey: string) {
 function getTooltipLines(i18nKey: string) {
   return getTooltipText(i18nKey)
     .split('\n')
-    .map(s => s.trim())
+    .map((s) => s.trim())
     .filter(Boolean)
 }
 

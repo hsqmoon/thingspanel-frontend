@@ -3,6 +3,7 @@ import { computed, reactive, getCurrentInstance, ref } from 'vue'
 import type { Ref } from 'vue'
 import { NButton, NPopconfirm, NSpace, NTag } from 'naive-ui'
 import type { DataTableColumns, PaginationProps } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 import { useBoolean, useLoading } from '@sa/hooks'
 import dayjs from 'dayjs'
 import { userStatusOptions } from '@/constants/business'
@@ -165,6 +166,8 @@ const pagination: PaginationProps = reactive({
 
 const tableData = ref<UserManagement.User[]>([])
 const tenantStatistics = ref<Api.UserManagement.TenantStatistics | null>(null)
+let tableRequestEpoch = 0
+let statisticsRequestEpoch = 0
 
 function setTableData(data: UserManagement.User[]) {
   if (data === null) {
@@ -176,26 +179,33 @@ function setTableData(data: UserManagement.User[]) {
 }
 
 async function getTableData() {
+  const epoch = ++tableRequestEpoch
   startLoading()
   try {
-    const { data } = await fetchUserList(queryParams)
-    if (data) {
-      const list: UserManagement.User[] = data.list
-      pagination.itemCount = data.total
-      setTableData(list)
-    }
+    const response = await fetchUserList(queryParams)
+    if (epoch !== tableRequestEpoch || isFlatRequestFailure(response) || !response.data) return
+
+    pagination.itemCount = response.data.total
+    setTableData(response.data.list)
   } finally {
-    endLoading()
+    if (epoch === tableRequestEpoch) {
+      endLoading()
+    }
   }
 }
 
 async function getTenantStatistics() {
+  const epoch = ++statisticsRequestEpoch
   startStatisticsLoading()
   try {
-    const { data } = await fetchTenantStatistics()
-    tenantStatistics.value = data ?? null
+    const response = await fetchTenantStatistics()
+    if (epoch !== statisticsRequestEpoch || isFlatRequestFailure(response)) return
+
+    tenantStatistics.value = response.data
   } finally {
-    endStatisticsLoading()
+    if (epoch === statisticsRequestEpoch) {
+      endStatisticsLoading()
+    }
   }
 }
 
@@ -288,7 +298,12 @@ const columns: Ref<DataTableColumns<UserManagement.User>> = ref([
             {{
               default: () => $t('common.confirm'),
               trigger: () => (
-                <NButton type="warning" size={'small'}>
+                <NButton
+                  type="warning"
+                  size={'small'}
+                  disabled={Boolean(authStore.switchingUserId)}
+                  loading={authStore.switchingUserId === row.id}
+                >
                   {$t('page.manage.user.enter')}
                 </NButton>
               )
@@ -344,27 +359,27 @@ async function handleEnter(rowId: string) {
 
 function handleEditPwd(rowId: string) {
   const findItem = tableData.value.find(item => item.id === rowId)
-  if (findItem) {
-    setEditData(findItem)
-  }
+  if (!findItem) return
+
+  setEditData(findItem)
   openEditPwdModal()
 }
 
 function handleEditTable(rowId: string) {
   const findItem = tableData.value.find(item => item.id === rowId)
-  if (findItem) {
-    setEditData(findItem)
-  }
+  if (!findItem) return
+
+  setEditData(findItem)
   setModalType('edit')
   openModal()
 }
 
 async function handleDeleteTable(rowId: string) {
-  const data = await delUser(rowId)
-  if (!data.error) {
-    window.$message?.success($t('common.deleteSuccess'))
-    await Promise.all([getTableData(), getTenantStatistics()])
-  }
+  const response = await delUser(rowId)
+  if (isFlatRequestFailure(response)) return
+
+  window.$message?.success($t('common.deleteSuccess'))
+  await Promise.all([getTableData(), getTenantStatistics()])
 }
 
 function handleActivityScopeChange(scope: Api.UserManagement.TenantActivityScope | null) {

@@ -1,6 +1,7 @@
 <script setup lang="tsx">
 import { onMounted, ref, watch } from 'vue'
 import { NFlex } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 import { deviceConfigEdit, deviceConfigMenu } from '@/service/api/device'
 import { useRouterPush } from '@/hooks/common/router'
 import { $t } from '@/locales'
@@ -21,9 +22,13 @@ const unbindOption = () => ({ name: $t('generate.unbind'), id: '' })
 const plugList = ref([unbindOption()])
 
 const selectValue = ref()
+let listRequestEpoch = 0
 
 const getTableData = async (name: string) => {
+  const requestEpoch = ++listRequestEpoch
   const res = await deviceConfigMenu({ name })
+  if (isFlatRequestFailure(res) || requestEpoch !== listRequestEpoch) return
+
   const list = Array.isArray(res.data) ? res.data : []
   plugList.value = [unbindOption(), ...list]
 }
@@ -33,9 +38,10 @@ const searchPlug = v => {
 
 const choseTemp = async v => {
   const res = await deviceConfigEdit({ device_template_id: v, id: props.configInfo.id })
-  if (!res.error) {
-    emit('upDateConfig')
-  }
+  if (isFlatRequestFailure(res)) return
+
+  selectValue.value = v
+  emit('upDateConfig')
 }
 const toTemplate = () => {
   routerPushByKey('device_template')
@@ -55,7 +61,7 @@ onMounted(() => getTableData(''))
     <NFlex align="center">
       <div>{{ $t('generate.bind-device-function-template') }}</div>
       <NSelect
-        v-model:value="selectValue"
+        :value="selectValue"
         class="w-300px"
         value-field="id"
         label-field="name"

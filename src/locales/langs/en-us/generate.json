@@ -240,7 +240,6 @@
   "generate.enter-sub-device-address": "Please enter sub-device address",
   "generate.sub-device-address-setting": "Sub-device Address Setting",
   "generate.add-extension-info": "+ Add Extension Info",
-  "generate.rule-engine": "Rule Engine",
   "generate.device-group": "Device Group",
   "generate.operation": "Operation",
   "generate.api-support-flag": "API Support Flag",

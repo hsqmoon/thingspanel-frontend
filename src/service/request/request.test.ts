@@ -9,12 +9,18 @@ interface TestRequestConfig {
 
 interface TestRequestError {
   response: { status: number; data: { code: number } }
-  config: { headers: { get: (name: string) => string } }
+  config: { headers: { get: (name: string) => string }; preserveSessionOn401?: boolean }
+  code?: string
+  message?: string
 }
 
 interface RequestHooks {
   onRequest: (config: TestRequestConfig) => Promise<TestRequestConfig>
   onError: (error: TestRequestError) => Promise<void>
+  transformBackendResponse: (response: {
+    config: { method: string; needMessage?: boolean }
+    data: { data: unknown }
+  }) => unknown
 }
 
 const mocks = vi.hoisted(() => {
@@ -87,6 +93,28 @@ describe('authenticated request lifecycle', () => {
     expect(logoutRequest.headers).not.toHaveProperty('x-tenant-id')
   })
 
+  it('preserves an explicit token used to prepare a new identity', async () => {
+    mocks.values.set('token', 'old-token')
+    mocks.values.set('userInfo', { authority: 'SYS_ADMIN' })
+    mocks.values.set('tenantScopeId', 'old-tenant')
+    const request = { method: 'get', url: '/user/detail', headers: { 'x-token': 'new-token' } }
+
+    await mocks.options[0]!.onRequest(request)
+
+    expect(request.headers['x-token']).toBe('new-token')
+    expect(request.headers).not.toHaveProperty('x-tenant-id')
+  })
+
+  it('does not clear messages after successful mutation responses', () => {
+    const response = {
+      config: { method: 'post' },
+      data: { data: { id: 'created' } }
+    }
+
+    expect(mocks.options[0]!.transformBackendResponse(response)).toEqual({ id: 'created' })
+    expect(window.$message?.destroyAll).not.toHaveBeenCalled()
+  })
+
   it('clears the complete session only when the failed request used the current token', async () => {
     mocks.values.set('token', 'token-a')
     mocks.values.set('refreshToken', 'refresh-a')
@@ -119,5 +147,28 @@ describe('authenticated request lifecycle', () => {
     expect(mocks.remove).not.toHaveBeenCalled()
     expect(window.$message?.error).not.toHaveBeenCalled()
     expect(mocks.values.get('token')).toBe('token-b')
+  })
+
+  it('leaves the current session intact when an owned identity-transform request returns 401', async () => {
+    mocks.values.set('token', 'token-a')
+
+    await mocks.options[0]!.onError({
+      response: { status: 401, data: { code: 40102 } },
+      config: { headers: { get: () => 'token-a' }, preserveSessionOn401: true }
+    })
+
+    expect(mocks.remove).not.toHaveBeenCalled()
+    expect(mocks.values.get('token')).toBe('token-a')
+  })
+
+  it('does not destroy unrelated messages for non-authentication failures', async () => {
+    await mocks.options[0]!.onError({
+      response: { status: 404, data: { code: 404 } },
+      config: { headers: { get: () => '' } },
+      message: 'Not found'
+    })
+
+    expect(window.$message?.destroyAll).not.toHaveBeenCalled()
+    expect(window.$message?.error).toHaveBeenCalledWith('请求的资源未找到 (404)。')
   })
 })

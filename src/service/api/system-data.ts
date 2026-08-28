@@ -250,14 +250,3 @@ export const getSysVersion = async (params?: any): Promise<any> => {
   })
   return data
 }
-
-/** 获取系统指标历史数据 */
-export const getSystemMetricsHistory = async (params?: any): Promise<any> => {
-  try {
-    const data = await request.get<any>('/system/metrics/history', { params })
-    return data
-  } catch (error) {
-    console.error('Error fetching system metrics history:', error)
-    throw error // Re-throw the error after logging
-  }
-}

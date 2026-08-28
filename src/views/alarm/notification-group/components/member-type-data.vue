@@ -10,10 +10,10 @@ import {
   handleScroll,
   handleSearch,
   handleUpdateMember,
+  loading,
   notificationTypeOptions
 } from '../utils'
 
-const loading = ref(false)
 type FormModel = Pick<DataService.Data, any>
 
 const formModel = reactive<FormModel>(createDefaultFormModel())

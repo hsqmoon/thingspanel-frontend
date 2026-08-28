@@ -62,12 +62,6 @@ const ROUTE_DISPLAY_PATH_MAP: Record<string, string> = {
   'resource-hub_dashboard': '/resource-hub/dashboard-template'
 }
 
-/** 后台 param1 仍可能使用旧路径，用于组件解析 */
-const LEGACY_PATH_TO_ROUTE: Record<string, string> = {
-  '/device/config': 'device_config',
-  '/device/template': 'device_template'
-}
-
 function transformLayoutAndPageToComponent(layout: string, page: string | null) {
   const hasLayout = Boolean(layout)
   const hasPage = Boolean(page)
@@ -171,12 +165,6 @@ function resolveViewNameByPath(path?: string | null) {
 
   if (!normalizedPath) return null
 
-  const legacyRouteName = LEGACY_PATH_TO_ROUTE[normalizedPath]
-
-  if (legacyRouteName && isKnownView(legacyRouteName)) {
-    return legacyRouteName
-  }
-
   const exactMatch = getRouteName(normalizedPath as never)
 
   if (isKnownView(exactMatch)) {
@@ -270,12 +258,7 @@ function replaceKeys(data: ElegantConstRoute[]): ElegantRoute[] {
     const hasComponent = Boolean(route.component)
 
     if (!hasChildren && !hasComponent) {
-      console.warn('[route-adapter] skip invalid menu route:', {
-        elementCode: item.element_code,
-        path: item.param1,
-        routePath: item.route_path
-      })
-      return []
+      throw new Error(`菜单“${item.description || item.element_code}”缺少有效组件：${item.param1 || item.route_path || '空路径'}`)
     }
 
     return [route as ElegantRoute]

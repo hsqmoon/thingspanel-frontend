@@ -241,7 +241,6 @@
   "generate.enter-sub-device-address": "请输入子设备地址",
   "generate.sub-device-address-setting": "子设备地址设置",
   "generate.add-extension-info": "添加扩展信息",
-  "generate.rule-engine": "规则引擎",
   "generate.device-group": "设备分组",
   "generate.operation": "操作",
   "generate.api-support-flag": "接口支持标志",

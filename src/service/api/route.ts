@@ -7,8 +7,7 @@ const logger = createLogger('Routes')
 /** get user routes */
 export async function fetchGetUserRoutes() {
   const data = await request<Api.Route.UserRoute>({ url: '/ui_elements/menu' })
-  // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-  data && data.data && (data.data.list = adapterOfFetchUserRouterList(data.data.list))
+  if (data?.data) data.data.list = adapterOfFetchUserRouterList(data.data.list)
   return data
 }
 
@@ -17,8 +16,7 @@ export const fetchElementList = async (params: any = {}) => {
   const data = await request.get<Api.Route.Data>('/ui_elements', {
     params
   })
-  // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-  data && data.data && (data.data.list = adapterOfFetchRouterList(data.data))
+  if (data?.data) data.data.list = adapterOfFetchRouterList(data.data)
   return data
 }
 
@@ -41,8 +39,7 @@ export const delElement = async (id: string) => {
 
 /** Get UI Element List */
 export const fetchUIElementList = async () => {
-  const data = await request.get<Api.Route.Data>('/ui_elements/select/form')
-  return data?.data?.list || []
+  return request.get<Api.Route.Data>('/ui_elements/select/form')
 }
 
 /**

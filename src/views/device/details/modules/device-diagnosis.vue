@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { h, onMounted, onUnmounted, nextTick, ref } from 'vue'
 import dayjs from 'dayjs'
+import { isFlatRequestFailure, type FlatRequestFailure } from '@sa/axios'
 
 import { $t } from '@/locales'
 import { Refresh, HelpCircleOutline } from '@vicons/ionicons5'
 import type { DataTableColumns } from 'naive-ui'
 import { deviceDiagnostics, getDeviceDebugStatus, setDeviceDebugStatus, getDeviceDebugLogs } from '@/service/api'
-import { componentLogger } from '@/utils/logger'
 
 // 类型定义
 interface StatisticsItem {
@@ -53,11 +53,6 @@ interface DiagnosticsData {
     stage?: string
     error?: string
   }>
-}
-
-// 诊断响应类型
-interface DiagnosticsResponse {
-  data?: DiagnosticsData
 }
 
 // 属性定义 props
@@ -138,10 +133,21 @@ const fetchDiagnostics = async () => {
   clearDiagnosticsError()
 
   try {
-    const response = (await deviceDiagnostics(props.id)) as DiagnosticsResponse
+    const response = await deviceDiagnostics(props.id)
     if (!isMounted || requestId !== diagnosticsRequestId) return
 
-    const data = response?.data || (response as unknown as DiagnosticsData)
+    if (isFlatRequestFailure(response)) {
+      const requestFailure: FlatRequestFailure = response
+      if (requestFailure.error.status === 401) return
+
+      const reason = requestFailure.error.message.trim()
+      diagnosticsErrorMessage = window.$message?.error(
+        reason ? `获取设备诊断信息失败：${reason}` : '获取设备诊断信息失败，请稍后重试'
+      ) ?? null
+      return
+    }
+
+    const data = response.data as DiagnosticsData
 
     if (data && data.stats) {
       // 更新统计数据
@@ -175,10 +181,9 @@ const fetchDiagnostics = async () => {
         failureRecords.value = []
       }
     }
-  } catch (error) {
+  } catch {
     if (!isMounted || requestId !== diagnosticsRequestId) return
 
-    componentLogger.error('Failed to fetch device diagnostics', error)
     diagnosticsErrorMessage = window.$message?.error('获取设备诊断信息失败，请稍后重试') ?? null
   }
 }
@@ -191,72 +196,93 @@ const refresh = () => {
 
 // 日志相关
 const logEnabled = ref(false)
+const logSwitchLoading = ref(false)
 const debugLogs = ref<string[]>([])
-let logTimer: NodeJS.Timeout | null = null
+const logError = ref('')
+let logTimer: ReturnType<typeof setTimeout> | null = null
+let logPolling = false
+let logStatusRequestEpoch = 0
+let logRequestEpoch = 0
 const logContainerRef = ref<HTMLElement | null>(null)
 
 // 获取日志开关状态
 const getLogStatus = async () => {
-  try {
-    const res = await getDeviceDebugStatus(props.id)
-    if (res.data) {
-      logEnabled.value = res.data.enabled
-    }
-  } catch (e) {
-    console.error(e)
-  }
+  if (logSwitchLoading.value) return
+
+  const requestEpoch = ++logStatusRequestEpoch
+  const res = await getDeviceDebugStatus(props.id)
+  if (!isMounted || requestEpoch !== logStatusRequestEpoch || isFlatRequestFailure(res)) return
+
+  if (typeof res.data?.enabled === 'boolean') logEnabled.value = res.data.enabled
 }
 
 // 切换日志开关
 const handleLogSwitch = async (value: boolean) => {
+  if (logSwitchLoading.value) return
+
+  const requestEpoch = ++logStatusRequestEpoch
+  logSwitchLoading.value = true
   try {
-    await setDeviceDebugStatus(props.id, { enabled: value })
+    const res = await setDeviceDebugStatus(props.id, { enabled: value })
+    if (!isMounted || requestEpoch !== logStatusRequestEpoch || isFlatRequestFailure(res)) return
+
     logEnabled.value = value
-  } catch (e) {
-    console.error(e)
-    // 恢复开关状态
-    logEnabled.value = !value
+  } finally {
+    logSwitchLoading.value = false
   }
 }
 
 // 获取日志
 const fetchLogs = async () => {
-  try {
-    const res = await getDeviceDebugLogs(props.id, { limit: 100 })
-    if (res.data && res.data.list) {
-      // 格式化日志展示
-      // 倒序排列，最新的在下面，符合控制台习惯
-      const list = res.data.list.reverse()
-      debugLogs.value = list.map((item: any) => {
-         const time = item.ts ? dayjs(item.ts).format('YYYY-MM-DD HH:mm:ss.SSS') : ''
-        return `[${time}] ${JSON.stringify(item)}`
-      })
-
-      // 自动滚动到底部
-      nextTick(() => {
-        if (logContainerRef.value) {
-          // 如果用户没有向上滚动太多，才自动滚动
-          // 这里简单处理，总是滚动到底部
-          logContainerRef.value.scrollTop = logContainerRef.value.scrollHeight
-        }
-      })
-    }
-  } catch (e) {
-    console.error(e)
+  const requestEpoch = ++logRequestEpoch
+  const res = await getDeviceDebugLogs(props.id, { limit: 100 })
+  if (!isMounted || requestEpoch !== logRequestEpoch) {
+    return
   }
+
+  if (isFlatRequestFailure(res)) {
+    if (res.error.status !== 401) logError.value = res.error.message.trim() || '设备调试日志加载失败，请稍后重试'
+    return
+  }
+
+  if (!Array.isArray(res.data?.list)) {
+    logError.value = '设备调试日志响应格式错误'
+    return
+  }
+
+  logError.value = ''
+
+  // 倒序排列，最新的在下面，符合控制台习惯
+  debugLogs.value = [...res.data.list].reverse().map((item: any) => {
+    const time = item.ts ? dayjs(item.ts).format('YYYY-MM-DD HH:mm:ss.SSS') : ''
+    return `[${time}] ${JSON.stringify(item)}`
+  })
+
+  nextTick(() => {
+    if (logContainerRef.value) logContainerRef.value.scrollTop = logContainerRef.value.scrollHeight
+  })
 }
 
 // 开始轮询日志
 const startLogPolling = () => {
-  if (logTimer) return
-  fetchLogs() // 立即执行一次
-  logTimer = setInterval(fetchLogs, 3000) // 每3秒查询一次
+  if (logPolling) return
+  logPolling = true
+  const poll = async () => {
+    logTimer = null
+    try {
+      await fetchLogs()
+    } finally {
+      if (logPolling && isMounted) logTimer = setTimeout(() => void poll(), 3000)
+    }
+  }
+  void poll()
 }
 
 // 停止轮询日志
 const stopLogPolling = () => {
+  logPolling = false
   if (logTimer) {
-    clearInterval(logTimer)
+    clearTimeout(logTimer)
     logTimer = null
   }
 }
@@ -271,6 +297,8 @@ onMounted(() => {
 onUnmounted(() => {
   isMounted = false
   diagnosticsRequestId += 1
+  logStatusRequestEpoch += 1
+  logRequestEpoch += 1
   clearDiagnosticsError()
   stopLogPolling()
 })
@@ -359,7 +387,7 @@ onUnmounted(() => {
             </template>
             开启后，系统将记录该设备的通信报文以供排查问题。
           </NTooltip>
-          <NSwitch :value="logEnabled" @update:value="handleLogSwitch" />
+          <NSwitch :value="logEnabled" :loading="logSwitchLoading" @update:value="handleLogSwitch" />
         </div>
       </div>
 
@@ -367,6 +395,9 @@ onUnmounted(() => {
         ref="logContainerRef"
         class="bg-[#1e1e1e] text-[#d4d4d4] font-mono p-4 rounded h-[400px] overflow-auto whitespace-pre-wrap break-all text-xs"
       >
+        <div v-if="logError" role="alert" class="mb-3 rounded bg-red-900/40 px-3 py-2 text-red-200">
+          {{ logError }}
+        </div>
         <div v-if="debugLogs.length === 0" class="text-center text-gray-500 py-10">暂无日志...</div>
         <div
           v-for="(log, index) in debugLogs"

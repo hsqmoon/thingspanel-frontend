@@ -1,5 +1,6 @@
 <script setup lang="tsx">
 import { ref } from 'vue'
+import { isFlatRequestFailure } from '@sa/axios'
 import { NButton, NPopconfirm } from 'naive-ui'
 import dayjs from 'dayjs'
 import { $t } from '@/locales'
@@ -45,7 +46,9 @@ const columns0 = [
     render: row => (
       <NPopconfirm
         onPositiveClick={async () => {
-          await deleteAttributeDataSet(row.id)
+          const response = await deleteAttributeDataSet(row.id)
+          if (isFlatRequestFailure(response)) return
+
           attributeRef.value.refresh()
         }}
       >

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, toRefs, watch } from 'vue'
 import type { FormInst, FormItemRule } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 import { editUser } from '@/service/api/auth'
 import { formRules, getConfirmPwdRule } from '@/utils/form/rule'
 import { $t } from '@/locales'
@@ -40,6 +41,8 @@ const closeModal = () => {
 }
 
 const formRef = ref<HTMLElement & FormInst>()
+const submitting = ref(false)
+let modalSession = 0
 
 type FormModel = Pick<UserManagement.User, 'email'> & {
   password: string
@@ -73,19 +76,37 @@ function handleUpdateFormModelByModalType() {
 }
 
 async function handleSubmit() {
-  await formRef.value?.validate()
-  const data: any = await editUser(formModel)
-  if (!data.error) {
-    window.$message?.success(data.msg)
+  if (submitting.value) return
+  const session = modalSession
+  submitting.value = true
+  try {
+    try {
+      await formRef.value?.validate()
+    } catch (error) {
+      if (error === undefined || Array.isArray(error)) return
+      throw error
+    }
+    if (session !== modalSession) return
+
+    const response = await editUser(formModel)
+    if (session !== modalSession || isFlatRequestFailure(response)) return
+
+    window.$message?.success($t('common.modifySuccess'))
     emit('success')
     handleUpdateFormModel(createDefaultFormModel())
     closeModal()
+  } finally {
+    if (session === modalSession) {
+      submitting.value = false
+    }
   }
 }
 
 watch(
   () => props.visible,
   newValue => {
+    modalSession += 1
+    submitting.value = false
     if (newValue) {
       handleUpdateFormModelByModalType()
     }
@@ -109,7 +130,9 @@ watch(
       </NGrid>
       <NSpace class="w-full pt-16px" :size="24" justify="end">
         <NButton class="w-72px" @click="closeModal">{{ $t('common.cancel') }}</NButton>
-        <NButton class="w-72px" type="primary" @click="handleSubmit">{{ $t('common.confirm') }}</NButton>
+        <NButton class="w-72px" type="primary" :loading="submitting" @click="handleSubmit">
+          {{ $t('common.confirm') }}
+        </NButton>
       </NSpace>
     </NForm>
   </NModal>

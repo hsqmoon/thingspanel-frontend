@@ -148,20 +148,18 @@ export function initEChartsComponents() {
  */
 export function registerEChartsExtensions(componentTypes: string[]) {
   const newComponents: any[] = []
+  const newComponentTypes: string[] = []
 
   componentTypes.forEach(type => {
     if (!registeredExtensions.has(type) && EXTENDED_COMPONENTS_MAP[type]) {
       newComponents.push(...EXTENDED_COMPONENTS_MAP[type])
-      registeredExtensions.add(type)
+      newComponentTypes.push(type)
     }
   })
 
   if (newComponents.length > 0) {
-    try {
-      echarts.use(newComponents)
-    } catch (error) {
-      console.error('⚠️ ECharts 扩展组件注册警告:', error)
-    }
+    echarts.use(newComponents)
+    newComponentTypes.forEach(type => registeredExtensions.add(type))
   }
 }
 

@@ -191,8 +191,6 @@ const routeMap: RouteMap = {
   "dashboard_mobile-panel": "/dashboard/mobile-panel",
   "dashboard_panel": "/dashboard/panel",
   "dashboard_workbench": "/dashboard/workbench",
-  "data-service": "/data-service",
-  "data-service_rule-engine": "/data-service/rule-engine",
   "device": "/device",
   "device_config": "/device/template",
   "device_config-detail": "/device/config-detail",
@@ -207,7 +205,6 @@ const routeMap: RouteMap = {
   "device_service-access": "/device/service-access",
   "device_service-details": "/device/service-details",
   "device_template": "/device/thingsmodel",
-  "device-details-app": "/device-details-app",
   "feature-unavailable": "/feature-unavailable",
   "function": "/function",
   "function_hide-child": "/function/hide-child",
@@ -252,7 +249,6 @@ const routeMap: RouteMap = {
   "resource-hub": "/resource-hub",
   "resource-hub_dashboard": "/resource-hub/dashboard-template",
   "resource-hub_device": "/resource-hub/device-template",
-  "rule-engine": "/rule-engine",
   "system-management-user": "/system-management-user",
   "system-management-user_system-log": "/system-management-user/system-log",
   "user-center": "/user-center",
@@ -262,10 +258,7 @@ const routeMap: RouteMap = {
   "visualization_thingsvis-editor": "/visualization/thingsvis-editor",
   "visualization_thingsvis-menu-dashboard": "/visualization/thingsvis-menu-dashboard",
   "visualization_thingsvis-preview": "/visualization/thingsvis-preview",
-  "visualization_thingsvis-template": "/visualization/thingsvis-template",
-  "visualization-app": "/visualization-app",
-  "visualization-app-dashboards": "/visualization-app-dashboards",
-  "visualization-app-preview": "/visualization-app-preview"
+  "visualization_thingsvis-template": "/visualization/thingsvis-template"
 };
 
 /**

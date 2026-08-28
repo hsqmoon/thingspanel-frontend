@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { isFlatRequestFailure } from '@sa/axios'
 import { NButton, NCard, NFlex, NInput } from 'naive-ui'
 import { EyeOutline, Refresh, TrashOutline } from '@vicons/ionicons5'
 import moment from 'moment'
@@ -64,14 +65,15 @@ const refresh = () => {
     end_time: '',
     device_id: ''
   }
-  alarmHistory.value = []
   noMore.value = false
-  getAlarmHistory()
+  void getAlarmHistory(true)
 }
 const alarmHistory = ref([] as any)
 const alarmHistoryTotal = ref(0)
+let historyRequestEpoch = 0
 
-const getAlarmHistory = async () => {
+const getAlarmHistory = async (replace = false) => {
+  const requestEpoch = ++historyRequestEpoch
   queryParams.value.device_id = props.id
   if (queryParams.value.selected_time && queryParams.value.selected_time.length > 0) {
     queryParams.value.start_time = moment(queryParams.value.selected_time[0]).format('YYYY-MM-DDTHH:mm:ssZ')
@@ -80,19 +82,24 @@ const getAlarmHistory = async () => {
     queryParams.value.start_time = ''
     queryParams.value.end_time = ''
   }
-  const res = await deviceAlarmHistory(queryParams.value)
-  alarmHistory.value.push(...(res.data.list || []))
-  alarmHistoryTotal.value = res.data.total
-  loading.value = false
-  if (alarmHistory.value.length === alarmHistoryTotal.value) {
-    noMore.value = true
+  loading.value = true
+  try {
+    const res = await deviceAlarmHistory({ ...queryParams.value })
+    if (isFlatRequestFailure(res) || requestEpoch !== historyRequestEpoch) return false
+
+    const list = Array.isArray(res.data?.list) ? res.data.list : []
+    alarmHistory.value = replace ? list : [...alarmHistory.value, ...list]
+    alarmHistoryTotal.value = Number(res.data?.total) || 0
+    noMore.value = alarmHistory.value.length >= alarmHistoryTotal.value
+    return true
+  } finally {
+    if (requestEpoch === historyRequestEpoch) loading.value = false
   }
 }
 const resetQuery = () => {
   queryParams.value.page = 1
-  alarmHistory.value = []
   noMore.value = false
-  getAlarmHistory()
+  void getAlarmHistory(true)
 }
 const showDialog = ref(false)
 const closeModal = () => {
@@ -123,7 +130,9 @@ const submitCallback = async () => {
     id: infoData.value.id,
     description: description.value
   }
-  await deviceAlarmHistoryPut(putData)
+  const response = await deviceAlarmHistoryPut(putData)
+  if (isFlatRequestFailure(response)) return
+
   alarmHistory.value.forEach(item => {
     if (item.id === infoData.value.id) {
       item.description = description.value
@@ -139,17 +148,15 @@ const handleDelete = async (item: any) => {
     positiveText: $t('common._confirm'),
     negativeText: $t('common._cancel'),
     onPositiveClick: async () => {
-      try {
-        await deviceAlarmHistoryDelete(item.id)
-        window.$message?.success($t('common.deleteSuccess'))
-        // 从列表中移除已删除的项
-        const index = alarmHistory.value.findIndex(alarm => alarm.id === item.id)
-        if (index > -1) {
-          alarmHistory.value.splice(index, 1)
-          alarmHistoryTotal.value -= 1
-        }
-      } catch {
-        window.$message?.error($t('common.deleteFail'))
+      const response = await deviceAlarmHistoryDelete(item.id)
+      if (isFlatRequestFailure(response)) return
+
+      window.$message?.success($t('common.deleteSuccess'))
+      // 从列表中移除已删除的项
+      const index = alarmHistory.value.findIndex(alarm => alarm.id === item.id)
+      if (index > -1) {
+        alarmHistory.value.splice(index, 1)
+        alarmHistoryTotal.value -= 1
       }
     }
   })
@@ -163,13 +170,15 @@ const loading = ref(false)
 const noMore = ref(false)
 const handleLoad = () => {
   if (loading.value || noMore.value) return
-  loading.value = true
-  queryParams.value.page += 1
-  getAlarmHistory()
+  const previousPage = queryParams.value.page
+  queryParams.value.page = previousPage + 1
+  void getAlarmHistory().then(success => {
+    if (!success && queryParams.value.page === previousPage + 1) queryParams.value.page = previousPage
+  })
 }
 
 onMounted(() => {
-  getAlarmHistory()
+  void getAlarmHistory(true)
 })
 </script>
 

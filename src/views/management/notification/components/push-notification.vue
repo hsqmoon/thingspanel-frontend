@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { reactive, ref } from 'vue'
 import type { FormInst } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 import { useLoading } from '@sa/hooks'
 import { createRequiredFormRule } from '@/utils/form/rule'
 import { deepClone } from '@/utils/common/tool'
@@ -20,11 +21,14 @@ function setTableData(data: Api.NotificationServices.PushNotification) {
 
 async function getNotificationServices() {
   startLoading()
-  const { data } = await fetchPushNotificationServices()
-  if (data) {
-    setTableData(data)
+  try {
+    const response = await fetchPushNotificationServices()
+    if (isFlatRequestFailure(response) || !response.data) return
+
+    setTableData(response.data)
+  } finally {
+    endLoading()
   }
-  endLoading()
 }
 
 function createDefaultFormModel(): NotificationServices.PushNotification {
@@ -38,20 +42,31 @@ const rules = {
 }
 const formRef = ref<HTMLElement & FormInst>()
 async function handleSubmit() {
+  if (loading.value) return
   if (!formModel.url.trim()) {
     window.$message?.warning($t('common.pleaseCheckValue'))
     return
   }
-  await formRef.value?.validate()
-  startLoading()
-  const formData = deepClone(formModel)
-  delete formData.config
-  const data: any = await editPushNotificationServices(formData)
-  if (!data.error) {
-    window.$message?.success($t('common.saveSuccess'))
-    endLoading()
-    await getNotificationServices()
+  try {
+    await formRef.value?.validate()
+  } catch (error) {
+    if (error === undefined || Array.isArray(error)) return
+    throw error
   }
+
+  startLoading()
+  try {
+    const formData = deepClone(formModel)
+    delete formData.config
+    const response = await editPushNotificationServices(formData)
+    if (isFlatRequestFailure(response)) return
+
+    window.$message?.success($t('common.saveSuccess'))
+  } finally {
+    endLoading()
+  }
+
+  await getNotificationServices()
 }
 
 function init() {

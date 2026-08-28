@@ -2,6 +2,7 @@
 import { computed, getCurrentInstance, reactive, ref } from 'vue'
 import type { Ref } from 'vue'
 import { NButton, NSelect } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 import type { DataTableColumns, PaginationProps } from 'naive-ui'
 import moment from 'moment'
 import { getSystemLogList } from '@/service/api/system-management-user'
@@ -43,6 +44,7 @@ const queryParams = reactive({
 const total = ref(0)
 
 const tableData = ref<Api.SystemManage.SystemLogList[]>([])
+let tableRequestEpoch = 0
 
 function setTableData(data: Api.SystemManage.SystemLogList[] | []) {
   tableData.value = data || []
@@ -63,22 +65,25 @@ const pagination: PaginationProps = reactive({
 })
 
 const getTableData = async () => {
+  const requestEpoch = ++tableRequestEpoch
   startLoading()
   const prams = {
     page: pagination.page || 1,
     page_size: pagination.pageSize || 10,
     ...queryParams
   }
-  const res = await getSystemLogList(prams)
-  if (res?.data) {
-    setTableData(res?.data.list || [])
-    total.value = res.data.total || 0
+  try {
+    const res = await getSystemLogList(prams)
+    if (isFlatRequestFailure(res) || requestEpoch !== tableRequestEpoch) return
+    setTableData(res.data?.list || [])
+    total.value = res.data?.total || 0
+  } finally {
+    if (requestEpoch === tableRequestEpoch) endLoading()
   }
-  endLoading()
 }
 const detailModalRef = ref<any>(null)
 const handleDetail = item => {
-  detailModalRef.value && detailModalRef.value.show && detailModalRef.value.show(item)
+  detailModalRef.value?.show?.(item)
 }
 const columns: Ref<DataTableColumns<DataService.Data>> = ref([
   {

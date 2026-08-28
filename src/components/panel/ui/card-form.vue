@@ -1,6 +1,7 @@
 <script lang="tsx" setup>
 import { computed, reactive, ref, watch } from 'vue'
 import type { SelectOption } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 import { usePanelStore } from '@/store/modules/panel'
 import ConfigCtx from '@/components/panel/ui/config-ctx.vue'
 import type { ICardData, ICardDefine } from '@/components/panel/card'
@@ -135,8 +136,20 @@ watch(
 const deviceOption = ref<SelectOption[]>([])
 const deviceCount = ref()
 const getDeviceList = async () => {
-  const res = await deviceListForPanel({})
-  deviceOption.value = res.data || []
+  try {
+    const res = await deviceListForPanel({})
+    if (isFlatRequestFailure(res)) {
+      throw res
+    }
+    if (!Array.isArray(res.data)) {
+      throw new Error('API返回设备列表格式异常')
+    }
+    deviceOption.value = res.data
+  } catch (error) {
+    if (!isFlatRequestFailure(error)) {
+      console.error('加载设备列表失败:', error)
+    }
+  }
 }
 
 defineExpose({
@@ -177,9 +190,21 @@ const deviceCountUpdate = v => {
 const updateDropdownShow = async (show: boolean, item) => {
   const reactiveItem = reactive(item)
   if (show && reactiveItem.deviceId && !reactiveItem.metricsOptionsFetched) {
-    const res = await deviceMetricsList(reactiveItem.deviceId)
-    reactiveItem.metricsOptions = res?.data || []
-    reactiveItem.metricsOptionsFetched = true
+    try {
+      const res = await deviceMetricsList(reactiveItem.deviceId)
+      if (isFlatRequestFailure(res)) {
+        throw res
+      }
+      if (!Array.isArray(res.data)) {
+        throw new Error('API返回指标列表格式异常')
+      }
+      reactiveItem.metricsOptions = res.data
+      reactiveItem.metricsOptionsFetched = true
+    } catch (error) {
+      if (!isFlatRequestFailure(error)) {
+        console.error('加载指标失败:', error)
+      }
+    }
   }
   reactiveItem.metricsShow = show
 }

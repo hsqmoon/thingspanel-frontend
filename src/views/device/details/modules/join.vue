@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref, watchEffect } from 'vue'
 import { useRouter } from 'vue-router'
+import { isFlatRequestFailure } from '@sa/axios'
 import type { FormInst, FormRules } from 'naive-ui'
 import { NButton, NForm, NFormItem, NInput, NSelect } from 'naive-ui'
 import type { SelectMixedOption } from 'naive-ui/es/select/src/interface'
@@ -79,23 +80,27 @@ const props = defineProps<{
 }>()
 const formElements = ref<FormElement[]>([])
 const formData = reactive({})
+const submitting = ref(false)
 const getFormJson = async () => {
   const res = await devicCeonnectForm({ device_id: props.id })
+  if (isFlatRequestFailure(res)) return
 
-  formElements.value = res.data
+  formElements.value = Array.isArray(res.data) ? res.data : []
 }
 const connectInfo = ref<object>({})
 const feachConnectInfo = async () => {
   const res = await getDeviceConnectInfo({ device_id: props.id })
-  connectInfo.value = res.data
+  if (isFlatRequestFailure(res)) return
+
+  connectInfo.value = res.data || {}
 }
 
 const pluginInfo = ref<ServicePluginInfo | null>(null)
 const getPlugininfoByServiceReq = async (params: { service_identifier: string }) => {
-  const { error, data } = await getPlugininfoByService(params)
-  if (!error) {
-    pluginInfo.value = toServicePluginInfo(data)
-  }
+  const response = await getPlugininfoByService(params)
+  if (isFlatRequestFailure(response)) return
+
+  pluginInfo.value = toServicePluginInfo(response.data)
 }
 
 onMounted(async () => {
@@ -105,38 +110,58 @@ onMounted(async () => {
     service_identifier = 'MQTT'
   }
   if (service_identifier) {
-    getPlugininfoByServiceReq({ service_identifier })
+    void getPlugininfoByServiceReq({ service_identifier })
   }
 
-  feachConnectInfo()
-  getFormJson()
+  void feachConnectInfo()
+  void getFormJson()
 })
 
 watchEffect(() => {
   const str = deviceDataStore?.deviceData?.voucher || '{}'
-  const thejson = JSON.parse(str)
+  let thejson: Record<string, unknown> = {}
+  try {
+    thejson = JSON.parse(str)
+  } catch {
+    thejson = {}
+  }
   if (formElements.value && Array.isArray(formElements.value)) {
     formElements.value.forEach(element => {
       if (element.type === 'table' && Array.isArray(element.array)) {
         element.array.forEach(subElement => {
           formRules.value[element.dataKey] = subElement.validate || {}
-          formData[subElement.dataKey] ??= thejson[subElement.dataKey] || ''
+          formData[subElement.dataKey] ??= thejson[subElement.dataKey] ?? ''
         })
       } else {
         formRules.value[element.dataKey] = element.validate || {}
-        formData[element.dataKey] = thejson[element.dataKey] || ''
+        formData[element.dataKey] = thejson[element.dataKey] ?? ''
       }
     })
   }
 })
 
 const handleSubmit = async () => {
-  await formRef.value?.validate()
-  await updateDeviceVoucher({
-    device_id: props.id,
-    voucher: JSON.stringify(formData)
-  })
-  window.$message?.success($t('common.updateSuccess'))
+  if (submitting.value) return
+
+  submitting.value = true
+  try {
+    await formRef.value?.validate()
+  } catch {
+    submitting.value = false
+    return
+  }
+
+  try {
+    const response = await updateDeviceVoucher({
+      device_id: props.id,
+      voucher: JSON.stringify(formData)
+    })
+    if (isFlatRequestFailure(response)) return
+
+    window.$message?.success($t('common.updateSuccess'))
+  } finally {
+    submitting.value = false
+  }
 }
 const copy = async param => {
   const element = document.getElementById(param.toString())
@@ -213,7 +238,7 @@ const toServiceClick = () => {
       </NCard>
     </n-scrollbar>
     <div v-if="deviceDataStore?.deviceData?.access_way !== 'B'" class="mt-4 w-full flex-center">
-      <NButton type="primary" @click="handleSubmit">{{ $t('common.save') }}</NButton>
+      <NButton type="primary" :loading="submitting" @click="handleSubmit">{{ $t('common.save') }}</NButton>
     </div>
   </div>
 </template>

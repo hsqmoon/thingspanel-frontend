@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
+import { isFlatRequestFailure } from '@sa/axios'
 import { useRouter } from 'vue-router'
 import type { PaginationProps } from 'naive-ui'
+import { NAlert } from 'naive-ui'
 import { getServiceList } from '@/service/api/device'
 import DevCardItem from '@/components/dev-card-item/index.vue'
 import AdvancedListLayout from '@/components/list-page/index.vue'
 import { GridOutline as CardIcon } from '@vicons/ionicons5'
 const loading = ref(false)
+const listError = ref('')
 const router = useRouter()
 const pagination: PaginationProps = reactive({
   page: 1,
@@ -18,24 +21,29 @@ const queryParams = reactive({
   service_type: 2
 })
 const deviceTemplateList = ref([] as any[])
+let listRequestEpoch = 0
 
 const getData = async () => {
+  const requestEpoch = ++listRequestEpoch
   loading.value = true
-  const res = await getServiceList({
-    page: pagination.page as number,
-    ...queryParams
-  })
-  if (!res.error) {
-    deviceTemplateList.value = res.data.list
-
-    pagination.pageCount = Math.ceil(res.data.total / 12)
+  listError.value = ''
+  try {
+    const res = await getServiceList({ page: pagination.page as number, ...queryParams })
+    if (requestEpoch !== listRequestEpoch) return
+    if (isFlatRequestFailure(res)) {
+      listError.value = res.error.message
+      return
+    }
+    deviceTemplateList.value = res.data?.list || []
+    pagination.pageCount = Math.max(1, Math.ceil((res.data?.total || 0) / queryParams.page_size))
+  } finally {
+    if (requestEpoch === listRequestEpoch) loading.value = false
   }
-  loading.value = false
 }
 
 getData()
 
-const clickDevice = async row => {
+const clickDevice = async (row) => {
   router.push(
     `/device/service-details?id=${row.id}&service_type=${row.service_type}&service_name=${row.name}&service_identifier=${row.service_identifier}`
   )
@@ -48,6 +56,9 @@ const handleRefresh = () => {
 
 <template>
   <div>
+    <NAlert v-if="listError" type="error" class="mb-4" closable @close="listError = ''">
+      {{ listError }}
+    </NAlert>
     <AdvancedListLayout
       :available-views="[{ key: 'card', icon: CardIcon, label: 'common.viewCard' }]"
       :showQueryButton="false"
@@ -105,7 +116,7 @@ const handleRefresh = () => {
           v-model:page="pagination.page"
           :page-count="pagination.pageCount"
           @update:page="
-            page => {
+            (page) => {
               pagination.page = page
               getData()
             }

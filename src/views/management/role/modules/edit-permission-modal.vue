@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isFlatRequestFailure } from '@sa/axios'
 import { computed, getCurrentInstance, ref } from 'vue'
 import { delRolePermissions, fetchUIElementList, getRolePermissions, modifyRolePermissions } from '@/service/api'
 import { $t } from '@/locales'
@@ -67,39 +68,67 @@ const title = computed(() => {
 
 const selectedPermissions = ref<string[]>([])
 const treeOptions = ref<any>([])
+const initializing = ref(false)
+const permissionsReady = ref(false)
+const submitting = ref(false)
+let initializationEpoch = 0
 
-const initRolePermissions = async () => {
+const initRolePermissions = async (epoch: number) => {
   // 首页默认选中
-  const data = treeOptions.value.find(item => item.label === '首页')
-  if (props.editData) {
-    const permissions = await getRolePermissions(props.editData.id)
-    selectedPermissions.value = [...new Set([data.key, ...permissions])]
-  } else {
-    selectedPermissions.value = [data.key]
-  }
+  const home = treeOptions.value.find(item => item.label === '首页')
+  if (!home || !props.editData) return false
+
+  const response = await getRolePermissions(props.editData.id)
+  if (epoch !== initializationEpoch || isFlatRequestFailure(response)) return false
+
+  selectedPermissions.value = [...new Set([home.key, ...(response.data || [])])]
+  return true
 }
 
 const initUIElementList = async () => {
-  const uiElementList = await fetchUIElementList()
-  treeOptions.value = convertToTreeNodes(uiElementList)
-  initRolePermissions()
+  const epoch = ++initializationEpoch
+  initializing.value = true
+  permissionsReady.value = false
+  treeOptions.value = []
+  selectedPermissions.value = []
+
+  try {
+    const response = await fetchUIElementList()
+    if (epoch !== initializationEpoch || isFlatRequestFailure(response)) return
+
+    treeOptions.value = convertToTreeNodes(response.data.list || [])
+    permissionsReady.value = await initRolePermissions(epoch)
+  } finally {
+    if (epoch === initializationEpoch) {
+      initializing.value = false
+    }
+  }
 }
 
 async function handleSubmit() {
-  let data: any
-  // delete first element which is the root node
-  const indeterminateData = proxy.$refs.treeRef.getIndeterminateData().keys
-  const currentPermissions = [...selectedPermissions.value, ...indeterminateData]
-  // currentPermissions.shift();
-  selectedPermissions.value = []
-  if (currentPermissions.length === 0) {
-    data = await delRolePermissions(props.editData?.id)
-  } else {
-    data = await modifyRolePermissions(props.editData?.id, currentPermissions)
-  }
-  closeModal()
-  if (!data.error) {
+  if (!permissionsReady.value || !props.editData || submitting.value) return
+
+  const tree = proxy?.$refs?.treeRef
+  if (!tree) return
+
+  const epoch = initializationEpoch
+  submitting.value = true
+  try {
+    const indeterminateData = tree.getIndeterminateData().keys
+    const currentPermissions = [...selectedPermissions.value, ...indeterminateData]
+    const response =
+      currentPermissions.length === 0
+        ? await delRolePermissions(props.editData.id)
+        : await modifyRolePermissions(props.editData.id, currentPermissions)
+    if (epoch !== initializationEpoch || isFlatRequestFailure(response)) return
+
+    selectedPermissions.value = []
+    closeModal()
     emit('success')
+  } finally {
+    if (epoch === initializationEpoch) {
+      submitting.value = false
+    }
   }
 }
 </script>
@@ -128,7 +157,15 @@ async function handleSubmit() {
       </div>
       <n-space class="w-full pt-16px" :size="24" justify="end">
         <n-button class="w-72px" @click="closeModal">{{ $t('generate.cancel') }}</n-button>
-        <n-button class="w-72px" type="primary" @click="handleSubmit">{{ $t('page.login.common.confirm') }}</n-button>
+        <n-button
+          class="w-72px"
+          type="primary"
+          :disabled="!permissionsReady"
+          :loading="initializing || submitting"
+          @click="handleSubmit"
+        >
+          {{ $t('page.login.common.confirm') }}
+        </n-button>
       </n-space>
     </n-form>
   </n-modal>

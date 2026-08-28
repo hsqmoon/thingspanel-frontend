@@ -15,7 +15,8 @@ export class ThingsVisAuthService {
   private cachedToken: string | null = null
   private tokenExpiry: number = 0
   private cachedIdentityKey: string | null = null
-  private exchangePromise: Promise<string> | null = null
+  private exchangePromise: { epoch: number; identityKey: string | null; promise: Promise<string> } | null = null
+  private identityEpoch = 0
   private thingsvisApiUrl: string
   private readonly thingsvisApiTarget: string
   private readonly networkFailureCooldownMs = 30_000
@@ -60,6 +61,11 @@ export class ThingsVisAuthService {
     )
   }
 
+  private getIdentityKey(userInfo: Api.Auth.UserInfo | null, platformToken = localStg.get('token')): string | null {
+    if (!userInfo) return null
+    return `${userInfo.userId || userInfo.id || ''}::${resolveThingsVisSpaceId(userInfo)}::${platformToken || ''}`
+  }
+
   private shouldTreatResponseAsUnavailable(status: number, errorText: string): boolean {
     if ([502, 503, 504].includes(status)) return true
 
@@ -79,13 +85,8 @@ export class ThingsVisAuthService {
 
     while (!userInfo && retries < maxRetries) {
       retries++
-      console.log(`[SSO] 等待 userInfo 就绪... (${retries}/${maxRetries})`)
       await new Promise(resolve => setTimeout(resolve, intervalMs))
       userInfo = localStg.get('userInfo')
-    }
-
-    if (!userInfo) {
-      console.warn(`[SSO] userInfo 仍未就绪，共尝试 ${retries} 次`)
     }
 
     return userInfo
@@ -94,7 +95,7 @@ export class ThingsVisAuthService {
   /**
    * 交换 ThingsPanel Token -> ThingsVis Token
    */
-  async exchangeToken(): Promise<string> {
+  async exchangeToken(epoch: number = this.identityEpoch): Promise<string> {
     try {
       const cooldownRemaining = this.getFailureCooldownRemaining()
       if (cooldownRemaining > 0) {
@@ -108,8 +109,8 @@ export class ThingsVisAuthService {
       // 1. 获取当前 ThingsPanel 用户信息
       // 注意：首次登录时，userInfo 可能尚未写入 localStorage（竞态条件）
       // 需要等待 userInfo 就绪
-      const tpToken = localStg.get('token')
       const userInfo = await this.waitForUserInfo()
+      const tpToken = localStg.get('token')
 
       if (!tpToken) {
         throw new Error('ThingsPanel token not found')
@@ -120,7 +121,7 @@ export class ThingsVisAuthService {
       }
 
       const resolvedSpaceId = resolveThingsVisSpaceId(userInfo)
-      this.cachedIdentityKey = `${userInfo.userId || userInfo.id || ''}::${resolvedSpaceId}`
+      const identityKey = this.getIdentityKey(userInfo, tpToken)
 
       // 2. 构建 SSO 请求
       const request: SSOExchangeRequest = {
@@ -147,18 +148,10 @@ export class ThingsVisAuthService {
       }
 
       request.role = role
-      console.log('[SSO] 角色映射:', { authority, role })
 
       // 3. 调用 ThingsVis SSO API (通过代理)
       // /thingsvis-api/auth/sso -> ${VITE_THINGSVIS_API_URL}/api/v1/auth/sso
       const ssoUrl = `${this.thingsvisApiUrl}/auth/sso`
-      console.log('[SSO] 📡 调用 SSO API:', ssoUrl)
-      console.log('[SSO] 请求目标:', this.thingsvisApiTarget)
-      console.log('[SSO] 请求数据:', {
-        platform: request.platform,
-        userEmail: request.userInfo.email,
-        role: request.role
-      })
 
       const response = await fetch(ssoUrl, {
         method: 'POST',
@@ -168,11 +161,8 @@ export class ThingsVisAuthService {
         body: JSON.stringify(request)
       })
 
-      console.log('[SSO] 响应状态:', response.status)
-
       if (!response.ok) {
         const errorText = await response.text()
-        console.error('[SSO] 响应错误:', errorText)
         if (this.shouldTreatResponseAsUnavailable(response.status, errorText)) {
           throw this.markNetworkFailure(`HTTP ${response.status}: ${errorText || 'proxy unavailable'}`)
         }
@@ -180,16 +170,27 @@ export class ThingsVisAuthService {
       }
 
       const data: SSOExchangeResponse = await response.json()
+      if (!data.accessToken) throw new Error('ThingsVis SSO response did not include an access token')
+      if (
+        epoch !== this.identityEpoch ||
+        localStg.get('token') !== tpToken ||
+        this.getIdentityKey(localStg.get('userInfo')) !== identityKey
+      ) {
+        throw new Error('ThingsVis identity changed during token exchange')
+      }
       this.clearNetworkFailure()
 
       // 4. 缓存 Token
       this.cachedToken = data.accessToken
       this.tokenExpiry = Date.now() + (data.expiresIn || 7200) * 1000 // 默认 2 小时
-
-      console.log('✅ SSO Token exchange successful')
+      this.cachedIdentityKey = identityKey
 
       return data.accessToken
     } catch (error) {
+      if (epoch !== this.identityEpoch) {
+        throw new Error('ThingsVis token exchange was invalidated by an identity change', { cause: error })
+      }
+
       // 清除缓存的 token
       this.cachedToken = null
       this.tokenExpiry = 0
@@ -197,11 +198,9 @@ export class ThingsVisAuthService {
 
       if (this.isNetworkError(error)) {
         const unavailableError = this.markNetworkFailure(error instanceof Error ? error.message : String(error))
-        console.error('❌ SSO Token exchange failed:', unavailableError)
         throw unavailableError
       }
 
-      console.error('❌ SSO Token exchange failed:', error)
       throw error
     }
   }
@@ -212,42 +211,57 @@ export class ThingsVisAuthService {
   async getValidToken(): Promise<string> {
     // 注意：首次登录时，userInfo 可能尚未写入 localStorage
     // identityKey 检查需要等待 userInfo 就绪
-    let userInfo = await this.waitForUserInfo(3, 100)
-    const identityKey = userInfo
-      ? `${userInfo.userId || userInfo.id || ''}::${resolveThingsVisSpaceId(userInfo)}`
-      : null
+    const userInfo = await this.waitForUserInfo(3, 100)
+    const identityKey = this.getIdentityKey(userInfo)
 
     if (this.cachedIdentityKey && identityKey && this.cachedIdentityKey !== identityKey) {
+      this.clearToken()
+    }
+    if (this.exchangePromise && this.exchangePromise.identityKey !== identityKey) {
       this.clearToken()
     }
 
     // Token 未过期，直接返回
     if (this.cachedToken && Date.now() < this.tokenExpiry) {
-      console.log('🔄 Using cached ThingsVis token')
       return this.cachedToken
     }
 
-    if (this.exchangePromise) {
-      console.log('🔄 Waiting for in-flight ThingsVis token exchange...')
-      return this.exchangePromise
+    const epoch = this.identityEpoch
+    if (this.exchangePromise?.epoch === epoch) {
+      return this.exchangePromise.promise
     }
 
     // Token 过期或不存在，重新交换
-    console.log('🔄 Token expired or not found, exchanging...')
-    this.exchangePromise = this.exchangeToken().finally(() => {
-      this.exchangePromise = null
+    const exchangePromise = this.exchangeToken(epoch)
+    const trackedPromise = exchangePromise.finally(() => {
+      if (this.exchangePromise?.promise === trackedPromise) {
+        this.exchangePromise = null
+      }
     })
-    return await this.exchangePromise
+    this.exchangePromise = { epoch, identityKey, promise: trackedPromise }
+    return await trackedPromise
   }
 
   /**
    * 清除缓存的 Token
    */
-  clearToken(): void {
+  clearToken(expectedToken?: string): boolean {
+    if (expectedToken && this.cachedToken !== expectedToken) return false
+
+    if (expectedToken && this.exchangePromise) {
+      this.cachedToken = null
+      this.tokenExpiry = 0
+      this.cachedIdentityKey = null
+      return true
+    }
+
+    this.identityEpoch += 1
     this.cachedToken = null
     this.tokenExpiry = 0
     this.cachedIdentityKey = null
     this.exchangePromise = null
+    this.clearNetworkFailure()
+    return true
   }
 
   /**
@@ -281,6 +295,6 @@ export async function getThingsVisToken(): Promise<string> {
 /**
  * 便捷方法：清除 ThingsVis Token
  */
-export function clearThingsVisToken(): void {
-  thingsvisAuthService.clearToken()
+export function clearThingsVisToken(expectedToken?: string): boolean {
+  return thingsvisAuthService.clearToken(expectedToken)
 }

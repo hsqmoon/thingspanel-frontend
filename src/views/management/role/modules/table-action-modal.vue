@@ -4,6 +4,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import type { FormInst, FormItemRule } from 'naive-ui'
 // import { genderOptions } from '@/constants'
+import { isFlatRequestFailure } from '@sa/axios'
 import { createRequiredFormRule } from '@/utils/form/rule'
 import { addrles, editrles } from '@/service/api'
 import { $t } from '@/locales'
@@ -58,6 +59,8 @@ const title = computed(() => {
 })
 
 const formRef = ref<HTMLElement & FormInst>()
+const submitting = ref(false)
+let modalSession = 0
 
 type FormModel = Pick<UserManagement.User, 'name' | 'description' | 'email'>
 
@@ -98,23 +101,35 @@ function handleUpdateFormModelByModalType() {
 }
 
 async function handleSubmit() {
-  await formRef.value?.validate()
+  if (submitting.value) return
+  const session = modalSession
+  submitting.value = true
+  try {
+    try {
+      await formRef.value?.validate()
+    } catch (error) {
+      if (error === undefined || Array.isArray(error)) return
+      throw error
+    }
+    if (session !== modalSession) return
 
-  closeModal()
-  let data: any
-  if (props.type === 'add') {
-    data = await addrles(formModel)
-  } else if (props.type === 'edit') {
-    data = await editrles(formModel)
-  }
-  if (!data.error) {
+    const response = props.type === 'add' ? await addrles(formModel) : await editrles(formModel)
+    if (session !== modalSession || isFlatRequestFailure(response)) return
+
     emit('success')
+    closeModal()
+  } finally {
+    if (session === modalSession) {
+      submitting.value = false
+    }
   }
 }
 
 watch(
   () => props.visible,
   newValue => {
+    modalSession += 1
+    submitting.value = false
     if (newValue) {
       handleUpdateFormModelByModalType()
     }
@@ -133,7 +148,9 @@ watch(
       </n-form-item>
       <n-space class="w-full pt-16px" :size="24" justify="end">
         <n-button class="w-72px" @click="closeModal">{{ $t('generate.cancel') }}</n-button>
-        <n-button class="w-72px" type="primary" @click="handleSubmit">{{ $t('page.login.common.confirm') }}</n-button>
+        <n-button class="w-72px" type="primary" :loading="submitting" @click="handleSubmit">
+          {{ $t('page.login.common.confirm') }}
+        </n-button>
       </n-space>
     </n-form>
   </n-modal>

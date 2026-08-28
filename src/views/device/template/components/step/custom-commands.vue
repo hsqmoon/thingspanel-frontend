@@ -3,6 +3,7 @@ import { computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
 import { NButton, NDataTable, NForm, NFormItem, NInput, NModal, NPagination, NPopconfirm, NTag } from 'naive-ui'
 import CodeMirror from 'vue-codemirror6'
 import { javascript } from '@codemirror/lang-javascript'
+import { isFlatRequestFailure } from '@sa/axios'
 import { $t } from '@/locales'
 import { useThemeStore } from '@/store/modules/theme'
 import {
@@ -34,6 +35,8 @@ const configFormRules = ref({
 
 const commandjson: any = reactive({
   configForm: false,
+  loading: false,
+  submitting: false,
   listData: [],
   total: 0,
   queryjson: {
@@ -48,12 +51,18 @@ const commandjson: any = reactive({
     enable_status: 'disable'
   }
 })
-const getCommandList = (page: number = 1) => {
+const getCommandList = async (page: number = 1) => {
   const queryjson = { ...commandjson.queryjson, page, device_template_id: props.id }
-  deviceCustomCommandsList(queryjson).then(({ data }) => {
-    commandjson.listData = data.list || []
-    commandjson.total = data.total
-  })
+  commandjson.loading = true
+  try {
+    const result = await deviceCustomCommandsList(queryjson)
+    if (isFlatRequestFailure(result)) return
+
+    commandjson.listData = Array.isArray(result.data?.list) ? result.data.list : []
+    commandjson.total = Number(result.data?.total || 0)
+  } finally {
+    commandjson.loading = false
+  }
 }
 const openCommandDialog = () => {
   commandjson.formjson = {
@@ -65,12 +74,11 @@ const openCommandDialog = () => {
   }
   commandjson.configForm = !commandjson.configForm
 }
-const handleDeleteTable = async id => {
-  const { error } = await deviceCustomCommandsDel(id)
+const handleDeleteTable = async (id) => {
+  const result = await deviceCustomCommandsDel(id)
+  if (isFlatRequestFailure(result)) return
 
-  if (!error) {
-    getCommandList()
-  }
+  await getCommandList()
 }
 const handleEditTable = (row: any) => {
   openCommandDialog()
@@ -106,7 +114,7 @@ const columns: any = [
     key: 'enable_status',
     minWidth: '100px',
     title: $t('generate.status'),
-    render: row => {
+    render: (row) => {
       if (row?.enable_status === 'enable') {
         return <NTag type="success">{$t('page.manage.common.status.enable')}</NTag>
       }
@@ -118,7 +126,7 @@ const columns: any = [
     minWidth: '100px',
     title: $t('page.product.list.operate'),
     align: 'center',
-    render: row => {
+    render: (row) => {
       return (
         <div class="flex gap-20px flex-justify-center">
           <NButton size={'small'} type="primary" onClick={() => handleEditTable(row)}>
@@ -141,17 +149,22 @@ const columns: any = [
   }
 ]
 const configFormRef = ref()
-const onCommandSubmit = async e => {
+const onCommandSubmit = async (e) => {
   const params = { ...commandjson.formjson, device_template_id: props.id }
   e.preventDefault()
-  configFormRef.value?.validate(async errors => {
-    if (!errors) {
-      const { error } = commandjson.formjson?.id
-        ? await deviceCustomCommandsPut(params)
-        : await deviceCustomCommandsAdd(params)
-      if (!error) {
+  configFormRef.value?.validate(async (errors) => {
+    if (!errors && !commandjson.submitting) {
+      commandjson.submitting = true
+      try {
+        const result = commandjson.formjson?.id
+          ? await deviceCustomCommandsPut(params)
+          : await deviceCustomCommandsAdd(params)
+        if (isFlatRequestFailure(result)) return
+
         openCommandDialog()
-        getCommandList()
+        await getCommandList()
+      } finally {
+        commandjson.submitting = false
       }
     }
   })
@@ -169,7 +182,7 @@ onMounted(() => {
         {{ $t('generate.addCustomCommand') }}
       </NButton>
     </div>
-    <NDataTable :columns="columns" :data="commandjson.listData" class="flex-1-hidden" />
+    <NDataTable :columns="columns" :data="commandjson.listData" :loading="commandjson.loading" class="flex-1-hidden" />
 
     <div class="w-full flex justify-end">
       <NPagination
@@ -230,8 +243,10 @@ onMounted(() => {
           </NFormItem>
 
           <NFlex justify="end">
-            <NButton @click="openCommandDialog">{{ $t('generate.cancel') }}</NButton>
-            <NButton type="primary" @click="onCommandSubmit">{{ $t('custom.groupPage.confirm') }}</NButton>
+            <NButton :disabled="commandjson.submitting" @click="openCommandDialog">{{ $t('generate.cancel') }}</NButton>
+            <NButton type="primary" :loading="commandjson.submitting" @click="onCommandSubmit">
+              {{ $t('custom.groupPage.confirm') }}
+            </NButton>
           </NFlex>
         </NForm>
       </n-card>

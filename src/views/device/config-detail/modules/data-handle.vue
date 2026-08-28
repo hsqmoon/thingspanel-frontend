@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, getCurrentInstance, nextTick, ref, watch } from 'vue'
-import { type FormInst, NButton, useDialog } from 'naive-ui'
+import { useEventListener } from '@vueuse/core'
+import { isFlatRequestFailure, type FlatRequestError } from '@sa/axios'
+import { type FormInst, NButton, useDialog, useMessage } from 'naive-ui'
 import { PencilOutline as editIcon, TrashOutline as trashIcon } from '@vicons/ionicons5'
+import { onBeforeRouteLeave } from 'vue-router'
 import ItemCard from '@/components/dev-card-item/index.vue'
 import {
   dataScriptAdd,
@@ -18,9 +21,15 @@ import { useI18n } from 'vue-i18n'
 
 // 获取国际化函数
 const { t } = useI18n()
-// const message = useMessage();
+const message = useMessage()
 const dialog = useDialog()
 const LuaEditor = defineAsyncComponent(() => import('./components/lua-editor.vue'))
+
+function showQuizRequestFailure(errorInfo: FlatRequestError) {
+  const errorMessage = errorInfo.message || t('page.dataForward.requestFailed')
+  const errorType = errorInfo.status ? `HTTP ${errorInfo.status}` : errorInfo.code || 'Unknown'
+  configForm.value.resolt_analog_input = `${t('page.dataForward.debugFailed')}\n${t('page.dataForward.errorType')}: ${errorType}\n${t('page.dataForward.errorCode')}: ${errorInfo.code || 'N/A'}\n${t('page.dataForward.errorMessage')}: ${errorMessage}`
+}
 
 interface Props {
   configInfo?: object | any
@@ -178,8 +187,22 @@ const configFormRules = ref({
   }
 })
 const showModal = ref(false)
+const submitting = ref(false)
+const quizLoading = ref(false)
+const scriptMutationIds = ref(new Set<string>())
+const listReady = ref(false)
+const activeEditorOptions = computed(() => ({ ...editorOptions.value, readOnly: submitting.value }))
+let listRequestEpoch = 0
+let modalSession = 0
+let closeModalAfterSubmit = false
+let modalDeviceConfigId = ''
 
 const openModal = (type: any, item: any) => {
+  if (!listReady.value || submitting.value) return
+
+  modalSession += 1
+  closeModalAfterSubmit = false
+  modalDeviceConfigId = String(props.configInfo?.id || '')
   modalTitle.value = type
   // 先用默认值初始化表单
   configForm.value = defaultConfigForm()
@@ -245,10 +268,24 @@ const dataScriptList = ref<Array<DataScriptItem>>([])
 const dataScriptTotal = ref(0)
 const queryDataScriptList = async () => {
   const deviceConfigId = props.configInfo?.id
-  if (!deviceConfigId) return
-  const res = await getDataScriptList({ ...queryData.value, device_config_id: deviceConfigId })
-  dataScriptList.value = res.data.list
-  dataScriptTotal.value = res.data.total
+  const requestEpoch = ++listRequestEpoch
+  dataScriptList.value = []
+  dataScriptTotal.value = 0
+  listReady.value = false
+  if (!deviceConfigId) {
+    return
+  }
+  try {
+    const res = await getDataScriptList({ ...queryData.value, device_config_id: deviceConfigId })
+    if (requestEpoch !== listRequestEpoch) return
+    if (isFlatRequestFailure(res)) return
+
+    dataScriptList.value = Array.isArray(res.data?.list) ? res.data.list : []
+    dataScriptTotal.value = Number(res.data?.total) || 0
+    listReady.value = true
+  } catch {
+    if (requestEpoch === listRequestEpoch) message.error(t('page.dataForward.requestFailed'))
+  }
 }
 // const findScriptType = (scriptType: any) => {
 
@@ -259,60 +296,104 @@ const queryDataScriptList = async () => {
 //   }
 //   return ''
 // }
-const searchDataScript = () => {
-  queryData.value.page = 1
-  queryDataScriptList()
-}
+const handleChange = async (item: DataScriptItem, enableFlag: string) => {
+  if (!listReady.value || scriptMutationIds.value.has(item.id)) return
 
-const handleChange = async (item: object) => {
-  await setDeviceScriptEnable(item)
+  const requestEpoch = listRequestEpoch
+  scriptMutationIds.value = new Set(scriptMutationIds.value).add(item.id)
+  try {
+    const response = await setDeviceScriptEnable({ ...item, enable_flag: enableFlag })
+    if (isFlatRequestFailure(response) || requestEpoch !== listRequestEpoch || !listReady.value) return
+
+    const currentItem = dataScriptList.value.find(script => script.id === item.id)
+    if (currentItem) currentItem.enable_flag = enableFlag
+  } catch {
+    message.error(t('page.dataForward.requestFailed'))
+  } finally {
+    const pendingIds = new Set(scriptMutationIds.value)
+    pendingIds.delete(item.id)
+    scriptMutationIds.value = pendingIds
+  }
 }
-const handleClose = () => {
+const handleClose = (force = false) => {
+  if (submitting.value && !force) return
+  modalSession += 1
+  closeModalAfterSubmit = false
+  quizLoading.value = false
   configFormRef.value?.restoreValidation()
   showModal.value = false
 }
+const handleModalShowUpdate = (value: boolean) => {
+  if (!value) handleClose()
+}
 // 提交表单
 const handleSubmit = async () => {
-  await configFormRef?.value?.validate()
-  configForm.value.device_config_id = props.configInfo.id
-  if (!configForm.value.id) {
-    const res = await dataScriptAdd(configForm.value)
-    if (!res.error) {
-      // message.success('新增成功');
-      handleClose()
-      searchDataScript()
+  if (submitting.value || quizLoading.value) return
+
+  const session = modalSession
+  submitting.value = true
+  try {
+    try {
+      await configFormRef?.value?.validate()
+    } catch {
+      return
     }
-  } else {
-    const res = await dataScriptEdit(configForm.value)
-    if (!res.error) {
-      handleClose()
-      // message.success('修改成功');
-      searchDataScript()
-    }
+    if (session !== modalSession || closeModalAfterSubmit) return
+
+    const payload = { ...configForm.value, device_config_id: modalDeviceConfigId }
+    const res = payload.id ? await dataScriptEdit(payload) : await dataScriptAdd(payload)
+    if (isFlatRequestFailure(res) || session !== modalSession) return
+
+    handleClose(true)
+  } catch {
+    message.error(t('page.dataForward.requestFailed'))
+  } finally {
+    submitting.value = false
+    if (closeModalAfterSubmit && session === modalSession) handleClose()
   }
+  await queryDataScriptList()
 }
 const deleteData = async (item: any) => {
+  if (!listReady.value) return
+  const requestEpoch = listRequestEpoch
   dialog.warning({
     title: $t('common.tip'),
     content: $t('common.deleteProcessing'),
     positiveText: $t('device_template.confirm'),
     negativeText: $t('common.cancel'),
     onPositiveClick: async () => {
-      await dataScriptDel({ id: item.id })
-      // message.success($t('custom.grouping_details.operationSuccess'));
-      searchDataScript()
+      if (!listReady.value || requestEpoch !== listRequestEpoch) return
+
+      try {
+        const response = await dataScriptDel({ id: item.id })
+        if (isFlatRequestFailure(response)) return
+
+        await queryDataScriptList()
+      } catch {
+        message.error(t('page.dataForward.requestFailed'))
+      }
     }
   })
 }
 const doQuiz = async () => {
-  await configFormRef?.value?.validate()
+  if (quizLoading.value || submitting.value) return
+
+  const session = modalSession
+  quizLoading.value = true
+  try {
+    await configFormRef?.value?.validate()
+  } catch {
+    quizLoading.value = false
+    return
+  }
+  if (session !== modalSession || !showModal.value) return
 
   try {
-    const response = await dataScriptQuiz(configForm.value)
-    if (response.error) {
-      const errorInfo = response.error
-      const errorMessage = errorInfo.message || t('page.dataForward.requestFailed')
-      configForm.value.resolt_analog_input = `${t('page.dataForward.debugFailed')}\n${t('page.dataForward.errorType')}: ${errorInfo.name || 'Unknown'}\n${t('page.dataForward.errorCode')}: ${errorInfo.code || 'N/A'}\n${t('page.dataForward.errorMessage')}: ${errorMessage}`
+    const response = await dataScriptQuiz({ ...configForm.value })
+    if (session !== modalSession || !showModal.value) return
+
+    if (isFlatRequestFailure(response)) {
+      if (response.error.status !== 401) showQuizRequestFailure(response.error)
       return
     }
 
@@ -342,24 +423,43 @@ const doQuiz = async () => {
       const errorMessage = actualResponse.message || t('page.dataForward.noErrorMessage')
       configForm.value.resolt_analog_input = `${t('page.dataForward.debugFailed')}\ncode: ${actualResponse.code}\nmessage: ${errorMessage}`
     }
-  } catch (error) {
-    // 处理请求异常
-    console.error('调试请求异常:', error)
-    const errorMessage = error instanceof Error ? error.message : t('page.dataForward.unknownError')
+  } catch (error: unknown) {
+    if (session !== modalSession || !showModal.value) return
+
+    if (isFlatRequestFailure(error)) {
+      if (error.error.status !== 401) showQuizRequestFailure(error.error)
+      return
+    }
+
     configForm.value.resolt_analog_input =
-      t('page.dataForward.debugRequestFailed') + ': ' + errorMessage
+      t('page.dataForward.debugRequestFailed') + ': ' + t('page.dataForward.unknownError')
+  } finally {
+    if (session === modalSession) quizLoading.value = false
   }
 }
 watch(
   () => [props.configInfo?.id, queryData.value.script_type, queryData.value.page, queryData.value.page_size],
-  () => queryDataScriptList(),
-  { immediate: true }
+  () => {
+    if (showModal.value) {
+      if (submitting.value) closeModalAfterSubmit = true
+      else handleClose()
+    }
+    queryDataScriptList()
+  },
+  { immediate: true, flush: 'sync' }
 )
+onBeforeRouteLeave(() => !submitting.value)
+useEventListener(window, 'beforeunload', event => {
+  if (!submitting.value) return
+
+  event.preventDefault()
+  event.returnValue = true
+})
 </script>
 <template>
   <div class="m-b-20px flex items-center gap-20px">
     <n-select v-model:value="queryData.script_type" :options="scripTypeOpt" class="max-w-40" clearable />
-    <NButton type="primary" @click="openModal($t('common.add'), null)">
+    <NButton type="primary" :disabled="!listReady" @click="openModal($t('common.add'), null)">
       {{ $t('generate.add-data-processing') }}
     </NButton>
   </div>
@@ -380,24 +480,26 @@ watch(
         <!-- 右上角开关 -->
         <template #top-right-icon>
           <NSwitch
-            v-model:value="item.enable_flag"
+            :value="item.enable_flag"
             checked-value="Y"
             unchecked-value="N"
-            @update-value="handleChange(item)"
+            :loading="scriptMutationIds.has(item.id)"
+            :disabled="!listReady"
+            @update:value="value => handleChange(item, value)"
           />
         </template>
 
         <!-- 底部操作按钮 -->
         <template #footer>
           <div class="flex items-center gap-2 w-full justify-between">
-            <NButton size="small" quaternary circle @click="openModal($t('common.edit'), item)">
+            <NButton size="small" quaternary circle :disabled="!listReady" @click="openModal($t('common.edit'), item)">
               <template #icon>
                 <n-icon color="#888">
                   <editIcon />
                 </n-icon>
               </template>
             </NButton>
-            <NButton size="small" quaternary circle @click="deleteData(item)">
+            <NButton size="small" quaternary circle :disabled="!listReady" @click="deleteData(item)">
               <template #icon>
                 <n-icon color="#888">
                   <trashIcon />
@@ -444,13 +546,16 @@ watch(
   </NGrid>
 
   <n-modal
-    v-model:show="showModal"
+    :show="showModal"
     preset="dialog"
     :width="800"
     :title="modalTitle + $t('common.dataProces')"
     :show-icon="false"
     :style="bodyStyle"
     :closable="false"
+    :mask-closable="!submitting"
+    :close-on-esc="!submitting"
+    @update:show="handleModalShowUpdate"
   >
     <NForm
       ref="configFormRef"
@@ -458,6 +563,7 @@ watch(
       :class="getPlatform ? 'flex-col' : 'flex'"
       :model="configForm"
       :rules="configFormRules"
+      :disabled="submitting"
       label-placement="left"
       label-width="auto"
     >
@@ -484,7 +590,7 @@ watch(
           <!-- 编辑器工具栏 -->
           <div class="editor-toolbar">
             <div class="toolbar-left">
-              <NButton size="small" tertiary @click="toggleWordWrap">
+              <NButton size="small" tertiary :disabled="submitting" @click="toggleWordWrap">
                 <template #icon>
                   <n-icon>
                     <svg viewBox="0 0 24 24">
@@ -497,7 +603,7 @@ watch(
                 </template>
                 自动换行
               </NButton>
-              <NButton size="small" tertiary @click="toggleMinimap">
+              <NButton size="small" tertiary :disabled="submitting" @click="toggleMinimap">
                 <template #icon>
                   <n-icon>
                     <svg viewBox="0 0 24 24">
@@ -512,7 +618,7 @@ watch(
               </NButton>
             </div>
             <div class="toolbar-right">
-              <NButton size="small" tertiary @click="changeFontSize(-1)">
+              <NButton size="small" tertiary :disabled="submitting" @click="changeFontSize(-1)">
                 <template #icon>
                   <n-icon>
                     <svg viewBox="0 0 24 24"><path fill="currentColor" d="M19 13H5v-2h14v2z" /></svg>
@@ -520,7 +626,7 @@ watch(
                 </template>
               </NButton>
               <span class="font-size-display">{{ editorOptions.fontSize }}px</span>
-              <NButton size="small" tertiary @click="changeFontSize(1)">
+              <NButton size="small" tertiary :disabled="submitting" @click="changeFontSize(1)">
                 <template #icon>
                   <n-icon>
                     <svg viewBox="0 0 24 24"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" /></svg>
@@ -533,7 +639,7 @@ watch(
           <div class="editor-wrapper">
             <LuaEditor
               v-model:value="configForm.content"
-              :options="editorOptions"
+              :options="activeEditorOptions"
               height="300"
               language="lua"
               class="custom-monaco-editor"
@@ -556,12 +662,16 @@ watch(
         <NInput v-model:value="configForm.resolt_analog_input" :rows="5" :disabled="true" type="textarea" />
       </NFormItem>
       <NFormItem>
-        <NButton type="primary" @click="doQuiz">{{ $t('common.debug') }}</NButton>
+        <NButton type="primary" :loading="quizLoading" :disabled="submitting" @click="doQuiz">
+          {{ $t('common.debug') }}
+        </NButton>
       </NFormItem>
     </NForm>
     <NFlex justify="end">
-      <NButton @click="handleClose">{{ $t('generate.cancel') }}</NButton>
-      <NButton type="primary" @click="handleSubmit">{{ $t('common.save') }}</NButton>
+      <NButton :disabled="submitting" @click="handleClose()">{{ $t('generate.cancel') }}</NButton>
+      <NButton type="primary" :loading="submitting" :disabled="quizLoading" @click="handleSubmit">
+        {{ $t('common.save') }}
+      </NButton>
     </NFlex>
   </n-modal>
 </template>

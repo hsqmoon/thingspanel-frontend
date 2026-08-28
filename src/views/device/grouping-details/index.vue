@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { type DataTableColumns, NButton, NDataTable, type PaginationProps, useMessage } from 'naive-ui'
+import { type DataTableColumns, NButton, NDataTable, type PaginationProps } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 import {
   deleteDeviceGroup,
   deleteDeviceGroupRelation,
@@ -52,8 +53,6 @@ const details_data = ref({
     group_path: ''
   }
 })
-const message = useMessage()
-
 const queryParams = reactive<{
   parent_id: string
   page: number
@@ -67,25 +66,27 @@ const queryParams = reactive<{
 const { routerPush } = useRouterPush()
 
 const getDetails = async (tid: string) => {
-  if (!currentId.value) {
-    message.error('00')
-  } else {
-    queryParams.parent_id = tid
-    startLoading()
-    const { data, error } = await deviceGroupDetail({ id: tid })
+  if (!currentId.value) return
 
-    if (!error && data) {
-      details_data.value = data
-      editData.value.id = data.detail.id
-      editData.value.description = data.detail.description
-      editData.value.name = data.detail.name
-      editData.value.parent_id = data.detail.parent_id
-    }
+  queryParams.parent_id = tid
+  startLoading()
+  try {
+    const detailResult = await deviceGroupDetail({ id: tid })
+    if (isFlatRequestFailure(detailResult) || !detailResult.data) return
 
-    const res2 = await getDeviceGroup(queryParams)
-    group_data.value = res2.data.list
-    group_pagination.itemCount = res2.data.total
+    const data = detailResult.data
+    details_data.value = data
+    editData.value.id = data.detail.id
+    editData.value.description = data.detail.description
+    editData.value.name = data.detail.name
+    editData.value.parent_id = data.detail.parent_id
 
+    const childResult = await getDeviceGroup(queryParams)
+    if (isFlatRequestFailure(childResult)) return
+
+    group_data.value = Array.isArray(childResult.data?.list) ? childResult.data.list : []
+    group_pagination.itemCount = Number(childResult.data?.total || 0)
+  } finally {
     endLoading()
   }
 }
@@ -115,7 +116,9 @@ const viewDetails = (rid: string) => {
 }
 // Function to delete a device group
 const deleteItem = async (rid: string) => {
-  await deleteDeviceGroup({ id: rid })
+  const result = await deleteDeviceGroup({ id: rid })
+  if (isFlatRequestFailure(result)) return
+
   await getDetails(currentId.value as string)
 }
 const group_column = group_columns(viewDetails, deleteItem)
@@ -148,14 +151,14 @@ const queryParams2 = reactive<{
 })
 const getDeviceList = async (id: string) => {
   const res = await deviceListByGroup({ ...queryParams2, group_id: id })
+  if (isFlatRequestFailure(res)) return
+
   if (res.data?.list) {
     device_data.value = res.data?.list
   } else {
     device_data.value = []
   }
-  if (res?.data?.total) {
-    devicePagination.pageCount = Math.ceil(res?.data?.total / 5)
-  }
+  devicePagination.pageCount = Math.max(1, Math.ceil(Number(res.data?.total || 0) / queryParams2.page_size))
 }
 const refresh_data = (newValue: boolean) => {
   if (newValue) {
@@ -175,10 +178,12 @@ const viewDeviceDetails = (rid: string) => {
   router.push({ name: 'device_details', query: { d_id: rid } })
 }
 const deleteDeviceItem = async (rid: string) => {
-  await deleteDeviceGroupRelation({
+  const result = await deleteDeviceGroupRelation({
     device_id: rid,
     group_id: currentId.value
   })
+  if (isFlatRequestFailure(result)) return
+
   await getDeviceList(currentId.value as string)
 }
 const deviceColumns: DataTableColumns<DeviceManagement.DeviceData> = createNoSelectDeviceColumns(
@@ -200,8 +205,6 @@ const reload = async (nid: string) => {
 const goToParentGroup = () => {
   if (details_data.value.detail.parent_id && details_data.value.detail.parent_id !== '0') {
     routerPush({ name: 'device_grouping-details', query: { id: details_data.value.detail.parent_id } })
-  } else {
-    console.error('无法导航到父级分组，parent_id 无效或为顶级:', details_data.value.detail.parent_id)
   }
 }
 
@@ -214,10 +217,10 @@ const goToGroupListRoot = () => {
 
 watch(
   () => route.query.id,
-  newId => {
+  (newId) => {
     if (newId) {
       currentId.value = newId
-      reload(newId as string)
+      void reload(newId as string)
     }
   }
 )
@@ -229,7 +232,11 @@ watch(
       <NCard :title="details_data.detail.name">
         <template #header-extra>
           <NSpace>
-            <NButton v-if="details_data.detail.parent_id !== '0'" type="primary" @click="goToParentGroup">
+            <NButton
+              v-if="details_data.detail.parent_id && details_data.detail.parent_id !== '0'"
+              type="primary"
+              @click="goToParentGroup"
+            >
               <template #icon>
                 <svg-icon icon="material-symbols:arrow-upward" />
               </template>

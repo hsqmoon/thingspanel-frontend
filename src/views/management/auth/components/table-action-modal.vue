@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import type { FormInst } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 import { routeSysFlagOptions, routeTypeOptions } from '@/constants/business'
 import { addElement, editElement, fetchElementList } from '@/service/api/route'
 import { deepClone } from '@/utils/common/tool'
@@ -59,16 +60,17 @@ const title = computed(() => {
 })
 
 const parentOptions = ref<CustomRoute.Route[]>([])
+let parentOptionsRequestEpoch = 0
 
 async function getTableData() {
-  const { data } = await fetchElementList({
+  const epoch = ++parentOptionsRequestEpoch
+  const response = await fetchElementList({
     page: 1,
     page_size: 99
   })
-  if (data) {
-    const list: Api.Route.MenuRoute[] = data.list
-    parentOptions.value = list
-  }
+  if (epoch !== parentOptionsRequestEpoch || isFlatRequestFailure(response)) return
+
+  parentOptions.value = response.data.list
 }
 
 getTableData()
@@ -80,6 +82,8 @@ getTableData()
 // });
 
 const formRef = ref<HTMLElement & FormInst>()
+const submitting = ref(false)
+let modalSession = 0
 
 type FormModel = Pick<
   CustomRoute.Route,
@@ -143,26 +147,39 @@ function handleUpdateFormModelByModalType() {
 }
 
 async function handleSubmit() {
-  await formRef.value?.validate()
-  const formData = deepClone(formModel)
-  formData.parent_id = formData.parent_id || '0'
-  formData.authority = JSON.stringify(formData.authority)
-  let data: any
-  if (props.type === 'add') {
-    data = await addElement(formData)
-  } else if (props.type === 'edit') {
-    data = await editElement(formData)
-  }
-  if (!data.error) {
-    window.$message?.success(data.msg)
+  if (submitting.value) return
+  const session = modalSession
+  submitting.value = true
+  try {
+    try {
+      await formRef.value?.validate()
+    } catch (error) {
+      if (error === undefined || Array.isArray(error)) return
+      throw error
+    }
+    if (session !== modalSession) return
+
+    const formData = deepClone(formModel)
+    formData.parent_id = formData.parent_id || '0'
+    formData.authority = JSON.stringify(formData.authority)
+    const response = props.type === 'add' ? await addElement(formData) : await editElement(formData)
+    if (session !== modalSession || isFlatRequestFailure(response)) return
+
+    window.$message?.success(props.type === 'add' ? $t('common.addSuccess') : $t('common.editSuccess'))
     emit('success')
+    closeModal()
+  } finally {
+    if (session === modalSession) {
+      submitting.value = false
+    }
   }
-  closeModal()
 }
 
 watch(
   () => props.visible,
   newValue => {
+    modalSession += 1
+    submitting.value = false
     if (newValue) {
       handleUpdateFormModelByModalType()
     }
@@ -234,7 +251,7 @@ watch(
         <NButton class="w-72px" @click="closeModal">
           {{ common_cancel }}
         </NButton>
-        <NButton class="w-72px" type="primary" @click="handleSubmit">
+        <NButton class="w-72px" type="primary" :loading="submitting" @click="handleSubmit">
           {{ common_confirm }}
         </NButton>
       </NSpace>

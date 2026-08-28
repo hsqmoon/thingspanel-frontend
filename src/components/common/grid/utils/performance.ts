@@ -112,7 +112,7 @@ export class PerformanceMonitor {
   start(operation: string): string {
     if (!this.isEnabled) return ''
 
-    const id = `${operation}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const id = `${operation}_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
     performance.mark(`${id}_start`)
 
     return id

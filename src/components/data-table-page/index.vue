@@ -1,5 +1,6 @@
 <script lang="tsx" setup>
 import type { VNode, VNodeChild } from 'vue'
+import { isFlatRequestFailure, type FlatResponseData } from '@sa/axios'
 import { computed, ref, watchEffect, onMounted, onUnmounted } from 'vue'
 import _ from 'lodash'
 import { NButton, NDataTable, NDatePicker, NInput, NSelect, NSpace, NPagination, NSpin } from 'naive-ui'
@@ -7,7 +8,6 @@ import type { TreeSelectOption } from 'naive-ui'
 import { useLoading } from '@sa/hooks'
 import { $t } from '@/locales'
 import { formatDateTime } from '@/utils/common/datetime'
-import { createLogger } from '@/utils/logger'
 import { getDemoServerUrl } from '@/utils/common/tool'
 import AdvancedListLayout from '@/components/list-page/index.vue'
 import TencentMap from './modules/tencent-map.vue'
@@ -45,17 +45,7 @@ interface DeviceItem {
   key?: string // DevCardItem 可能用到的备用字段
 }
 
-type FetchDataResult =
-  | {
-      data: { list: DeviceItem[]; total: number }
-      error: null
-    }
-  | {
-      data: null
-      error: Error
-    }
-
-const logger = createLogger('TablePage')
+type FetchDataResult = FlatResponseData<{ list: DeviceItem[]; total: number }>
 
 // 定义搜索配置项的类型，支持多种输入类型：纯文本、日期选择器、日期范围选择器、下拉选择和树形选择器
 export type theLabel = string | (() => string) | undefined
@@ -111,6 +101,10 @@ const props = defineProps<{
   initPage?: number
   initPageSize?: number
 }>()
+const emit = defineEmits<{
+  dataLoaded: [rows: DeviceItem[]]
+  paramsUpdate: [params: Record<string, unknown>]
+}>()
 
 const { loading, startLoading, endLoading } = useLoading()
 // 解构props以简化访问
@@ -121,6 +115,8 @@ const total = ref(0) // 数据总数
 const currentPage = ref(props.initPage || 1) // 当前页码
 const pageSize = ref(props.initPageSize || 10) // 每页显示数量
 const searchCriteria: any = ref(Object.fromEntries(searchConfigs.map(item => [item.key, item.initValue]))) // 搜索条件
+let requestEpoch = 0
+let committedParams: Record<string, unknown> | null = null
 
 // 添加当前视图状态管理
 const currentViewType = ref('list') // 默认为列表视图
@@ -131,9 +127,10 @@ const url = ref(demoUrl)
 
 // 获取数据的函数，结合搜索条件、分页等
 const getData = async () => {
+  const epoch = ++requestEpoch
   // 处理搜索条件，特别是将日期对象转换为字符串
   startLoading()
-  const processedSearchCriteria = Object.fromEntries(
+  const processedSearchCriteria: Record<string, unknown> = Object.fromEntries(
     Object.entries(searchCriteria.value).map(([key, value]) => {
       if (value && Array.isArray(value)) {
         // 处理日期范围
@@ -143,22 +140,43 @@ const getData = async () => {
       return [key, value instanceof Date ? value.toISOString() : value]
     })
   )
-  // 调用提供的fetchData函数获取数据
-
-  const response = await fetchData({
+  const requestParams = {
     page: currentPage.value,
     page_size: pageSize.value,
     ...processedSearchCriteria
-  })
-  // 处理响应
-  if (!response.error) {
-    dataList.value = response.data.list
-    total.value = response.data.total
-  } else {
-    logger.error({ 'Error fetching data:': response.error })
   }
-  endLoading()
+  // 调用提供的fetchData函数获取数据
+  emit('paramsUpdate', processedSearchCriteria)
+
+  try {
+    const response = await fetchData(requestParams)
+
+    if (epoch !== requestEpoch) return
+
+    if (isFlatRequestFailure(response)) {
+      if (!committedParams || !_.isEqual(requestParams, committedParams)) {
+        dataList.value = []
+        total.value = 0
+        emit('dataLoaded', dataList.value)
+      }
+      return
+    }
+
+    dataList.value = Array.isArray(response.data?.list) ? response.data.list : []
+    total.value = Number(response.data?.total) || 0
+    committedParams = _.cloneDeep(requestParams)
+    emit('dataLoaded', dataList.value)
+  } finally {
+    if (epoch === requestEpoch) {
+      endLoading()
+    }
+  }
 }
+
+const debouncedInputSearch = _.debounce(() => {
+  currentPage.value = 1
+  getData()
+}, 400)
 
 // 使用计算属性动态生成表格的列配置
 const generatedColumns = computed(() => {
@@ -195,10 +213,12 @@ const generatedColumns = computed(() => {
 
 // 更新页码或页面大小时重新获取数据
 const onUpdatePage = newPage => {
+  debouncedInputSearch.cancel()
   currentPage.value = newPage
   getData() // 更新数据
 }
 const onUpdatePageSize = newPageSize => {
+  debouncedInputSearch.cancel()
   pageSize.value = newPageSize
   currentPage.value = 1 // 重置为第一页
   getData() // 更新数据
@@ -222,8 +242,9 @@ watchEffect(() => {
 
 // 搜索和重置按钮的逻辑
 const handleSearch = () => {
+  debouncedInputSearch.cancel()
   currentPage.value = 1 // 搜索时重置到第一页
-  getData()
+  return getData()
 }
 
 const handleReset = () => {
@@ -255,12 +276,11 @@ const handleReset = () => {
 
 // 强制更新指定参数并刷新数据
 const forceChangeParamsByKey = (params: Record<string, any>) => {
+  debouncedInputSearch.cancel()
   Object.entries(params).forEach(([key, value]) => {
-    if (key in searchCriteria.value) {
-      searchCriteria.value[key] = value
-    }
+    searchCriteria.value[key] = value
   })
-  getData()
+  return getData()
 }
 
 // 暴露方法给父组件
@@ -268,11 +288,14 @@ defineExpose({
   handleSearch,
   handleReset,
   forceChangeParamsByKey,
-  dataList // 暴露dataList以便父组件能够直接更新数据
+  dataList, // 暴露dataList以便父组件能够直接更新数据
+  currentPage,
+  pageSize
 })
 
 // 更新树形选择器的选项
 const handleTreeSelectUpdate = (value, key) => {
+  debouncedInputSearch.cancel()
   currentPage.value = 1
   searchCriteria.value[key] = value
   getData()
@@ -293,7 +316,7 @@ const rowProps = row => {
     return {
       style: 'cursor: pointer;',
       onClick: () => {
-        props.rowClick && props.rowClick(row)
+        props.rowClick?.(row)
       }
     }
   }
@@ -317,21 +340,18 @@ onMounted(() => {
   getData()
 })
 
-const debouncedInputSearch = _.debounce(() => {
-  currentPage.value = 1
-  getData()
-}, 400)
-
 const handleInputChange = () => {
   debouncedInputSearch()
 }
 
 const handleSelectChange = () => {
+  debouncedInputSearch.cancel()
   currentPage.value = 1
   getData()
 }
 
 onUnmounted(() => {
+  requestEpoch += 1
   debouncedInputSearch.cancel()
 })
 
@@ -360,6 +380,7 @@ const handleViewChange = ({ viewType }: { viewType: string }) => {
 }
 
 const handleRefresh = () => {
+  debouncedInputSearch.cancel()
   getData()
 }
 
@@ -385,7 +406,6 @@ const getDeviceIconName = (deviceType: string, deviceConfigName?: string): strin
 
 // 获取配置图片URL的函数
 const getConfigImageUrl = (imagePath: string | undefined): string => {
-  logger.info('imagePath:', imagePath)
   if (!imagePath) return '' // 返回空字符串，让模板使用默认图标
   const relativePath = imagePath.replace(/^\.?\//, '')
   return `${url.value.replace('api/v1', '') + relativePath}`

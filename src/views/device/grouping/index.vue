@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import { NButton, NDataTable, NFlex, NPagination } from 'naive-ui'
 import { IosSearch } from '@vicons/ionicons4'
 import { debounce } from 'lodash'
+import { isFlatRequestFailure } from '@sa/axios'
 import { deleteDeviceGroup, getDeviceGroup } from '@/service/api/device'
 import { group_columns } from '@/views/device/modules/all-columns'
 import { $t } from '@/locales'
@@ -19,14 +20,19 @@ const currentPage = ref(1)
 const totalPages = ref(0) // 假设总页数为 5，实际应从后端获取
 const getDevice = async () => {
   loading.value = true
-  const res = await getDeviceGroup({
-    page: currentPage.value,
-    page_size: 10,
-    parent_id: 0
-  })
-  data.value = res.data.list
-  totalPages.value = Math.ceil(res.data.total / 10)
-  loading.value = false
+  try {
+    const res = await getDeviceGroup({
+      page: currentPage.value,
+      page_size: 10,
+      parent_id: 0
+    })
+    if (isFlatRequestFailure(res)) return
+
+    data.value = Array.isArray(res.data?.list) ? res.data.list : []
+    totalPages.value = Math.ceil(Number(res.data?.total || 0) / 10)
+  } finally {
+    loading.value = false
+  }
 }
 // 使用 lodash 的 debounce 函数来延迟搜索请求的发送
 const debouncedSearch = debounce(async () => {
@@ -36,17 +42,21 @@ const debouncedSearch = debounce(async () => {
 
   isRequestPending.value = true
   loading.value = true
-  const res = await getDeviceGroup({
-    page: currentPage.value,
-    page_size: 10,
-    parent_id: 0,
-    name: searchValue.value.trim() || undefined
-  })
-  data.value = res.data.list
-  totalPages.value = Math.ceil(res.data.total / 10)
-  loading.value = false
+  try {
+    const res = await getDeviceGroup({
+      page: currentPage.value,
+      page_size: 10,
+      parent_id: 0,
+      name: searchValue.value.trim() || undefined
+    })
+    if (isFlatRequestFailure(res)) return
 
-  isRequestPending.value = false
+    data.value = Array.isArray(res.data?.list) ? res.data.list : []
+    totalPages.value = Math.ceil(Number(res.data?.total || 0) / 10)
+  } finally {
+    loading.value = false
+    isRequestPending.value = false
+  }
 }, 500) // 设置延迟为 500 毫秒
 
 // 监听输入变化并调用 debounced 函数
@@ -56,7 +66,9 @@ const handleInput = () => {
 // Async function to fetch device groups from the backend
 // Function to delete a device group
 const deleteItem = async (rid: string) => {
-  await deleteDeviceGroup({ id: rid })
+  const result = await deleteDeviceGroup({ id: rid })
+  if (isFlatRequestFailure(result)) return
+
   await getDevice()
 }
 const router = useRouter()
@@ -103,7 +115,7 @@ onMounted(getDevice) // Fetch device groups on component mount
         <!-- Data table to display device groups -->
         <NDataTable
           :row-props="
-            row => {
+            (row) => {
               return {
                 style: 'cursor: pointer;',
                 onClick: () => {

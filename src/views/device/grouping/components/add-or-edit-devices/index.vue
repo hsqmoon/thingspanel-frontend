@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { computed, getCurrentInstance, onMounted, ref, watch } from 'vue'
 import type { FormInst, FormRules } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 // import {useMessage} from 'naive-ui';
 import { deviceGroup, deviceGroupTree, putDeviceGroup } from '@/service/api/device'
 import { $t } from '@/locales'
@@ -41,6 +42,7 @@ interface Props {
 const props = defineProps<Props>()
 // const message = useMessage();
 const formRef = ref<HTMLElement & FormInst>()
+const submitting = ref(false)
 const formItem = ref({
   id: '', // Used for identification in edit mode
   parent_id: '',
@@ -58,7 +60,7 @@ const rules: FormRules = {
     trigger: ['blur', 'input'],
     message: $t('custom.groupPage.selectParentGroup')
   },
-  Name: {
+  name: {
     required: true,
     trigger: ['blur', 'input'],
     message: $t('custom.groupPage.enterGroupName')
@@ -73,7 +75,7 @@ interface opNode {
 
 // Extract id and name for tree select options
 const extractIdAndName = (data: TreeNode[]): opNode[] => {
-  const res = data?.map(node => ({
+  const res = data?.map((node) => ({
     id: node.group.id,
     name: node.group.name,
     children: node.children ? extractIdAndName(node.children) : undefined
@@ -86,12 +88,15 @@ const getOptions = async () => {
     formItem.value = { ...props.editData }
   }
 
-  const { data } = await deviceGroupTree({})
+  const result = await deviceGroupTree({})
+  if (isFlatRequestFailure(result)) return
+
+  const data = result.data
   options.value = [
     {
       id: '0', // Root node for tree select
       name: $t('custom.groupPage.group'),
-      children: data?.map(item => ({
+      children: data?.map((item) => ({
         id: item.group.id,
         name: item.group.name,
         children: item.children ? extractIdAndName(item.children) : undefined
@@ -103,29 +108,26 @@ const getOptions = async () => {
 // Submit form data
 const handleSubmit = async () => {
   await formRef?.value?.validate()
-  showModal.value = false
-  if (props.isEdit) {
-    await putDeviceGroup(formItem.value)
-    // message.success($t('custom.groupPage.modificationSuccess'));
-  } else {
-    await deviceGroup(formItem.value)
-    // message.success($t('custom.groupPage.additionSuccess'));
-  }
+  if (submitting.value) return
 
-  await getOptions()
-  props.refreshData()
+  submitting.value = true
+  try {
+    const result = props.isEdit ? await putDeviceGroup(formItem.value) : await deviceGroup(formItem.value)
+    if (isFlatRequestFailure(result)) return
 
+    showModal.value = false
+    await getOptions()
+    await Promise.resolve(props.refreshData())
 
-  if (formItem?.value) {
     formItem.value = {
       id: '',
       parent_id: '',
       name: '',
       description: ''
     }
+  } finally {
+    submitting.value = false
   }
-
-  // Implement API call for form submission here
 }
 
 // Close modal and reset form fields
@@ -144,7 +146,7 @@ onMounted(getOptions)
 // Watch for editData changes to handle edit mode data echo back
 watch(
   () => props.editData,
-  newVal => {
+  (newVal) => {
     if (props.isEdit && newVal) {
       formItem.value = { ...newVal }
     }
@@ -189,8 +191,10 @@ const getPlatform = computed(() => {
         </NFormItem>
         <!-- Form action buttons -->
         <div style="display: flex; justify-content: flex-end; gap: 8px">
-          <NButton @click="handleClose">{{ $t('custom.groupPage.cancel') }}</NButton>
-          <NButton type="primary" @click="handleSubmit">{{ $t('custom.groupPage.confirm') }}</NButton>
+          <NButton :disabled="submitting" @click="handleClose">{{ $t('custom.groupPage.cancel') }}</NButton>
+          <NButton type="primary" :loading="submitting" @click="handleSubmit">
+            {{ $t('custom.groupPage.confirm') }}
+          </NButton>
         </div>
       </NForm>
     </NCard>

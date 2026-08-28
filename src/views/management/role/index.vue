@@ -4,6 +4,7 @@ import type { Ref } from 'vue'
 import { NButton, NPopconfirm, NSpace } from 'naive-ui'
 import type { DataTableColumns, PaginationProps } from 'naive-ui'
 // import { userStatusLabels, userStatusOptions } from '@/constants'
+import { isFlatRequestFailure } from '@sa/axios'
 import { useBoolean, useLoading } from '@sa/hooks'
 import { delrles, rlesList } from '@/service/api'
 import { $t } from '@/locales'
@@ -33,18 +34,24 @@ const queryParams = reactive<QueryFormModel>({
 })
 
 const tableData = ref<UserManagement.User[]>([])
+let tableRequestEpoch = 0
 
 function setTableData(data: UserManagement.User[]) {
   tableData.value = data
 }
 
 async function getTableData() {
+  const epoch = ++tableRequestEpoch
   startLoading()
-  const { data } = await rlesList(queryParams)
-  if (data) {
-    const list: UserManagement.User[] = data.list
-    setTableData(list)
-    endLoading()
+  try {
+    const response = await rlesList(queryParams)
+    if (epoch !== tableRequestEpoch || isFlatRequestFailure(response) || !response.data) return
+
+    setTableData(response.data.list)
+  } finally {
+    if (epoch === tableRequestEpoch) {
+      endLoading()
+    }
   }
 }
 
@@ -136,27 +143,27 @@ function handleAddTable() {
 
 function handleEditTable(rowId: string) {
   const findItem = tableData.value.find(item => item.id === rowId)
-  if (findItem) {
-    setEditData(findItem)
-  }
+  if (!findItem) return
+
+  setEditData(findItem)
   setModalType('edit')
   openModal()
 }
 
 function handleEditPermission(rowId: string) {
   const findItem = tableData.value.find(item => item.id === rowId)
-  if (findItem) {
-    setEditData(findItem)
-  }
+  if (!findItem) return
+
+  setEditData(findItem)
   openEditPermissionModal()
 }
 
 async function handleDeleteTable(rowId: string) {
-  const data = await delrles(rowId)
-  if (!data.error) {
-    window.$message?.success($t('common.deleteSuccess'))
-    getTableData()
-  }
+  const response = await delrles(rowId)
+  if (isFlatRequestFailure(response)) return
+
+  window.$message?.success($t('common.deleteSuccess'))
+  await getTableData()
 }
 
 const pagination: PaginationProps = reactive({

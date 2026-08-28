@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, h, nextTick, reactive, ref, watch } from 'vue'
 import { useLoading } from '@sa/hooks'
+import { isFlatRequestFailure } from '@sa/axios'
 import { deviceStatusHistory } from '@/service/api/device'
 import { $t } from '@/locales'
 import dayjs from 'dayjs'
@@ -27,18 +28,6 @@ interface StatusHistoryParams {
   status?: number
 }
 
-// 响应数据类型定义
-interface StatusHistoryListResponse {
-  list?: StatusHistoryItem[]
-  total?: number
-}
-
-// 响应数据类型定义
-interface StatusHistoryResponse {
-  data?: StatusHistoryListResponse
-  error?: unknown
-}
-
 const props = defineProps<{
   deviceId: string
   visible: boolean
@@ -51,6 +40,7 @@ const emit = defineEmits<{
 const { loading, startLoading, endLoading } = useLoading()
 const tableData = ref<StatusHistoryItem[]>([])
 const total = ref(0)
+let requestEpoch = 0
 
 const queryParams = reactive({
   device_id: '',
@@ -121,6 +111,7 @@ const columns: DataTableColumns<StatusHistoryItem> = [
 ]
 
 const fetchData = async () => {
+  const currentRequestEpoch = ++requestEpoch
   startLoading()
   try {
     const params: StatusHistoryParams = {
@@ -139,17 +130,14 @@ const fetchData = async () => {
       params.status = queryParams.status
     }
 
-    const response = (await deviceStatusHistory(params)) as StatusHistoryResponse
-    const { data, error } = response
+    const response = await deviceStatusHistory(params)
+    if (isFlatRequestFailure(response) || currentRequestEpoch !== requestEpoch) return
 
-    if (!error && data) {
-      tableData.value = data.list ?? []
-      total.value = data.total ?? 0
-      pagination.itemCount = total.value
-    }
-  } catch {
+    tableData.value = Array.isArray(response.data?.list) ? response.data.list : []
+    total.value = Number(response.data?.total) || 0
+    pagination.itemCount = total.value
   } finally {
-    endLoading()
+    if (currentRequestEpoch === requestEpoch) endLoading()
   }
 }
 
@@ -190,6 +178,10 @@ const showModal = computed({
 watch(
   () => props.visible,
   newVal => {
+    if (!newVal) {
+      requestEpoch += 1
+      endLoading()
+    }
     if (newVal && props.deviceId) {
       queryParams.device_id = props.deviceId
       queryParams.page = 1

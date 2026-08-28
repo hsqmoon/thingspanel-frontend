@@ -3,6 +3,7 @@ import { h, reactive, ref } from 'vue'
 import type { Ref } from 'vue'
 import { NButton, NPopconfirm, NSpace, NTag } from 'naive-ui'
 import type { DataTableColumns, PaginationProps } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 import { useBoolean, useLoading } from '@sa/hooks'
 import { routerSysFlagLabels, routerTypeLabels } from '@/constants/business'
 import { delElement, fetchElementList } from '@/service/api/route'
@@ -25,6 +26,7 @@ const queryParams = reactive<QueryFormModel>({
 })
 
 const tableData = ref<CustomRoute.Route[]>([])
+let tableRequestEpoch = 0
 
 function setTableData(data: CustomRoute.Route[]) {
   tableData.value = data
@@ -51,13 +53,18 @@ const pagination: PaginationProps = reactive({
 })
 
 async function getTableData() {
+  const epoch = ++tableRequestEpoch
   startLoading()
-  const { data } = await fetchElementList(queryParams)
-  if (data) {
-    const list: Api.Route.MenuRoute[] = data.list
-    pagination.itemCount = data.total
-    setTableData(list)
-    endLoading()
+  try {
+    const response = await fetchElementList(queryParams)
+    if (epoch !== tableRequestEpoch || isFlatRequestFailure(response)) return
+
+    pagination.itemCount = response.data.total
+    setTableData(response.data.list)
+  } finally {
+    if (epoch === tableRequestEpoch) {
+      endLoading()
+    }
   }
 }
 
@@ -208,11 +215,11 @@ function handleEditTable(row: any) {
 }
 
 async function handleDeleteTable(rowId: string) {
-  const data = await delElement(rowId)
-  if (!data.error) {
-    window.$message?.success($t('common.deleteSuccess'))
-    await getTableData()
-  }
+  const response = await delElement(rowId)
+  if (isFlatRequestFailure(response)) return
+
+  window.$message?.success($t('common.deleteSuccess'))
+  await getTableData()
 }
 
 function init() {

@@ -84,7 +84,6 @@ export function useGridHistory(options: UseGridHistoryOptions = {}) {
    */
   const undo = (): GridLayoutPlusItem[] | null => {
     if (!canUndo.value) {
-      console.error('[GridHistory] Cannot undo: no previous state available')
       return null
     }
 
@@ -104,7 +103,6 @@ export function useGridHistory(options: UseGridHistoryOptions = {}) {
    */
   const redo = (): GridLayoutPlusItem[] | null => {
     if (!canRedo.value) {
-      console.error('[GridHistory] Cannot redo: no next state available')
       return null
     }
 

@@ -1,6 +1,7 @@
 <script setup lang="tsx">
 import { reactive, ref } from 'vue'
 import type { Ref } from 'vue'
+import { isFlatRequestFailure } from '@sa/axios'
 import type { PaginationProps } from 'naive-ui'
 import { NButton, NPopconfirm } from 'naive-ui'
 import moment from 'moment'
@@ -11,6 +12,7 @@ const props = defineProps<{
 }>()
 
 const tableData = ref([])
+let tableRequestEpoch = 0
 const statusOptions = ref([
   { label: $t('page.expect.pending'), value: 'pending' },
   { label: $t('page.expect.send'), value: 'sent' },
@@ -48,24 +50,24 @@ const pagination: PaginationProps = reactive({
   }
 })
 async function getTableData() {
-  const { data, error } = await expectMessageList({
+  const requestEpoch = ++tableRequestEpoch
+  const response = await expectMessageList({
     device_id: props.id,
     send_type: query.type,
     ...query
   })
-  if (!error) {
-    const list: any = data.list || []
-    tableData.value = list
-    pagination.itemCount = data.total || 0
-  }
+  if (isFlatRequestFailure(response) || requestEpoch !== tableRequestEpoch) return
+
+  tableData.value = Array.isArray(response.data?.list) ? response.data.list : []
+  pagination.itemCount = Number(response.data?.total) || 0
 }
 
 const handleDeleteTable = async id => {
-  const { error } = await expectMessageDelete(id)
-  if (!error) {
-    window.$message?.success($t('common.deleteSuccess'))
-    getTableData()
-  }
+  const response = await expectMessageDelete(id)
+  if (isFlatRequestFailure(response)) return
+
+  window.$message?.success($t('common.deleteSuccess'))
+  await getTableData()
 }
 const columns: Ref<any> = ref([
   {

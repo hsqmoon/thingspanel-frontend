@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, getCurrentInstance, onMounted, reactive, ref } from 'vue'
+import { isFlatRequestFailure } from '@sa/axios'
 import { NButton, useDialog, useMessage } from 'naive-ui'
 import { useRoute } from 'vue-router'
 import ClipboardJS from 'clipboard'
@@ -23,6 +24,7 @@ const message = useMessage()
 const route = useRoute()
 const tabStore = useTabStore()
 const { routerPushByKey } = useRouterPush()
+const submitting = ref(false)
 const deleteConfig = () => {
   dialog.warning({
     title: $t('common.tip'),
@@ -32,11 +34,11 @@ const deleteConfig = () => {
     onPositiveClick: async () => {
       const res: any = await deviceConfigDel({ id: props.configInfo.id })
 
-      if (!res || !res.error) {
-        message.success($t('custom.grouping_details.operationSuccess'))
-        await tabStore.removeTab(route.path)
-        await routerPushByKey('device_config')
-      }
+      if (isFlatRequestFailure(res)) return
+
+      message.success($t('custom.grouping_details.operationSuccess'))
+      await tabStore.removeTab(route.path)
+      await routerPushByKey('device_config')
     }
   })
 }
@@ -60,7 +62,14 @@ const customRequest = ({ file: _file, event }: { file: UploadFileInfo; event?: P
   if (!event || !event.target) return
 
   const xhr = event.target as XMLHttpRequest
-  const response = JSON.parse(xhr.response)
+  let response: any
+  try {
+    response = JSON.parse(xhr.response)
+  } catch {
+    message.error($t('common.operationFailed'))
+    return
+  }
+  if (typeof response?.data?.path !== 'string') return
 
   // 保存图片路径
   const relativePath = response.data.path.replace(/^\.\//, '')
@@ -72,15 +81,15 @@ const customRequest = ({ file: _file, event }: { file: UploadFileInfo; event?: P
 
 // 保存图片路径到服务器
 const saveImagePath = async (relativePath: string) => {
-  const { error }: any = await deviceConfigEdit({
+  const response = await deviceConfigEdit({
     id: props.configInfo.id,
     image_url: relativePath
   })
 
-  if (!error) {
-    message.success($t('custom.grouping_details.operationSuccess'))
-    emit('change')
-  }
+  if (isFlatRequestFailure(response)) return
+
+  message.success($t('custom.grouping_details.operationSuccess'))
+  emit('change')
 }
 
 const onDialogVisble = () => {
@@ -90,9 +99,17 @@ const onOpenDialogModal = (val: number) => {
   modalIndex.value = val
   onDialogVisble()
   if (modalIndex.value !== 1) {
-    const { online_timeout, heartbeat }: any = JSON.parse(props.configInfo?.other_config || {})
-    onlinejson.online_timeout = online_timeout || 0
-    onlinejson.heartbeat = heartbeat || 0
+    let otherConfig: Record<string, unknown>
+    try {
+      otherConfig = JSON.parse(props.configInfo?.other_config || '{}')
+    } catch {
+      otherConfig = {}
+    }
+    const { online_timeout, heartbeat } = otherConfig
+    onlinejson.online_timeout = typeof online_timeout === 'number' ? online_timeout : 0
+    onlinejson.heartbeat = typeof heartbeat === 'number' ? heartbeat : 0
+  } else {
+    auto_register.value = props.configInfo?.auto_register === 1
   }
 }
 const copyOneTypeOneSecretDevicePassword = () => {
@@ -132,8 +149,7 @@ const copyOneTypeOneSecretDevicePassword = () => {
     cleanup()
   })
 
-  clipboard.on('error', e => {
-    console.error('Clipboard.js error event:', e)
+  clipboard.on('error', _e => {
     message.error($t('common.copyFailed'))
     cleanup()
   })
@@ -162,23 +178,30 @@ const copyOneTypeOneSecretDevicePassword = () => {
   // }, 100); // 100ms 应该足够
 }
 const onSubmit = async () => {
-  onDialogVisble()
-  if (modalIndex.value !== 1) {
-    const { error }: any = await deviceConfigEdit({
-      id: props.configInfo.id,
-      other_config: JSON.stringify({
-        online_timeout: onlinejson.online_timeout,
-        heartbeat: onlinejson.heartbeat
-      })
-    })
-    !error && emit('change')
-  } else {
-    const { error }: any = await deviceConfigEdit({
-      id: props.configInfo.id,
-      auto_register: auto_register.value ? 1 : 0
-    })
+  if (submitting.value) return
+
+  submitting.value = true
+  try {
+    const response =
+      modalIndex.value !== 1
+        ? await deviceConfigEdit({
+            id: props.configInfo.id,
+            other_config: JSON.stringify({
+              online_timeout: onlinejson.online_timeout,
+              heartbeat: onlinejson.heartbeat
+            })
+          })
+        : await deviceConfigEdit({
+            id: props.configInfo.id,
+            auto_register: auto_register.value ? 1 : 0
+          })
+    if (isFlatRequestFailure(response)) return
+
     message.success($t('custom.grouping_details.operationSuccess'))
-    !error && emit('change')
+    emit('change')
+    showModal.value = false
+  } finally {
+    submitting.value = false
   }
 }
 const getPlatform = computed(() => {
@@ -284,7 +307,7 @@ onMounted(() => {
 
       <NFlex justify="end">
         <NButton @click="onDialogVisble">{{ $t('generate.cancel') }}</NButton>
-        <NButton type="primary" @click="onSubmit">{{ $t('common.save') }}</NButton>
+        <NButton type="primary" :loading="submitting" @click="onSubmit">{{ $t('common.save') }}</NButton>
       </NFlex>
     </n-modal>
   </div>

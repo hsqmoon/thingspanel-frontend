@@ -11,7 +11,6 @@ import {
   deleteThingsVisProject,
   type ProjectListItem
 } from '@/service/api/thingsvis'
-import { deleteDashboardMenuConfig } from '@/service/api/dashboard-menu'
 import { refreshAuthRoutes } from '@/utils/router/refresh-auth-routes'
 import { clearThingsVisHomeCache } from '@/utils/thingsvis/home-cache'
 
@@ -130,19 +129,18 @@ const handleDeleteProject = async () => {
   deletingId.value = pendingDeleteProject.value.id
   try {
     const { id } = pendingDeleteProject.value
-    const { data: dashboardsData } = await getThingsVisDashboards({
+    const { data: dashboardsData, error: dashboardsError } = await getThingsVisDashboards({
       projectId: id,
       page: 1,
       limit: 1000
     })
-    const dashboardIds = (dashboardsData?.data || []).map((d: { id: string }) => d.id)
-
-    for (const did of dashboardIds) {
-      const { error } = await deleteDashboardMenuConfig(did)
-      if (error) {
-        message.error('删除失败：无法清理部分关联菜单')
-        return
-      }
+    if (dashboardsError || !dashboardsData) {
+      message.error('删除失败：无法确认项目下的仪表盘')
+      return
+    }
+    if (dashboardsData.data.length > 0) {
+      message.warning('该项目下仍有仪表盘，无法删除。请先删除所有仪表盘。')
+      return
     }
 
     const { error } = await deleteThingsVisProject(id)
@@ -155,7 +153,6 @@ const handleDeleteProject = async () => {
       message.success(`已删除项目: ${deletedName}`)
       await fetchProjects()
     } else {
-      console.warn(`[handleDeleteProject] 项目 ${id} 删除失败`)
       message.error('删除失败')
     }
   } catch (e) {

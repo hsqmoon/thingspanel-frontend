@@ -31,7 +31,7 @@ ThingsPanel的插件主要有如下几类，分别是：
 <div align="center">
     <img src="https://pub-dd72232484fd4c78b094868481918d04.r2.dev/weatherstation-800.gif" width="42%" alt="气象站">
   <img src="https://pub-dd72232484fd4c78b094868481918d04.r2.dev/electric2-s.gif" width="50%" alt="电力系统">
-  
+
 </div>
 <div align="center">
   <img src="https://pub-dd72232484fd4c78b094868481918d04.r2.dev/huanrezhan.gif" width="92.5%" alt="换热站">
@@ -40,15 +40,8 @@ ThingsPanel的插件主要有如下几类，分别是：
 <div align="center">
   <img src="https://github.com/ThingsPanel/app/blob/main/github/iphone-1.png" width="30%">
   <img src="https://github.com/ThingsPanel/app/blob/main/github/iphone-2.png" width="30%">
-  
+
 </div>
-
-## 演示
-地址：http://demo.thingspanel.cn
-
-账户：test@test.cn
-
-密码：123456
 
 ## 产品用途
 - 设备统一管理

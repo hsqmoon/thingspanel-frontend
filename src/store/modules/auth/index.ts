@@ -11,7 +11,7 @@ import { encryptDataByRsa, generateRandomHexString } from '@/utils/common/tool'
 import { useRouteStore } from '../route'
 import { clearAuthStorage, getToken, getUserInfo } from './shared'
 import { clearThingsVisToken } from '@/utils/thingsvis'
-import { initAuthRoute, resetAuthRoute } from '@/router/auth-route-manager'
+import { initAuthRoute, resetAndInitAuthRoute, resetAuthRoute } from '@/router/auth-route-manager'
 
 export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
   const routeStore = useRouteStore()
@@ -19,29 +19,99 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
   const { loading: loginLoading, startLoading, endLoading } = useLoading()
 
   const token = ref(getToken())
+  const switchingUserId = ref<string | null>(null)
+  let identityGeneration = 0
 
   /** Is login */
   const isLogin = computed(() => Boolean(token.value))
 
   const userInfo: Api.Auth.UserInfo = reactive(getUserInfo())
+
+  interface IdentitySnapshot {
+    token: string
+    refreshToken?: string
+    tokenExpiresIn?: string
+    tenantScopeId?: string
+    userInfo: Api.Auth.UserInfo
+  }
+
+  function replaceUserInfo(info: Api.Auth.UserInfo) {
+    Object.keys(userInfo).forEach(key => {
+      delete (userInfo as unknown as Record<string, unknown>)[key]
+    })
+    Object.assign(userInfo, info)
+  }
+
+  function captureIdentity(): IdentitySnapshot {
+    return {
+      token: localStg.get('token') || token.value,
+      refreshToken: localStg.get('refreshToken') || undefined,
+      tokenExpiresIn: localStg.get('token_expires_in') || undefined,
+      tenantScopeId: localStg.get('tenantScopeId') || undefined,
+      userInfo: JSON.parse(JSON.stringify(userInfo)) as Api.Auth.UserInfo
+    }
+  }
+
+  function restoreIdentity(snapshot: IdentitySnapshot) {
+    localStg.set('token', snapshot.token)
+    if (snapshot.refreshToken) localStg.set('refreshToken', snapshot.refreshToken)
+    else localStg.remove('refreshToken')
+    if (snapshot.tokenExpiresIn) localStg.set('token_expires_in', snapshot.tokenExpiresIn)
+    else localStg.remove('token_expires_in')
+    if (snapshot.tenantScopeId) localStg.set('tenantScopeId', snapshot.tenantScopeId)
+    else localStg.remove('tenantScopeId')
+    localStg.set('userInfo', snapshot.userInfo)
+    token.value = snapshot.token
+    replaceUserInfo(snapshot.userInfo)
+  }
+
+  function commitIdentity(loginToken: Api.Auth.LoginToken, info: Api.Auth.UserInfo) {
+    const nextInfo = { ...info, roles: [info.authority] }
+    localStg.set('token', loginToken.token)
+    localStg.set('refreshToken', loginToken.refreshToken)
+    localStg.set('token_expires_in', String(Date.now() + loginToken.expires_in * 1000))
+    localStg.set('userInfo', nextInfo)
+    localStg.remove('tenantScopeId')
+    token.value = loginToken.token
+    replaceUserInfo(nextInfo)
+    clearThingsVisToken()
+    return nextInfo
+  }
+
+  async function rollbackIdentity(snapshot: IdentitySnapshot, generation: number) {
+    if (generation !== identityGeneration) return
+
+    restoreIdentity(snapshot)
+    clearThingsVisToken()
+    try {
+      const restored = await resetAndInitAuthRoute()
+      if (generation !== identityGeneration || restored === 'success') return
+    } catch {
+      // The old identity cannot be used safely without its routes; fall through to explicit logout recovery.
+    }
+
+    if (generation === identityGeneration) {
+      await resetStore()
+    }
+  }
+
   /** Reset auth store */
   async function resetStore(navigateToLogin = true) {
-    await resetAuthRoute()
-
+    identityGeneration += 1
+    switchingUserId.value = null
     clearAuthStorage()
     clearThingsVisToken()
 
     token.value = ''
-    Object.keys(userInfo).forEach(key => {
-      delete (userInfo as unknown as Record<string, unknown>)[key]
-    })
-    Object.assign(userInfo, {
+    replaceUserInfo({
       authority: '',
       id: '',
       userId: '',
       userName: '',
       roles: []
     })
+
+    await resetAuthRoute()
 
     if (navigateToLogin && !route.value.meta.constant) {
       await toLogin()
@@ -56,7 +126,6 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
    */
   async function login(userName: string, password: string) {
     startLoading()
-    let identityLoaded = false
     try {
       let newP = password
       const data = localStorage.getItem('enableZcAndYzm') ? JSON.parse(localStorage.getItem('enableZcAndYzm')!) : []
@@ -73,23 +142,24 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
       }
 
       const { loop, info } = await loginByToken(loginToken)
-      if (loop && info) {
-        identityLoaded = true
-        const initialized = await initAuthRoute()
-        if (!initialized) {
-          await resetStore()
-          return
-        }
-        if (!routeStore.hasAuthRoutes) {
-          await routerPushByKey('403')
-          return
-        }
-        await redirectFromLogin()
-      }
-    } catch {
-      if (!identityLoaded || !localStg.get('token')) {
+      if (!loop || !info) {
         await resetStore()
+        return
       }
+
+      const initialized = await initAuthRoute()
+      if (initialized === 'stale') return
+      if (initialized === 'failed') {
+        await resetStore()
+        return
+      }
+      if (!routeStore.hasAuthRoutes) {
+        await routerPushByKey('403')
+        return
+      }
+      await redirectFromLogin()
+    } catch {
+      await resetStore()
     } finally {
       endLoading()
     }
@@ -101,32 +171,38 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
    * @param userId userId
    */
   async function enter(userId: string) {
+    if (switchingUserId.value) return false
+
+    const generation = ++identityGeneration
+    const previousIdentity = captureIdentity()
+    switchingUserId.value = userId
     startLoading()
-    let replacingIdentity = false
-    let identityLoaded = false
+    let identityCommitted = false
     try {
       const { data: loginToken, error } = await transformUser({
         become_user_id: userId
       })
 
+      if (generation !== identityGeneration) return false
       if (error || !loginToken) {
-        await resetStore()
-        return
+        window.$message?.error(error?.message || '无法切换到该用户，请稍后重试。')
+        return false
       }
 
-      replacingIdentity = true
-      await resetAuthRoute()
-      const { info, loop } = await loginByToken(loginToken)
-      if (!loop) {
-        await resetStore()
-        return
+      const userResponse = await fetchGetUserInfo(loginToken.token)
+      if (generation !== identityGeneration) return false
+      if (userResponse.error || !userResponse.data) {
+        window.$message?.error(userResponse.error?.message || '无法读取目标用户信息，请稍后重试。')
+        return false
       }
-      identityLoaded = true
 
-      const initialized = await initAuthRoute()
-      if (!initialized) {
-        await resetStore()
-        return
+      const info = commitIdentity(loginToken, userResponse.data)
+      identityCommitted = true
+      const initialized = await resetAndInitAuthRoute()
+      if (generation !== identityGeneration) return false
+      if (initialized !== 'success') {
+        await rollbackIdentity(previousIdentity, generation)
+        return false
       }
 
       await redirectFromLogin()
@@ -134,44 +210,30 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
         window.$notification?.success({
           title: $t('page.login.common.loginSuccess'),
           content: $t('page.login.common.welcomeBack', {
-            userName: info?.name
+            userName: info.userName
           }),
           duration: 4500
         })
       }
+      return true
     } catch {
-      if (replacingIdentity && (!identityLoaded || !localStg.get('token'))) {
-        await resetStore()
+      if (identityCommitted && generation === identityGeneration) {
+        await rollbackIdentity(previousIdentity, generation)
       }
+      return false
     } finally {
+      if (generation === identityGeneration) {
+        switchingUserId.value = null
+      }
       endLoading()
     }
   }
 
   async function loginByToken(loginToken: Api.Auth.LoginToken) {
-    // 1. stored in the localStorage, the later requests need it in headers
-    localStg.set('token', loginToken.token)
-    localStg.set('refreshToken', loginToken.refreshToken)
-    const expires_in = Date.now() + loginToken.expires_in * 1000
-    localStg.set('token_expires_in', expires_in.toString())
+    const { data: info, error } = await fetchGetUserInfo(loginToken.token)
+    if (error || !info) return { loop: false, info }
 
-    const { data: info, error } = await fetchGetUserInfo()
-
-    if (!error) {
-      // 2. store user info
-      info.roles = [info.authority]
-      localStg.set('userInfo', info)
-      // 3. update auth route
-      token.value = loginToken.token
-      Object.assign(userInfo, info)
-
-      // 4. 清除 ThingsVis token 缓存，确保使用新用户身份重新交换 SSO token
-      clearThingsVisToken()
-
-      return { loop: true, info }
-    }
-
-    return { loop: false, info }
+    return { loop: true, info: commitIdentity(loginToken, info) }
   }
   async function requestLogout() {
     try {
@@ -188,6 +250,7 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
     userInfo,
     isLogin,
     loginLoading,
+    switchingUserId,
     resetStore,
     login,
     enter,

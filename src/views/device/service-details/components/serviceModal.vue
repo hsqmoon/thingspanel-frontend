@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-// import { useMessage } from "naive-ui";
-import { createServiceDrop, getServiceAccessForm, putServiceDrop, getServiceListDrop } from '@/service/api/plugin'
+import { isFlatRequestFailure } from '@sa/axios'
+import { createServiceDrop, getServiceAccessForm, putServiceDrop } from '@/service/api/plugin'
 import { $t } from '@/locales'
 import FormInput from './form.vue'
 
@@ -10,7 +10,10 @@ const isEdit = ref<any>(false)
 const emit = defineEmits(['getList', 'isEdit'])
 const serviceModals = ref<any>(false)
 const formRef = ref<any>(null)
+const dynamicFormRef = ref<InstanceType<typeof FormInput> | null>(null)
 const currentStep = ref(1)
+const submitting = ref(false)
+let openSession = 0
 
 const service_plugin_id = ref<any>('')
 const formElements = ref<any>([])
@@ -35,85 +38,88 @@ const rules = ref<any>({
   }
 })
 const openModal: (id: any, row?: any) => void = async (id, row) => {
+  if (submitting.value) return
+
+  const session = ++openSession
+  let voucherData: Record<string, unknown> = {}
   if (row) {
-    // 编辑模式：设置 isEdit 为 true 并填充表单数据
-    isEdit.value = true
-    Object.assign(form.value, row)
-    const voucherData = JSON.parse(row.voucher)
-    Object.assign(form.value.vouchers, voucherData)
-    // 从 voucher 解析的数据中回显 auth_type 到选择模式字段
-    if (voucherData.auth_type) {
-      form.value.auth_type = voucherData.auth_type
+    try {
+      voucherData = typeof row.voucher === 'string' ? JSON.parse(row.voucher) : row.voucher || {}
+    } catch {
+      window.$message?.error('接入点凭据格式无效，无法编辑')
+      return
     }
-  } else {
-    // 新增模式：重置 isEdit 为 false
-    isEdit.value = false
   }
-  service_plugin_id.value = id
-  form.value.service_plugin_id = id
+
+  const draft = {
+    ...defaultForm,
+    ...(row || {}),
+    service_plugin_id: id,
+    vouchers: { ...voucherData },
+    auth_type: typeof voucherData.auth_type === 'string' ? voucherData.auth_type : row?.auth_type || 'manual'
+  }
   const data = await getServiceAccessForm({
-    service_plugin_id: service_plugin_id.value
+    service_plugin_id: id
   })
-  if (data.data) {
-    formElements.value = data.data
-    serviceModals.value = true
-  }
+  if (session !== openSession || isFlatRequestFailure(data) || !data.data) return
+
+  isEdit.value = Boolean(row)
+  service_plugin_id.value = id
+  form.value = draft
+  formElements.value = data.data
+  serviceModals.value = true
 }
-const close: () => void = () => {
+const close = (force = false) => {
+  if (submitting.value && !force) return
+
+  openSession += 1
   serviceModals.value = false
-  form.value = { ...defaultForm }
-  form.value.vouchers = {}
+  form.value = { ...defaultForm, vouchers: {} }
+  formElements.value = []
   currentStep.value = 1
   // 重置编辑状态
   isEdit.value = false
 }
 
 const submitSevice: () => void = async () => {
-  formRef.value?.validate(async errors => {
-    if (errors) return
+  if (submitting.value) return
+  try {
+    await formRef.value?.validate()
+    await dynamicFormRef.value?.validate()
+  } catch {
+    return
+  }
 
-    // 无论是手动还是自动模式，都先调用接口创建/更新服务
-    // 在 vouchers 中添加 auth_type 字段
-    form.value.vouchers.auth_type = form.value.auth_type
-    form.value.voucher = JSON.stringify(form.value.vouchers)
-    const data: any = isEdit.value ? await putServiceDrop(form.value) : await createServiceDrop(form.value)
-    serviceModals.value = false
+  const wasEdit = isEdit.value
+  const vouchers = { ...form.value.vouchers, auth_type: form.value.auth_type }
+  const payload = {
+    ...form.value,
+    voucher: JSON.stringify(vouchers),
+    vouchers,
+    ...(wasEdit ? { idempotency_key: crypto.randomUUID() } : {})
+  }
+  submitting.value = true
+  try {
+    const data: any = wasEdit ? await putServiceDrop(payload) : await createServiceDrop(payload)
+    if (isFlatRequestFailure(data)) return
 
-    if (form.value.auth_type === 'auto') {
-      // 自动模式，调用设备列表接口（与手动模式一样）
-      try {
-        await getServiceListDrop({
-          voucher: form.value.voucher,
-          service_type: '', // 可能需要根据实际情况调整
-          page: 1,
-          page_size: 10
-        })
-      } catch {
-        // 设备列表预取失败不影响已成功创建的服务和后续配置。
-      }
-
-      // 关闭当前弹窗，并打开配置弹窗
-      const id = isEdit.value ? form.value.id : data.data.id
-      emit(
-        'isEdit',
-        form.value.voucher,
-        {
-          id: id,
-          auth_type: form.value.auth_type,
-          name: form.value.name
-        },
-        true
-      )
-    } else {
-      // 手动模式处理
-      const id = isEdit.value ? form.value.id : data.data.id
-      emit('isEdit', form.value.voucher, id, isEdit.value)
+    const accessPointId = wasEdit ? payload.id : data.data?.id
+    if (!accessPointId) {
+      window.$message?.error($t('common.operationFailed'))
+      return
     }
 
-    // 重置表单
-    form.value = { ...defaultForm }
-    form.value.vouchers = {}
-  })
+    const accessPoint = { ...payload, id: accessPointId }
+    serviceModals.value = false
+    emit('isEdit', payload.voucher, accessPoint, wasEdit)
+  } finally {
+    submitting.value = false
+  }
+}
+
+function handleVisibilityChange(show: boolean) {
+  if (show) serviceModals.value = true
+  else close()
 }
 
 defineExpose({ openModal })
@@ -121,10 +127,14 @@ defineExpose({ openModal })
 
 <template>
   <n-modal
-    v-model:show="serviceModals"
+    :show="serviceModals"
     preset="dialog"
     :title="$t('card.addNewAccessPoint')"
     class="w"
+    :closable="!submitting"
+    :mask-closable="!submitting"
+    :close-on-esc="!submitting"
+    @update:show="handleVisibilityChange"
     @after-leave="close"
   >
     <n-form
@@ -146,11 +156,13 @@ defineExpose({ openModal })
       </n-form-item>
     </n-form>
     <div class="box">
-      <FormInput v-model:protocol-config="form.vouchers" :form-elements="formElements"></FormInput>
+      <FormInput ref="dynamicFormRef" v-model:protocol-config="form.vouchers" :form-elements="formElements"></FormInput>
     </div>
     <div class="footer">
-      <NButton type="primary" class="btn" @click="submitSevice">{{ $t('card.saveNext') }}</NButton>
-      <NButton @click="close">{{ $t('common.cancel') }}</NButton>
+      <NButton type="primary" class="btn" :loading="submitting" @click="submitSevice">
+        {{ $t('card.saveNext') }}
+      </NButton>
+      <NButton :disabled="submitting" @click="() => close()">{{ $t('common.cancel') }}</NButton>
     </div>
   </n-modal>
 </template>

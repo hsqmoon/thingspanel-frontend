@@ -2,6 +2,7 @@
 import { nextTick, reactive, ref } from 'vue'
 import { NButton, NForm, NFormItem, NIcon, NInput, NModal } from 'naive-ui'
 import { LockClosedOutline, PersonOutline, StorefrontOutline } from '@vicons/ionicons5'
+import { isFlatRequestFailure } from '@sa/axios'
 import { $t } from '@/locales'
 import { marketLogin } from '@/service/api/market'
 import { useMarketAuth } from '../composables/use-market-auth'
@@ -37,7 +38,9 @@ const handleLogin = async () => {
   loading.value = true
   try {
     const res: any = await marketLogin({ username: loginForm.username, password: loginForm.password })
-    const auth = res?.data || res
+    if (isFlatRequestFailure(res)) return
+
+    const auth = res.data
     const token = auth?.token
     if (token) {
       setToken(token, auth.refresh_token, auth.expires_in, auth.expires_at)
@@ -116,14 +119,7 @@ defineExpose({ open })
 
     <div class="market-login-footer">
       <span>{{ $t('market.noAccount') }}</span>
-      <NButton
-        tag="a"
-        :href="marketRegisterUrl"
-        target="_blank"
-        rel="noopener noreferrer"
-        text
-        type="primary"
-      >
+      <NButton tag="a" :href="marketRegisterUrl" target="_blank" rel="noopener noreferrer" text type="primary">
         {{ $t('market.goToRegister') }}
       </NButton>
     </div>

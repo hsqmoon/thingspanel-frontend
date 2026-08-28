@@ -79,6 +79,23 @@ const smartDeepToRaw = <T>(obj: T): T => {
   return raw
 }
 
+function assertJsonCloneSafe(value: unknown, ancestors = new Set<object>()): void {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw new TypeError('JSON cloning cannot preserve non-finite numbers')
+    return
+  }
+  if (typeof value !== 'object') throw new TypeError(`JSON cloning cannot preserve ${typeof value}`)
+  if (ancestors.has(value)) throw new TypeError('JSON cloning cannot preserve circular references')
+  if (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) {
+    throw new TypeError('JSON cloning cannot preserve non-plain objects')
+  }
+
+  ancestors.add(value)
+  Object.values(value).forEach(item => assertJsonCloneSafe(item, ancestors))
+  ancestors.delete(value)
+}
+
 /**
  * 性能优化的深拷贝函数
  *
@@ -86,18 +103,16 @@ const smartDeepToRaw = <T>(obj: T): T => {
  * 1. 优先使用高性能的 structuredClone()
  * 2. 对Vue响应式对象智能预处理
  * 3. 失败时降级到JSON方法
- * 4. 支持复杂对象类型(Set, Map等)
+ * 4. 所有策略失败时显式抛错，不伪装成深拷贝成功
  */
 export const smartDeepClone = <T>(
   obj: T,
   options?: {
-    /** 是否启用详细日志 */
-    debug?: boolean
     /** 强制使用JSON方法（用于测试） */
     forceJSON?: boolean
   }
 ): T => {
-  const { debug = false, forceJSON = false } = options || {}
+  const { forceJSON = false } = options || {}
 
   if (obj === null || obj === undefined) return obj
 
@@ -110,27 +125,17 @@ export const smartDeepClone = <T>(
       try {
         const cloned = structuredClone(rawObj)
         return cloned
-      } catch (structuredCloneError) {
-        if (debug) {
-          console.error('⚠️ [smartDeepClone] structuredClone失败，降级到JSON:', structuredCloneError)
-        }
+      } catch {
         // 继续到JSON方法
       }
     }
 
     // 第三步：降级到JSON方法
+    assertJsonCloneSafe(rawObj)
     const jsonCloned = JSON.parse(JSON.stringify(rawObj))
     return jsonCloned
   } catch (error) {
-    console.error('❌ [smartDeepClone] 所有克隆方法都失败了:', error)
-    // 最后的兜底：浅拷贝
-    if (Array.isArray(obj)) {
-      return [...obj] as T
-    }
-    if (obj && typeof obj === 'object') {
-      return { ...obj } as T
-    }
-    return obj
+    throw new Error('Deep clone failed', { cause: error })
   }
 }
 
@@ -156,7 +161,7 @@ export const batchDeepClone = <T>(items: T[]): T[] => {
 }
 
 /**
- * 兼容性深拷贝（确保100%成功）
+ * JSON 兼容数据的深拷贝（不支持的数据会显式抛错）
  */
 export const safeDeepClone = <T>(obj: T): T => {
   return smartDeepClone(obj, { forceJSON: true })

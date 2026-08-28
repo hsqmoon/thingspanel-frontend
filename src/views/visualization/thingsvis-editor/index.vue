@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { NButton, NBreadcrumb, NBreadcrumbItem } from 'naive-ui'
+import { NButton, NBreadcrumb, NBreadcrumbItem, NResult, NSpin } from 'naive-ui'
 import { $t } from '@/locales'
 import { useRouterPush } from '@/hooks/common/router'
 import { getThingsVisDashboard, type ThingsVisDashboard } from '@/service/api/thingsvis'
@@ -13,34 +13,53 @@ const { routerPushByKey } = useRouterPush()
 const dashboardId = computed(() => String(route.query.id || '').trim())
 const currentProjectId = computed(() => {
   const routeProjectId = String(route.query.projectId || '').trim()
-  return routeProjectId || dashboardSchema.value?.projectId || ''
+  const schemaProjectId = dashboardSchema.value?.id === dashboardId.value ? dashboardSchema.value.projectId : ''
+  return routeProjectId || schemaProjectId
 })
 const projectTitle = ref('')
 const dashboardSchema = ref<ThingsVisDashboard | null>(null)
+const loading = ref(false)
+const loadError = ref('')
+let loadSequence = 0
+const currentDashboardSchema = computed(() =>
+  dashboardSchema.value?.id === dashboardId.value ? dashboardSchema.value : null
+)
 
 /** 加载标题 (仅用于面包屑显示) */
 const loadDashboardInfo = async () => {
   if (!dashboardId.value) {
+    loadSequence += 1
     projectTitle.value = ''
     dashboardSchema.value = null
+    loadError.value = ''
+    loading.value = false
     return
   }
 
+  const requestedDashboardId = dashboardId.value
+  const sequence = ++loadSequence
+  loading.value = true
+  loadError.value = ''
+  if (dashboardSchema.value?.id !== requestedDashboardId) {
+    projectTitle.value = ''
+  }
+
   try {
-    let result = await getThingsVisDashboard(dashboardId.value)
-
-    if (result.error?.status === 401) {
-      result = await getThingsVisDashboard(dashboardId.value)
+    const { data, error } = await getThingsVisDashboard(requestedDashboardId)
+    if (sequence !== loadSequence) return
+    if (error || !data) {
+      loadError.value = error?.message || '仪表盘加载失败，请重试'
+      return
     }
-
-    const { data } = result
-    if (data) {
-      projectTitle.value = data.name
-      dashboardSchema.value = data
+    projectTitle.value = data.name
+    dashboardSchema.value = data
+  } catch {
+    if (sequence !== loadSequence) return
+    loadError.value = '仪表盘加载失败，请重试'
+  } finally {
+    if (sequence === loadSequence) {
+      loading.value = false
     }
-  } catch (e) {
-    console.warn('获取项目标题失败', e)
-    dashboardSchema.value = null
   }
 }
 
@@ -82,7 +101,19 @@ watch(
 
     <!-- 编辑器区域 (全屏 Iframe) -->
     <div class="flex-1 overflow-hidden bg-white relative">
-      <ThingsVisAppFrame v-if="dashboardId" :id="dashboardId" :schema="dashboardSchema" mode="editor" />
+      <NSpin :show="loading" class="h-full">
+        <NResult v-if="loadError" status="error" title="仪表盘加载失败" :description="loadError">
+          <template #footer>
+            <NButton type="primary" @click="loadDashboardInfo">重试</NButton>
+          </template>
+        </NResult>
+        <ThingsVisAppFrame
+          v-else-if="currentDashboardSchema"
+          :id="dashboardId"
+          :schema="currentDashboardSchema"
+          mode="editor"
+        />
+      </NSpin>
     </div>
   </div>
 </template>

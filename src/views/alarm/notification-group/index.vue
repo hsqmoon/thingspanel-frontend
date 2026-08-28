@@ -3,6 +3,7 @@ import { computed, getCurrentInstance, reactive, ref } from 'vue'
 import type { Ref } from 'vue'
 import { NButton, NPopconfirm, NSpace, NSwitch } from 'naive-ui'
 import type { DataTableColumns, PaginationProps } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 import {
   deleteNotificationGroup,
   getNotificationGroupDetail,
@@ -40,39 +41,43 @@ const pagination: PaginationProps = reactive({
 
 const getTableData = async () => {
   startLoading()
-  const prams = {
-    page: pagination.page || 1,
-    page_size: pagination.pageSize || 10
+  try {
+    const params = {
+      page: pagination.page || 1,
+      page_size: pagination.pageSize || 10
+    }
+    const response = await getNotificationGroupList(params)
+    if (isFlatRequestFailure(response)) return
+
+    setTableData(response.data.list || [])
+    total.value = response.data.total || 0
+  } finally {
+    endLoading()
   }
-  const res = await getNotificationGroupList(prams)
-  if (res?.data) {
-    setTableData(res?.data.list || [])
-    total.value = res.data.total || 0
-  }
-  endLoading()
 }
 
 const handleSwitchChange = async (row, value) => {
-  row.status = value ? 'OPEN' : 'CLOSE'
-  const id = row?.id || ''
-  delete row.id
-  await putNotificationGroup(row, id)
-  getTableData()
+  const { id = '', ...params } = row
+  const response = await putNotificationGroup({ ...params, status: value ? 'OPEN' : 'CLOSE' }, id)
+  if (isFlatRequestFailure(response)) return
+
+  await getTableData()
 }
 const handleDeleteTable = async (rowId: string) => {
-  await deleteNotificationGroup({ id: rowId })
+  const response = await deleteNotificationGroup({ id: rowId })
+  if (isFlatRequestFailure(response)) return
 
   window.$message?.info($t('generate.notificationGroup'))
-  getTableData()
+  await getTableData()
 }
 const editData = ref<Api.Alarm.NotificationGroupList | null>(null)
 const handleEditTable = async (rowId: string) => {
-  const res = await getNotificationGroupDetail({ id: rowId })
-  if (res?.data) {
-    editData.value = res.data
-    setModalType('edit')
-    openModal()
-  }
+  const response = await getNotificationGroupDetail({ id: rowId })
+  if (isFlatRequestFailure(response)) return
+
+  editData.value = response.data
+  setModalType('edit')
+  openModal()
 }
 const columns = ref([
   {

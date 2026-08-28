@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, h, watch, computed } from 'vue'
+import { isFlatRequestFailure } from '@sa/axios'
 import {
   deviceConfigEdit,
   deviceConfigVoucherType,
@@ -80,6 +81,8 @@ const topicMappingList = ref<TopicMapping[]>([])
 const topicMappingModalVisible = ref(false)
 const currentEditTopicMapping = ref<TopicMapping | null>(null)
 const topicMappingLoading = ref(false)
+const topicMappingSaving = ref(false)
+let topicMappingRequestEpoch = 0
 const message = useMessage()
 const { t } = useI18n()
 
@@ -163,12 +166,10 @@ const handleEditTopicMapping = (row: TopicMapping) => {
 
 const handleDeleteTopicMapping = async (row: TopicMapping) => {
   if (!row.id) return
-  try {
-    await deleteTopicMapping(row.id)
-    await fetchTopicMappings()
-  } catch {
-    message.error(t('generate.topicMapping.message.deleteFailed'))
-  }
+  const response = await deleteTopicMapping(row.id)
+  if (isFlatRequestFailure(response)) return
+
+  await fetchTopicMappings()
 }
 
 const handleAddTopicMapping = () => {
@@ -189,8 +190,10 @@ const normalizeTopicMapping = (item: any): TopicMapping => ({
 })
 
 const fetchTopicMappings = async () => {
+  const requestEpoch = ++topicMappingRequestEpoch
   if (!props.configInfo?.id) {
     topicMappingList.value = []
+    topicMappingLoading.value = false
     return
   }
   topicMappingLoading.value = true
@@ -198,17 +201,18 @@ const fetchTopicMappings = async () => {
     const res = await getTopicMappingList({
       device_config_id: props.configInfo.id
     })
-    const list = res.data.list
-    topicMappingList.value = list.map((item: any) => normalizeTopicMapping(item))
-  } catch {
-    message.error(t('generate.topicMapping.message.fetchFailed'))
+    if (!isFlatRequestFailure(res) && requestEpoch === topicMappingRequestEpoch) {
+      const list = Array.isArray(res.data?.list) ? res.data.list : []
+      topicMappingList.value = list.map((item: any) => normalizeTopicMapping(item))
+    }
   } finally {
-    topicMappingLoading.value = false
+    if (requestEpoch === topicMappingRequestEpoch) topicMappingLoading.value = false
   }
 }
 
 const handleSaveTopicMapping = async (data: TopicMapping) => {
-  if (!props.configInfo?.id) return
+  if (!props.configInfo?.id || topicMappingSaving.value) return
+  topicMappingSaving.value = true
   const payload = {
     device_config_id: props.configInfo.id,
     name: data.mapping_name?.trim(),
@@ -221,28 +225,28 @@ const handleSaveTopicMapping = async (data: TopicMapping) => {
     enabled: data.enabled ?? true
   }
   try {
-    if (data.id) {
-      await updateTopicMapping(data.id, payload)
-      message.success(t('generate.topicMapping.message.updateSuccess'))
-    } else {
-      await createTopicMapping(payload)
-      message.success(t('generate.topicMapping.message.createSuccess'))
-    }
+    const response = data.id ? await updateTopicMapping(data.id, payload) : await createTopicMapping(payload)
+    if (isFlatRequestFailure(response)) return
+
+    message.success(
+      t(data.id ? 'generate.topicMapping.message.updateSuccess' : 'generate.topicMapping.message.createSuccess')
+    )
+    topicMappingModalVisible.value = false
     currentEditTopicMapping.value = null
     await fetchTopicMappings()
-  } catch {
-    message.error(t('generate.topicMapping.message.saveFailed'))
+  } finally {
+    topicMappingSaving.value = false
   }
 }
 
 const handleSubmit = async () => {
-  const postData = props.configInfo
+  const postData = { ...props.configInfo }
   postData.protocol_type = extendForm.value.protocol_type
   postData.voucher_type = extendForm.value.voucher_type
   postData.protocol_config = JSON.stringify(protocol_config.value)
 
   const res = await deviceConfigEdit(postData)
-  if (!res.error) {
+  if (!isFlatRequestFailure(res)) {
     // message.success('修改成功');
     emit('upDateConfig')
   }
@@ -253,6 +257,8 @@ const getProtocolList = async (deviceCode: string) => {
     device_type: deviceCode
   }
   const res = await deviceProtocalServiceList(queryData)
+  if (isFlatRequestFailure(res)) return
+
   typeOptions.value = [
     {
       type: 'group',
@@ -276,7 +282,9 @@ const getConfigForm = async data => {
     device_type: props.configInfo.device_type,
     protocol_type: data
   })
-  const elements: FormElement[] = res.data || []
+  if (isFlatRequestFailure(res)) return
+
+  const elements: FormElement[] = Array.isArray(res.data) ? res.data : []
   const metaIdx = elements.findIndex(e => e.dataKey === '__topic_mapping__')
   if (metaIdx !== -1) {
     showTopicMapping.value = (elements[metaIdx] as any).default !== 'false'
@@ -287,12 +295,11 @@ const getConfigForm = async data => {
   }
 }
 const getVoucherType = async data => {
-  connectOptions.value = []
   const res = await deviceConfigVoucherType({
     device_type: props.configInfo.device_type,
     protocol_type: data
   })
-  if (res.data) {
+  if (!isFlatRequestFailure(res) && res.data) {
     connectOptions.value = Object.keys(res.data).map(key => {
       return { label: key, value: res.data[key] }
     })
@@ -394,6 +401,7 @@ watch(
     <TopicMappingModal
       v-model:visible="topicMappingModalVisible"
       :edit-data="currentEditTopicMapping"
+      :saving="topicMappingSaving"
       @save="handleSaveTopicMapping"
     />
   </div>

@@ -4,6 +4,7 @@ import type { Ref } from 'vue'
 import { NButton, NPopconfirm, NSpace } from 'naive-ui'
 import type { DataTableColumns, PaginationProps } from 'naive-ui'
 import { useBoolean, useLoading } from '@sa/hooks'
+import { isFlatRequestFailure } from '@sa/axios'
 import { serviceManagementDeviceTypeLabels } from '@/constants/business'
 import { delProtocolPlugin, fetchProtocolPluginList } from '@/service/api'
 import { $t } from '@/locales'
@@ -35,20 +36,29 @@ const pagination: PaginationProps = reactive({
   pageSizes: [10, 15, 20, 25, 30],
   onChange: (page: number) => {
     pagination.page = page
+    queryParams.page = page
+    void getTableData()
   },
   onUpdatePageSize: (pageSize: number) => {
     pagination.pageSize = pageSize
     pagination.page = 1
+    queryParams.page_size = pageSize
+    queryParams.page = 1
+    void getTableData()
   }
 })
 
 async function getTableData() {
   startLoading()
-  const { data } = await fetchProtocolPluginList(queryParams)
-  if (data) {
-    const list: Api.ApiApplyManagement.Service[] = data.list
-    pagination.itemCount = data.total
+  try {
+    const result = await fetchProtocolPluginList(queryParams)
+    if (isFlatRequestFailure(result)) return
+
+    const data = result.data
+    const list: Api.ApiApplyManagement.Service[] = Array.isArray(data?.list) ? data.list : []
+    pagination.itemCount = Number(data?.total || 0)
     setTableData(list)
+  } finally {
     endLoading()
   }
 }
@@ -65,7 +75,7 @@ const columns: Ref<DataTableColumns<ServiceManagement.Service>> = ref([
     minWidth: '140px',
     title: () => $t('page.apply.service.form.deviceType'),
     align: 'left',
-    render: row => {
+    render: (row) => {
       if (row.device_type) {
         return <span>{serviceManagementDeviceTypeLabels[row.device_type]}</span>
       }
@@ -107,7 +117,7 @@ const columns: Ref<DataTableColumns<ServiceManagement.Service>> = ref([
     title: () => $t('common.actions'),
     align: 'center',
     minWidth: '140px',
-    render: row => {
+    render: (row) => {
       return (
         <NSpace justify={'center'}>
           {
@@ -153,7 +163,7 @@ function handleAddTable() {
 }
 
 function handleEditTable(rowId: string) {
-  const findItem = tableData.value.find(item => item.id === rowId)
+  const findItem = tableData.value.find((item) => item.id === rowId)
   if (findItem) {
     setEditData(findItem)
   }
@@ -162,15 +172,14 @@ function handleEditTable(rowId: string) {
 }
 
 async function handleDeleteTable(rowId: string) {
-  const data = await delProtocolPlugin(rowId)
-  if (!data.error) {
-    // window.$message?.success($t('common.deleteSuccess'));
-    await getTableData()
-  }
+  const result = await delProtocolPlugin(rowId)
+  if (isFlatRequestFailure(result)) return
+
+  await getTableData()
 }
 
 function init() {
-  getTableData()
+  void getTableData()
 }
 
 // 初始化

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { FormInst, FormItemRule } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 import { createRequiredFormRule } from '@/utils/form/rule'
 import { notificationOptions } from '@/constants/business'
 import { postNotificationGroup, putNotificationGroup } from '@/service/api/notification'
@@ -79,6 +80,8 @@ const title = computed(() => {
 })
 
 const formRef = ref<HTMLElement & FormInst>()
+const submitting = ref(false)
+let modalSession = 0
 
 type FormModel = Pick<DataService.Data, any>
 
@@ -104,7 +107,9 @@ function handleUpdateFormModelByModalType() {
         const notification_config = JSON.parse(props.editData.notification_config)
         const notification_type = props.editData.notification_type
         if (notification_type === 'MEMBER') {
-          notificationConfig.value.MEMBER = memberTypeData
+          memberTypeData.value = Array.isArray(notification_config.MEMBER)
+            ? notification_config.MEMBER.map(item => ({ ...item }))
+            : [{ ...initMemberData }]
         } else if (['EMAIL', 'SME', 'VOICE'].includes(notification_type)) {
           formModel.value.info = notification_config[notification_type]
         } else if (notification_type === 'WEBHOOK') {
@@ -120,38 +125,54 @@ function handleUpdateFormModelByModalType() {
 }
 
 async function handleSubmit() {
-  await formRef.value?.validate()
-  if (formModel.value.notification_type === 'MEMBER') {
-    notificationConfig.value.MEMBER = memberTypeData
-  } else if (['EMAIL', 'SME', 'VOICE'].includes(formModel.value.notification_type)) {
-    notificationConfig.value[formModel.value.notification_type] = formModel.value.info
-  }
+  if (submitting.value) return
+  const session = modalSession
+  submitting.value = true
+  try {
+    try {
+      await formRef.value?.validate()
+    } catch (error) {
+      if (error === undefined || Array.isArray(error)) return
+      throw error
+    }
+    if (session !== modalSession) return
 
-  const params = {
-    name: formModel.value.name,
-    description: formModel.value.description,
-    notification_type: formModel.value.notification_type,
-    notification_config: JSON.stringify(notificationConfig.value),
-    status: formModel.value.status
-  }
-  if (props.type === 'add') {
-    await postNotificationGroup(params)
-  } else {
-    await putNotificationGroup({ ...params, tenant_id: props.editData?.tenant_id || '' }, props.editData?.id || '')
-  }
+    if (formModel.value.notification_type === 'MEMBER') {
+      notificationConfig.value.MEMBER = memberTypeData.value
+    } else if (['EMAIL', 'SME', 'VOICE'].includes(formModel.value.notification_type)) {
+      notificationConfig.value[formModel.value.notification_type] = formModel.value.info
+    }
 
-  // const titles: Record<ModalType, string> = {
-  //   add: $t('generate.add'),
-  //   edit: $t('common.edit')
-  // };
-  // window.$message?.success(`${titles[props.type]}成功!`);
-  emit('getTableData')
-  closeModal()
+    const params = {
+      name: formModel.value.name,
+      description: formModel.value.description,
+      notification_type: formModel.value.notification_type,
+      notification_config: JSON.stringify(notificationConfig.value),
+      status: formModel.value.status
+    }
+    const response =
+      props.type === 'add'
+        ? await postNotificationGroup(params)
+        : await putNotificationGroup(
+            { ...params, tenant_id: props.editData?.tenant_id || '' },
+            props.editData?.id || ''
+          )
+    if (session !== modalSession || isFlatRequestFailure(response)) return
+
+    emit('getTableData')
+    closeModal()
+  } finally {
+    if (session === modalSession) {
+      submitting.value = false
+    }
+  }
 }
 
 watch(
   () => props.visible,
   newValue => {
+    modalSession += 1
+    submitting.value = false
     if (newValue) {
       notificationTypeOptions.value = []
       handleSearch()
@@ -161,7 +182,7 @@ watch(
 )
 
 const handleAddMember = () => {
-  memberTypeData.value.push(initMemberData)
+  memberTypeData.value.push({ ...initMemberData })
 }
 </script>
 
@@ -228,7 +249,9 @@ const handleAddMember = () => {
 
       <NSpace class="w-full pt-16px" :size="24" justify="end">
         <NButton class="w-72px" @click="closeModal">{{ $t('generate.cancel') }}</NButton>
-        <NButton class="w-72px" type="primary" @click="handleSubmit">{{ $t('common.save') }}</NButton>
+        <NButton class="w-72px" type="primary" :loading="submitting" @click="handleSubmit">
+          {{ $t('common.save') }}
+        </NButton>
       </NSpace>
     </NForm>
   </NModal>

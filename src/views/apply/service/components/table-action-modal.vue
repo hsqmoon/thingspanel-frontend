@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import type { FormInst } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 import { deepClone } from '@/utils/common/tool'
 import { addProtocolPlugin, editProtocolPlugin } from '@/service/api'
 import { createRequiredFormRule } from '@/utils/form/rule'
@@ -52,6 +53,7 @@ const title = computed(() => {
 })
 
 const formRef = ref<HTMLElement & FormInst>()
+const submitting = ref(false)
 
 const deviceOptions = ref<any[]>([
   { label: $t('generate.direct-connected-device'), value: 1 },
@@ -130,6 +132,8 @@ function handleUpdateFormModelByModalType() {
 
 async function handleSubmit() {
   await formRef.value?.validate()
+  if (submitting.value) return
+
   const formData = deepClone(formModel)
   formData.device_type = Number(formData.device_type)
 
@@ -142,17 +146,16 @@ async function handleSubmit() {
   })
   formData.additional_info = JSON.stringify(additional_info)
   delete formData.additional_info_list
-  let data: any
-  if (props.type === 'add') {
-    data = await addProtocolPlugin(formData)
-  } else if (props.type === 'edit') {
-    data = await editProtocolPlugin(formData)
-  }
-  if (!data.error) {
-    // window.$message?.success(data.msg);
+  submitting.value = true
+  try {
+    const result = props.type === 'add' ? await addProtocolPlugin(formData) : await editProtocolPlugin(formData)
+    if (isFlatRequestFailure(result)) return
+
     emit('success')
+    closeModal()
+  } finally {
+    submitting.value = false
   }
-  closeModal()
 }
 
 function handleAddAdditionalInfo() {
@@ -164,7 +167,7 @@ function handleAddAdditionalInfo() {
 
 watch(
   () => props.visible,
-  newValue => {
+  (newValue) => {
     if (newValue) {
       handleUpdateFormModelByModalType()
     }
@@ -213,10 +216,10 @@ watch(
         </NFormItemGridItem>
       </NGrid>
       <NSpace class="w-full pt-16px" :size="24" justify="end">
-        <NButton class="w-72px" @click="closeModal">
+        <NButton class="w-72px" :disabled="submitting" @click="closeModal">
           {{ $t('common.cancel') }}
         </NButton>
-        <NButton class="w-72px" type="primary" @click="handleSubmit">
+        <NButton class="w-72px" type="primary" :loading="submitting" @click="handleSubmit">
           {{ $t('common.confirm') }}
         </NButton>
       </NSpace>

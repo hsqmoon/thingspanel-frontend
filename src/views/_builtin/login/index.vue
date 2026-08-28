@@ -35,8 +35,6 @@ const sysSetting = useSysSettingStore()
 const setupState = ref<{
   has_admin: boolean
   entry: 'login' | 'register'
-  market_base_url?: string
-  market_register_url?: string
 } | null>(null)
 const loading = ref(true)
 const setupStateError = ref(false)

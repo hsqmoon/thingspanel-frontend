@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref, computed, h, onMounted } from 'vue'
+import { isFlatRequestFailure } from '@sa/axios'
 import { useRoute } from 'vue-router'
 import {
   NButton,
@@ -13,7 +14,8 @@ import {
   NPopconfirm,
   NCard,
   NEllipsis,
-  NDropdown
+  NDropdown,
+  NAlert
 } from 'naive-ui'
 import { IosSearch } from '@vicons/ionicons4'
 import { EllipsisHorizontal, ListOutline, GridOutline } from '@vicons/ionicons5'
@@ -47,24 +49,28 @@ const getPath = (path: string) => {
 
 // 数据
 const deviceTemplateList = ref([] as any[])
+const listError = ref('')
 const dataTotal = ref(0)
 const modalType = ref<'add' | 'edit'>('add')
 const templateId = ref<string>('')
+let listRequestEpoch = 0
 
 // 获取数据
 const getData = async () => {
+  const requestEpoch = ++listRequestEpoch
   startLoading()
+  listError.value = ''
   try {
     const res = await deviceTemplate({ ...queryParams })
-    if (!res.error) {
-      deviceTemplateList.value = res.data.list
-      dataTotal.value = res.data.total
+    if (requestEpoch !== listRequestEpoch) return
+    if (isFlatRequestFailure(res)) {
+      listError.value = res.error.message || $t('common.fetchDataFailed')
+      return
     }
-  } catch (error) {
-    console.error('Failed to fetch device template data:', error)
-    window.$message?.error($t('common.fetchDataFailed'))
+    deviceTemplateList.value = res.data?.list || []
+    dataTotal.value = res.data?.total || 0
   } finally {
-    endLoading()
+    if (requestEpoch === listRequestEpoch) endLoading()
   }
 }
 
@@ -98,13 +104,11 @@ const handleEdit = (id: string) => {
 // 删除模板
 const handleRemove = async (id: string) => {
   try {
-    const { error } = await deleteDeviceTemplate(id)
-    if (!error) {
-      window.$message?.success($t('common.templateDeleted'))
-      await getData()
-    }
-  } catch (error) {
-    console.error('Failed to delete template:', error)
+    const response = await deleteDeviceTemplate(id)
+    if (isFlatRequestFailure(response)) return
+    window.$message?.success($t('common.templateDeleted'))
+    await getData()
+  } catch {
     window.$message?.error($t('common.deleteFailed'))
   }
 }
@@ -287,6 +291,9 @@ onMounted(() => {
 
 <template>
   <div>
+    <NAlert v-if="listError" type="error" class="mb-4" closable @close="listError = ''">
+      {{ listError }}
+    </NAlert>
     <AdvancedListLayout
       :initial-view="'card'"
       :available-views="availableViews"

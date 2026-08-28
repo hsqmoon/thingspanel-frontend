@@ -1,7 +1,20 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
-import { NModal, NForm, NFormItem, NInput, NButton, NAlert, NSelect, NUpload, NUploadDragger, FormInst, FormRules } from 'naive-ui'
+import {
+  NModal,
+  NForm,
+  NFormItem,
+  NInput,
+  NButton,
+  NAlert,
+  NSelect,
+  NUpload,
+  NUploadDragger,
+  FormInst,
+  FormRules
+} from 'naive-ui'
 import type { UploadFileInfo } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 import { $t } from '@/locales'
 import { publishToMarket } from '@/service/api/market'
 import { deviceConfigInfo } from '@/service/api/device'
@@ -11,7 +24,7 @@ import { useMarketAuth } from '../composables/use-market-auth'
 import { useAuthStore } from '@/store/modules/auth'
 
 const emit = defineEmits(['publish-success'])
-const { getToken, clearToken, refreshAccessToken } = useMarketAuth()
+const { getToken, refreshAccessToken } = useMarketAuth()
 const authStore = useAuthStore()
 
 const visible = ref(false)
@@ -102,7 +115,7 @@ const open = async (deviceConfigId: string, defaultName?: string) => {
   // 获取设备配置详情（包含 device_template_id），再获取模板详情填充表单
   try {
     const dcRes: any = await deviceConfigInfo({ id: deviceConfigId })
-    if (!dcRes.error && dcRes.data) {
+    if (!isFlatRequestFailure(dcRes) && dcRes.data) {
       const dc = dcRes.data
       // 自动填充设备配置名称（如果没有默认名）
       if (!formModel.market_name) {
@@ -151,20 +164,17 @@ const handlePublish = async () => {
       description: formModel.description,
       cover_url: formModel.cover_url
     })
-    if (!res.error) {
+    if (!isFlatRequestFailure(res)) {
       window.$message?.success($t('device_template.publishSuccess'))
       visible.value = false
       emit('publish-success')
     } else {
-      window.$message?.error($t('device_template.publishFailed') + ': ' + (res.error?.msg || ''))
+      if (res.error.status !== 401) {
+        window.$message?.error($t('device_template.publishFailed') + ': ' + res.error.message)
+      }
     }
   } catch (e: any) {
-    if (e?.response?.status === 401) {
-      clearToken()
-      window.$message?.error($t('market.tokenExpired'))
-    } else {
-      window.$message?.error($t('device_template.publishFailed') + ': ' + (e?.message || ''))
-    }
+    window.$message?.error($t('device_template.publishFailed') + ': ' + (e?.message || ''))
   } finally {
     loading.value = false
   }
@@ -203,26 +213,26 @@ defineExpose({ open })
           />
         </NFormItem>
         <div class="market-form-grid">
-        <NFormItem :label="$t('device_template.brand')" path="brand">
-          <NInput v-model:value="formModel.brand" :placeholder="$t('device_template.inputBrand')" clearable />
-        </NFormItem>
-        <NFormItem :label="$t('device_template.modelNumber')" path="model">
-          <NInput v-model:value="formModel.model" :placeholder="$t('device_template.inputModelNumber')" clearable />
-        </NFormItem>
-        <NFormItem :label="$t('device_template.category')" path="category">
-          <NSelect
-            v-model:value="formModel.category"
-            :options="categoryOptions"
-            :placeholder="$t('device_template.selectCategory')"
-            clearable
-          />
-        </NFormItem>
-        <NFormItem :label="$t('device_template.version')" path="version">
-          <NInput v-model:value="formModel.version" :placeholder="$t('device_template.inputVersion')" clearable />
-        </NFormItem>
-        <NFormItem :label="$t('device_template.author')" path="author">
-          <NInput v-model:value="formModel.author" :placeholder="$t('device_template.inputAuthor')" clearable />
-        </NFormItem>
+          <NFormItem :label="$t('device_template.brand')" path="brand">
+            <NInput v-model:value="formModel.brand" :placeholder="$t('device_template.inputBrand')" clearable />
+          </NFormItem>
+          <NFormItem :label="$t('device_template.modelNumber')" path="model">
+            <NInput v-model:value="formModel.model" :placeholder="$t('device_template.inputModelNumber')" clearable />
+          </NFormItem>
+          <NFormItem :label="$t('device_template.category')" path="category">
+            <NSelect
+              v-model:value="formModel.category"
+              :options="categoryOptions"
+              :placeholder="$t('device_template.selectCategory')"
+              clearable
+            />
+          </NFormItem>
+          <NFormItem :label="$t('device_template.version')" path="version">
+            <NInput v-model:value="formModel.version" :placeholder="$t('device_template.inputVersion')" clearable />
+          </NFormItem>
+          <NFormItem :label="$t('device_template.author')" path="author">
+            <NInput v-model:value="formModel.author" :placeholder="$t('device_template.inputAuthor')" clearable />
+          </NFormItem>
         </div>
         <NFormItem :label="$t('generate.description')" path="description">
           <NInput

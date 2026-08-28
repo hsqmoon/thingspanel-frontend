@@ -60,7 +60,7 @@ const initialWizardState: PublishWizardState = {
 }
 
 export function useMarketBundle() {
-  const { getToken } = useMarketAuth()
+  const { getToken, refreshAccessToken } = useMarketAuth()
   const wizardState = reactive<PublishWizardState>({ ...initialWizardState })
 
   const hasSelectedResources = computed(() => {
@@ -85,7 +85,10 @@ export function useMarketBundle() {
   const hasBlockingErrors = computed(() => precheckErrors.value.some(isBlockingResult))
 
   function resetWizard() {
-    Object.assign(wizardState, { ...initialWizardState, selectedResources: { deviceTemplateIds: [], dashboardIds: [] } })
+    Object.assign(wizardState, {
+      ...initialWizardState,
+      selectedResources: { deviceTemplateIds: [], dashboardIds: [] }
+    })
   }
 
   function setSelectedResources(source: BundleSource) {
@@ -134,7 +137,7 @@ export function useMarketBundle() {
 
   /** 单步发布：publish-draft 直接完成发布 */
   async function createDraft(locale: MarketLocale = 'zh'): Promise<boolean> {
-    const marketToken = getToken()
+    const marketToken = getToken() || (await refreshAccessToken())
     if (!marketToken) {
       wizardState.error = {
         code: 'UNAUTHORIZED',
@@ -191,15 +194,6 @@ export function useMarketBundle() {
     } finally {
       wizardState.isLoading = false
     }
-  }
-
-  /** 发布已在 createDraft 一步完成，此方法仅用于向导步骤跳转 */
-  async function confirmPublishAction(_locale: MarketLocale = 'zh'): Promise<boolean> {
-    if (wizardState.publishResult) {
-      wizardState.step = 'result'
-      return true
-    }
-    return createDraft(_locale)
   }
 
   async function cancelCurrentDraft(): Promise<void> {
@@ -275,7 +269,6 @@ export function useMarketBundle() {
     removeDashboard,
     updateMetadata,
     createDraft,
-    confirmPublishAction,
     cancelCurrentDraft,
     install,
     goToStep,
@@ -309,7 +302,7 @@ const LEVEL_ICONS: Record<string, PrecheckDisplayItem['level']> = {
 }
 
 export function formatPrecheckResults(results: PrecheckResult[], locale: MarketLocale = 'zh'): PrecheckDisplayItem[] {
-  return results.map(result => {
+  return results.map((result) => {
     const titles = PRECHECK_CODE_TITLES[result.code] || { zh: result.code, en: result.code }
     return {
       code: result.code,

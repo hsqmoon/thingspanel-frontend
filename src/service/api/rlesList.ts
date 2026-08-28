@@ -27,9 +27,8 @@ export const delrles = async (id: string) => {
 }
 
 /** Get role permissions */
-export const getRolePermissions = async (id: string): Promise<string[]> => {
-  const response = await request.get<any>(`/casbin/function?role_id=${id}`)
-  return response?.data || []
+export const getRolePermissions = async (id: string) => {
+  return request.get<string[] | null>(`/casbin/function?role_id=${id}`)
 }
 
 /** Add role permissions */

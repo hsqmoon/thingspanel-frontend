@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
+import { isFlatRequestFailure } from '@sa/axios'
 import { useMessage } from 'naive-ui'
 import dayjs from 'dayjs'
 import { addMonths } from 'date-fns'
@@ -48,6 +49,9 @@ const params = reactive<Params>({
 })
 
 const tableData = ref<HistoryData[]>([])
+let requestEpoch = 0
+let committedPage = 1
+let committedPageSize = 5
 
 const pagination = reactive({
   page: 1,
@@ -70,27 +74,41 @@ const pagination = reactive({
 })
 
 // 定义函数
-const getTelemetryHistoryData = async () => {
-  if (!props.deviceId && !props.theKey) {
+const getTelemetryHistoryData = async (exportExcel = false) => {
+  const currentRequestEpoch = ++requestEpoch
+  if (!props.deviceId || !props.theKey) {
     tableData.value = []
     return
   }
   startLoading()
-  const { data, error } = await telemetryHistoryData(params)
+  try {
+    const response = await telemetryHistoryData({ ...params, export_excel: exportExcel })
+    if (isFlatRequestFailure(response) || currentRequestEpoch !== requestEpoch) {
+      if (!exportExcel) {
+        pagination.page = committedPage
+        pagination.pageSize = committedPageSize
+        params.page = committedPage
+        params.page_size = committedPageSize
+      }
+      return
+    }
 
-  if (params.export_excel) {
-    endLoading()
-    if (data?.filePath) {
+    const data = response.data
+    if (exportExcel) {
+      if (!data?.filePath) return
+
       const baseUrlWithoutApi = baseURL.replace('/api/v1', '/')
       const downloadUrl = `${baseUrlWithoutApi}${data.filePath}`
       window.open(downloadUrl)
+      return
     }
-  }
 
-  if (!error && !params.export_excel) {
-    tableData.value = data.list || []
-    pagination.itemCount = data.total || 0
-    endLoading()
+    tableData.value = Array.isArray(data?.list) ? data.list : []
+    pagination.itemCount = Number(data?.total) || 0
+    committedPage = params.page
+    committedPageSize = params.page_size
+  } finally {
+    if (currentRequestEpoch === requestEpoch) endLoading()
   }
 }
 
@@ -127,15 +145,14 @@ const checkDateRange = value => {
     // 直接使用用户选择的时间
     params.start_time = start
     params.end_time = end
-    params.export_excel = false
-    getTelemetryHistoryData()
+    void getTelemetryHistoryData()
   }
 }
 
 const refresh = () => {
-  params.export_excel = false
   pagination.page = 1
-  getTelemetryHistoryData()
+  params.page = 1
+  void getTelemetryHistoryData()
 }
 onMounted(getTelemetryHistoryData)
 </script>
@@ -159,8 +176,7 @@ onMounted(getTelemetryHistoryData)
         type="primary"
         @click="
           () => {
-            params.export_excel = true
-            getTelemetryHistoryData()
+            getTelemetryHistoryData(true)
           }
         "
       >

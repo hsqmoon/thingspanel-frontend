@@ -9,6 +9,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useMessage } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 import { addWarningMessage, editInfo } from '@/service/api/alarm'
 import { getNotificationGroupList } from '@/service/api/notification'
 import { useNaiveForm } from '@/hooks/common/form'
@@ -74,10 +75,12 @@ const loadMoreNotificationGroupData = async () => {
       page: state.notificationGroupPageNo,
       page_size: state.notificationGroupPageSize
     }
-    const res = await getNotificationGroupList(params)
-    let list = res?.data?.list || []
+    const response = await getNotificationGroupList(params)
+    if (isFlatRequestFailure(response)) return
+
+    const list = response.data.list || []
     // list = list.filter(item => item.status === 'OPEN'); // 只展示生效的通知组
-    const total = res?.data?.total || 0
+    const total = response.data.total || 0
     state.generalOptions = [...state.generalOptions, ...list]
 
     state.generalOptions = state.generalOptions.map((item: any) => {
@@ -251,14 +254,12 @@ const add = async () => {
     enabled: 'Y',
     description: formData.value.description
   }
-  const res = await addWarningMessage(data)
-  if (res) {
-    message.success($t('common.addSuccess'))
-    modalVisible.value = false
-    emit('newEdit')
-  } else {
-    message.error($t('common.addFail'))
-  }
+  const response = await addWarningMessage(data)
+  if (isFlatRequestFailure(response)) return
+
+  message.success($t('common.addSuccess'))
+  modalVisible.value = false
+  emit('newEdit')
 }
 
 /** @param e 编辑 */
@@ -273,14 +274,12 @@ async function editInfoText() {
     enabled: 'Y',
     description: formData.value.description
   }
-  const { data } = await editInfo(datas)
-  if (data) {
-    message.success($t('common.editSuccess'))
-    modalVisible.value = false
-    emit('newEdit')
-  } else {
-    message.success($t('common.editFail'))
-  }
+  const response = await editInfo(datas)
+  if (isFlatRequestFailure(response)) return
+
+  message.success($t('common.editSuccess'))
+  modalVisible.value = false
+  emit('newEdit')
 }
 
 function handleReset(e) {
@@ -308,10 +307,12 @@ function handleReset(e) {
 
 watch(props, newValue => {
   logger.info(newValue)
-  if (props.type === 'edit') {
-    formData.value = props.editData
-    formData.value.alarm_keep_time = String(formData.value.alarm_keep_time)
-    formData.value.alarm_repeat_time = String(formData.value.alarm_repeat_time)
+  if (props.type === 'edit' && props.editData) {
+    formData.value = {
+      ...props.editData,
+      alarm_keep_time: String(props.editData.alarm_keep_time ?? ''),
+      alarm_repeat_time: String(props.editData.alarm_repeat_time ?? '')
+    }
   } else {
     formData.value = {
       id: '',

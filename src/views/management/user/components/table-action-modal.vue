@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, toRefs, watch } from 'vue'
 import type { FormInst, FormItemRule } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 import {
   NButton,
   NForm,
@@ -169,6 +170,8 @@ const title = computed(() => {
 })
 
 const formRef = ref<HTMLElement & FormInst>()
+const submitting = ref(false)
+let modalSession = 0
 
 type FormModel = Pick<UserManagement.User, 'email' | 'name' | 'phone_number' | 'gender' | 'remark' | 'status'> & {
   password: string
@@ -341,32 +344,42 @@ function handleUpdateFormModelByModalType() {
 }
 
 async function handleSubmit() {
-  await formRef.value?.validate()
+  if (submitting.value) return
+  const session = modalSession
+  submitting.value = true
+  try {
+    try {
+      await formRef.value?.validate()
+    } catch (error) {
+      if (error === undefined || Array.isArray(error)) return
+      throw error
+    }
+    if (session !== modalSession) return
 
-  // 准备提交的数据，确保地址字段正确
-  const submitData = {
-    ...formModel
-  }
+    // 准备提交的数据，确保地址字段正确
+    const submitData = {
+      ...formModel
+    }
 
-  // 移除不需要提交的字段
-  delete (submitData as any).confirmPwd
+    // 移除不需要提交的字段
+    delete (submitData as any).confirmPwd
+    const response = props.type === 'add' ? await addUser(submitData) : await editUser(submitData)
+    if (session !== modalSession || isFlatRequestFailure(response)) return
 
-  let data: any
-  if (props.type === 'add') {
-    data = await addUser(submitData)
-  } else if (props.type === 'edit') {
-    data = await editUser(submitData)
-  }
-  if (!data.error) {
-    // window.$message?.success(data.msg);
     emit('success')
+    closeModal()
+  } finally {
+    if (session === modalSession) {
+      submitting.value = false
+    }
   }
-  closeModal()
 }
 
 watch(
   () => props.visible,
   newVal => {
+    modalSession += 1
+    submitting.value = false
     if (newVal) {
       handleUpdateFormModelByModalType()
     }
@@ -457,7 +470,9 @@ watch(
       </NGrid>
       <NSpace class="w-full pt-16px" :size="24" justify="end">
         <NButton class="w-72px" @click="closeModal">{{ $t('common.cancel') }}</NButton>
-        <NButton class="w-72px" type="primary" @click="handleSubmit">{{ $t('common.confirm') }}</NButton>
+        <NButton class="w-72px" type="primary" :loading="submitting" @click="handleSubmit">
+          {{ $t('common.confirm') }}
+        </NButton>
       </NSpace>
     </NForm>
   </NModal>

@@ -20,10 +20,6 @@ export const getDeviceGroup = async (params: any) => {
 }
 
 //
-/** 接入方式下拉菜单（旧） */
-export const deviceDictProtocolService = async (params: any) => {
-  return await request.get<DeviceManagement.TreeStructure | any>('/dict/protocol/service', params)
-}
 /** 接入方式下拉一级菜单 */
 export const deviceDictProtocolServiceFirstLevel = async (params: any) => {
   return await request.get<DeviceManagement.ProtocolAndService | any>('/service/plugin/select', params)
@@ -266,113 +262,16 @@ export const telemetryDataCurrentKeys = async (params: any) => {
   return await request.get<any>('/telemetry/datas/current/keys', { params })
 }
 
-const TELEMETRY_TIME_RANGE_MS: Record<string, number> = {
-  last_5m: 5 * 60 * 1000,
-  last_15m: 15 * 60 * 1000,
-  last_30m: 30 * 60 * 1000,
-  last_1h: 60 * 60 * 1000,
-  last_3h: 3 * 60 * 60 * 1000,
-  last_6h: 6 * 60 * 60 * 1000,
-  last_12h: 12 * 60 * 60 * 1000,
-  last_24h: 24 * 60 * 60 * 1000,
-  last_3d: 3 * 24 * 60 * 60 * 1000,
-  last_7d: 7 * 24 * 60 * 60 * 1000,
-  last_15d: 15 * 24 * 60 * 60 * 1000,
-  last_30d: 30 * 24 * 60 * 60 * 1000,
-  last_60d: 60 * 24 * 60 * 60 * 1000,
-  last_90d: 90 * 24 * 60 * 60 * 1000,
-  last_6m: 180 * 24 * 60 * 60 * 1000,
-  last_1y: 365 * 24 * 60 * 60 * 1000
-}
-
-function shouldFallbackTelemetryHistory(error: any) {
-  const message = error?.error?.message || error?.message || ''
-  return typeof message === 'string' && message.includes('failed to encode args[2]') && message.includes('OID 25')
-}
-
-function resolveTelemetryHistoryRange(params: any) {
-  const startTime = Number(params?.start_time)
-  const endTime = Number(params?.end_time)
-
-  if (params?.time_range === 'custom' && Number.isFinite(startTime) && Number.isFinite(endTime)) {
-    return { start_time: startTime, end_time: endTime }
-  }
-
-  const duration = TELEMETRY_TIME_RANGE_MS[String(params?.time_range || '')]
-  if (!duration) return null
-
-  const currentTime = Date.now()
-  return {
-    start_time: currentTime - duration,
-    end_time: currentTime
-  }
-}
-
-function normalizeTelemetryHistoryPageData(payload: any) {
-  const list = Array.isArray(payload?.list) ? payload.list : []
-
-  return list
-    .map((item: any) => {
-      const x = Number(item?.ts ?? item?.time ?? item?.x ?? 0)
-      const y = Number(item?.value ?? item?.y ?? item?.avg ?? 0)
-
-      return {
-        key: item?.key,
-        x,
-        y
-      }
-    })
-    .filter((item: any) => Number.isFinite(item.x) && Number.isFinite(item.y))
-}
-
 /**
  * @param params { device_id: string, key: string, start_time: string, end_time: string, aggregate_window: string,
  *   aggregate_function: string, time_range: string }
  * @returns
  */
 export const telemetryDataHistoryList = async (params: any, requestConfig: Record<string, unknown> = {}) => {
-  const normalized = { ...params }
-  let statisticResponse: any
-  try {
-    statisticResponse = await request.get<any>('/telemetry/datas/statistic', {
-      ...(requestConfig as any),
-      params: normalized
-    })
-  } catch (error) {
-    statisticResponse = error
-  }
-
-  if (!statisticResponse?.error || !shouldFallbackTelemetryHistory(statisticResponse)) {
-    return statisticResponse
-  }
-
-  const fallbackRange = resolveTelemetryHistoryRange(normalized)
-  if (!fallbackRange) {
-    return statisticResponse
-  }
-
-  let historyResponse: any
-  try {
-    historyResponse = await telemetryHistoryData(
-      {
-        device_id: normalized.device_id,
-        key: normalized.key,
-        ...fallbackRange
-      },
-      requestConfig
-    )
-  } catch (error) {
-    historyResponse = error
-  }
-
-  if (historyResponse?.error) {
-    return statisticResponse
-  }
-
-  return {
-    data: normalizeTelemetryHistoryPageData(historyResponse?.data),
-    error: null
-  }
+  return await request.get<any>('/telemetry/datas/statistic', {
+    ...(requestConfig as any),
+    params
+  })
 }
 
 /** 遥测删除数据处理 */
@@ -465,8 +364,8 @@ export const deviceUpdateConfig = async (params: any) => {
   return await request.put<any>(`/device/update/config`, params)
 }
 
-export const deviceConfigMenu = async (params: any) => {
-  return await request.get<any>(`/device/template/menu`, { params })
+export const deviceConfigMenu = async (params: any, requestConfig: Record<string, unknown> = {}) => {
+  return await request.get<any>(`/device/template/menu`, { ...(requestConfig as any), params })
 }
 
 // 保存设备位置
@@ -508,11 +407,7 @@ export const getSimulationInit = async (params: { device_id: string }) => {
   return await request.get<any>(`/telemetry/datas/simulation/init`, { params })
 }
 /** 发送模拟数据 */
-export const sendSimulationData = async (params: {
-  device_id: string
-  data: string
-  topic?: string
-}) => {
+export const sendSimulationData = async (params: { device_id: string; data: string; topic?: string }) => {
   return await request.post<any>(`/telemetry/datas/simulation/send`, params)
 }
 
@@ -581,5 +476,5 @@ export const setDeviceDebugStatus = async (deviceId: string, data: { enabled: bo
 
 /** 设备调试日志查询 */
 export const getDeviceDebugLogs = async (deviceId: string, params?: { limit?: number; offset?: number }) => {
-  return await request.get<any>(`/device/${deviceId}/debug/logs`, { params })
+  return await request.get<any>(`/device/${deviceId}/debug/logs`, { params, silentError: true })
 }

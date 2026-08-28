@@ -10,25 +10,10 @@
  */
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import {
-  NDataTable,
-  NButton,
-  NTag,
-  NSpace,
-  NEmpty,
-  NIcon,
-  NTooltip,
-  NDropdown
-} from 'naive-ui'
+import { NDataTable, NButton, NTag, NSpace, NEmpty, NIcon, NTooltip, NDropdown, NAlert } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
 import { h } from 'vue'
-import {
-  RefreshOutline,
-  OpenOutline,
-  LinkOutline,
-  CloudDownloadOutline,
-  EllipsisHorizontal
-} from '@vicons/ionicons5'
+import { RefreshOutline, OpenOutline, LinkOutline, CloudDownloadOutline, EllipsisHorizontal } from '@vicons/ionicons5'
 import { $t } from '@/locales'
 import { getInstalledBundles, type InstalledBundle } from '@/service/api/market-bundle'
 import MarketBrowse from './MarketBrowse.vue'
@@ -41,6 +26,8 @@ const router = useRouter()
 
 /** 加载状态 */
 const loading = ref(false)
+const listError = ref('')
+let listRequestEpoch = 0
 
 /** 已安装列表 */
 const installedList = ref<InstalledBundle[]>([])
@@ -231,7 +218,9 @@ watch(activeTab, (tab) => {
  * 获取已安装列表
  */
 async function fetchInstalledList() {
+  const requestEpoch = ++listRequestEpoch
   loading.value = true
+  listError.value = ''
 
   try {
     const result = await getInstalledBundles({
@@ -239,14 +228,15 @@ async function fetchInstalledList() {
       page_size: pagination.pageSize
     })
 
-    if (result.data) {
-      installedList.value = result.data.list || []
-      total.value = result.data.total || 0
+    if (requestEpoch !== listRequestEpoch) return
+    if (result.error || !result.data) {
+      listError.value = result.error?.message || $t('common.fetchDataFailed')
+      return
     }
-  } catch (err) {
-    console.error('Failed to fetch installed list:', err)
+    installedList.value = result.data.list
+    total.value = result.data.total
   } finally {
-    loading.value = false
+    if (requestEpoch === listRequestEpoch) loading.value = false
   }
 }
 
@@ -337,6 +327,9 @@ onMounted(() => {
 
       <!-- 已安装列表 -->
       <div v-if="activeTab === 'installed'" class="tab-content">
+        <NAlert v-if="listError" type="error" class="mb-4" closable @close="listError = ''">
+          {{ listError }}
+        </NAlert>
         <div class="list-header">
           <div class="header-left">
             <span class="total-count">

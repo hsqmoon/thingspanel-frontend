@@ -1,9 +1,10 @@
 import { fileURLToPath, URL } from 'node:url'
 import vue from '@vitejs/plugin-vue'
+import vueJsx from '@vitejs/plugin-vue-jsx'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [vue(), vueJsx()],
   resolve: {
     alias: {
       '~': fileURLToPath(new URL('./', import.meta.url)),
@@ -12,7 +13,7 @@ export default defineConfig({
   },
   test: {
     environment: 'happy-dom',
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'packages/*/src/**/*.test.ts'],
     clearMocks: true,
     restoreMocks: true,
     onConsoleLog(log, type) {

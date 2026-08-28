@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref, watch } from 'vue'
+import { isFlatRequestFailure } from '@sa/axios'
 import { NDatePicker, NSelect, NSpace } from 'naive-ui'
 import { useFullscreen } from '@vueuse/core'
 import dayjs from 'dayjs'
@@ -16,6 +17,7 @@ const datePickerValue = ref<[number, number] | null>(null)
 const avgValue = ref<number | undefined>(undefined)
 const maxValue = ref<number | undefined>(undefined)
 const minValue = ref<number | undefined>(undefined)
+let requestEpoch = 0
 
 interface Created {
   deviceId: string
@@ -131,7 +133,7 @@ const initialOptions = ref({
         onclick: () => {
           if (initialOptions.value.series) {
             if (initialOptions.value.series[0].type === 'bar') {
-              window.NMessage.destroyAll()
+              window.$message?.destroyAll()
               message.info($t('common.alreadyToChart'))
               return
             }
@@ -146,7 +148,7 @@ const initialOptions = ref({
         onclick: () => {
           if (initialOptions.value.series) {
             if (initialOptions.value.series[0].type === 'scatter') {
-              window.NMessage.destroyAll()
+              window.$message?.destroyAll()
               message.info($t('common.alreadyScatterPlot'))
               return
             }
@@ -313,19 +315,24 @@ watch(
   selectedOption,
   async v => {
     // 这里是当 selectedOption 变化时需要执行的逻辑
+    const currentRequestEpoch = ++requestEpoch
 
     if (v.time_range === 'custom' && (!v.start_time || !v.end_time)) {
-      window.NMessage.destroyAll()
+      endLoading()
+      window.$message?.destroyAll()
       message.info($t('common.rangeMustSelected'))
       return
     }
     startLoading()
-    const { data, error } = await telemetryDataHistoryList({
-      ...v
-    })
-    if (!error && data && initialOptions.value.series) {
+    try {
+      const response = await telemetryDataHistoryList({ ...v })
+      if (isFlatRequestFailure(response) || currentRequestEpoch !== requestEpoch || !initialOptions.value.series) {
+        return
+      }
+
+      const data = Array.isArray(response.data) ? response.data : []
       // 对数据进行排序，确保最新的数据在前面
-      const sortedData = data.sort((a, b) => {
+      const sortedData = [...data].sort((a, b) => {
         return b.x - a.x
       })
       tableData.value = sortedData
@@ -356,8 +363,9 @@ watch(
         minValue.value = undefined
         avgValue.value = undefined
       }
+    } finally {
+      if (currentRequestEpoch === requestEpoch) endLoading()
     }
-    endLoading()
   },
   { deep: true }
 )

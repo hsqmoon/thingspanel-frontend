@@ -6,6 +6,7 @@ import { createAxiosConfig, createDefaultOptions, createRetryOptions } from './o
 import { BACKEND_ERROR_CODE, REQUEST_ID_KEY } from './constant'
 import type {
   CustomAxiosRequestConfig,
+  FlatRequestFailure,
   FlatRequestInstance,
   MappedType,
   RequestInstance,
@@ -24,11 +25,9 @@ function createCommonRequest<ResponseData = any>(
 
   const cancelTokenSourceMap = new Map<string, CancelTokenSource>()
 
-  // config axios retry
   const retryOptions = createRetryOptions(axiosConf)
-  axiosRetry(instance, retryOptions)
 
-  instance.interceptors.request.use(conf => {
+  instance.interceptors.request.use(async conf => {
     const config: InternalAxiosRequestConfig = { ...conf }
 
     // set requestTs id
@@ -40,11 +39,45 @@ function createCommonRequest<ResponseData = any>(
     config.cancelToken = cancelTokenSource.token
     cancelTokenSourceMap.set(requestId, cancelTokenSource)
 
-    // handle config by hook
-    const handledConfig = opts.onRequest?.(config) || config
-
-    return handledConfig
+    try {
+      // handle config by hook
+      const handledConfig = (await opts.onRequest?.(config)) || config
+      handledConfig.headers.set(REQUEST_ID_KEY, requestId)
+      const adapter = axios.getAdapter(handledConfig.adapter || instance.defaults.adapter)
+      handledConfig.adapter = async adapterConfig => {
+        try {
+          return await adapter(adapterConfig)
+        } finally {
+          cancelTokenSourceMap.delete(requestId)
+        }
+      }
+      return handledConfig
+    } catch (error) {
+      cancelTokenSourceMap.delete(requestId)
+      throw error
+    }
   })
+
+  function releaseCancelToken(config?: InternalAxiosRequestConfig) {
+    const requestId = config?.headers.get(REQUEST_ID_KEY)
+    if (typeof requestId === 'string') {
+      cancelTokenSourceMap.delete(requestId)
+    }
+  }
+
+  // Release each transport attempt before axios-retry decides whether to retry it.
+  instance.interceptors.response.use(
+    response => {
+      releaseCancelToken(response.config)
+      return response
+    },
+    error => {
+      releaseCancelToken(error?.config)
+      return Promise.reject(error)
+    }
+  )
+
+  axiosRetry(instance, retryOptions)
 
   instance.interceptors.response.use(
     async response => {
@@ -167,7 +200,7 @@ export function createRequest<ResponseData = any>(
 /**
  * create a flat requestTs instance
  *
- * The response data is a flat object: { data: any, error: AxiosError }
+ * Calls resolve with either `{ data, error: null }` or a `FlatRequestFailure`.
  *
  * @param axiosConfig axios config
  * @param options requestTs options
@@ -208,49 +241,46 @@ export function createFlatRequest<ResponseData = any>(
   const flatRequest: FlatRequestInstance = async function flatRequest<T = any, R extends ResponseType = 'json'>(
     config: CustomAxiosRequestConfig
   ) {
+    let response: AxiosResponse<ResponseData>
+
     try {
-      const response: AxiosResponse<ResponseData> = await instance(config)
-
-      const responseType = response.config?.responseType || 'json'
-
-      if (responseType === 'json') {
-        const data = opts.transformBackendResponse(response)
-
-        return { data, error: null }
-      }
-
-      return Promise.resolve({ data: response.data as MappedType<R, T>, error: null })
+      response = await instance(config)
     } catch (error) {
-      const requestError =
-        typeof error === 'object' && error !== null
-          ? (error as { response?: { data?: unknown; status?: number }; code?: string; message?: string })
-          : {}
-      const responseData = requestError.response?.data
+      if (!axios.isAxiosError(error)) throw error
 
-      // 如果是后端业务错误，应该将错误信息放在error字段中
-      if (responseData && typeof responseData === 'object') {
-        const backendError = responseData as { message?: string; msg?: string }
-        return Promise.reject({
-          data: null,
-          error: {
-            message: backendError.message || backendError.msg || '请求失败',
-            status: requestError.response?.status,
-            code: requestError.code,
-            data: responseData
-          }
-        })
-      }
+      const responseData = error.response?.data
 
-      // 其他错误返回简化的错误信息
-      return Promise.reject({
+      const backendError =
+        responseData && typeof responseData === 'object'
+          ? (responseData as { message?: unknown; msg?: unknown })
+          : undefined
+      const message =
+        (typeof backendError?.message === 'string' && backendError.message) ||
+        (typeof backendError?.msg === 'string' && backendError.msg) ||
+        error.message ||
+        '请求失败'
+      const failure: FlatRequestFailure = {
         data: null,
         error: {
-          message: requestError.message || '请求失败',
-          status: requestError.response?.status,
-          code: requestError.code
+          message,
+          status: error.response?.status,
+          code: error.code,
+          ...(backendError ? { data: responseData } : {})
         }
-      })
+      }
+
+      return failure
     }
+
+    const responseType = response.config?.responseType || 'json'
+
+    if (responseType === 'json') {
+      const data = await opts.transformBackendResponse(response)
+
+      return { data, error: null }
+    }
+
+    return { data: response.data as MappedType<R, T>, error: null }
   } as FlatRequestInstance
   const requestMethods = {
     async get<T = any, R extends ResponseType = 'json'>(url: string, config?: CustomAxiosRequestConfig<R>) {
@@ -291,3 +321,4 @@ export function createFlatRequest<ResponseData = any>(
 }
 
 export type { CreateAxiosDefaults, AxiosError }
+export { isFlatRequestFailure } from './shared'

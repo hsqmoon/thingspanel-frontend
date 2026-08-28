@@ -2,6 +2,7 @@
 import { computed, reactive, ref } from 'vue'
 import { NButton, NPopconfirm, NSpace } from 'naive-ui'
 import { useLoading } from '@sa/hooks'
+import { isFlatRequestFailure } from '@sa/axios'
 import { $t } from '@/locales'
 import {
   attributesApi,
@@ -54,7 +55,7 @@ const comList: { id: string; components: any; title: string }[] = [
   { id: 'command', components: AddEditCommands, title: $t('device_template.addAndEditCommand') }
 ]
 const SwitchCom = computed<any>(() => {
-  const selectedItem = comList.find(item => item.id === tabsCurrent.value)
+  const selectedItem = comList.find((item) => item.id === tabsCurrent.value)
   if (selectedItem) {
     addAndEditTitle.value = selectedItem.title
   }
@@ -84,7 +85,7 @@ const queryParams: any = reactive([
   }
 ])
 
-const checkedTabs: (value: string | number) => void = value => {
+const checkedTabs: (value: string | number) => void = (value) => {
   tabsCurrent.value = value
 }
 
@@ -109,30 +110,31 @@ const getPagination = (index: number) => {
 
 // 编辑
 let objItem = reactive<any>({})
-const edit: (row: any) => void = row => {
+const edit: (row: any) => void = (row) => {
   addAndEditModalVisible.value = true
   objItem = row
 }
 
 // 新增或者编辑成功后的回调函数
 const determine: () => void = () => {
-
   getTableData(tabsCurrent.value)
 }
 
 // 删除
-const del: (id: string) => void = async id => {
+const del: (id: string) => void = async (id) => {
+  let result
   if (tabsCurrent.value === 'telemetry') {
-    await delTelemetry(id)
+    result = await delTelemetry(id)
   } else if (tabsCurrent.value === 'attributes') {
-    await delAttributes(id)
+    result = await delAttributes(id)
   } else if (tabsCurrent.value === 'events') {
-    await delEvents(id)
+    result = await delEvents(id)
   } else {
-    await delCommands(id)
+    result = await delCommands(id)
   }
+  if (isFlatRequestFailure(result)) return
 
-  getTableData(tabsCurrent.value)
+  await getTableData(tabsCurrent.value)
 }
 // 上一步
 const next: () => void = async () => {
@@ -165,7 +167,7 @@ const columnsList: any = reactive([
         width: 350,
         title: () => $t('common.actions'),
         align: 'center',
-        render: row => {
+        render: (row) => {
           return (
             <NSpace justify={'center'}>
               <NButton quaternary type="primary" size={'small'} onClick={() => edit(row)}>
@@ -202,7 +204,7 @@ const columnsList: any = reactive([
         width: 350,
         title: () => $t('common.actions'),
         align: 'center',
-        render: row => {
+        render: (row) => {
           return (
             <NSpace justify={'center'}>
               <NButton quaternary type="primary" size={'small'} onClick={() => edit(row)}>
@@ -239,7 +241,7 @@ const columnsList: any = reactive([
         width: 350,
         title: () => $t('common.actions'),
         align: 'center',
-        render: row => {
+        render: (row) => {
           return (
             <NSpace justify={'center'}>
               <NButton quaternary type="primary" size={'small'} onClick={() => edit(row)}>
@@ -276,14 +278,14 @@ const columnsList: any = reactive([
         width: 350,
         title: () => $t('common.actions'),
         align: 'center',
-        render: row => {
+        render: (row) => {
           return (
             <NSpace justify={'center'}>
-              { }
+              {}
               <NButton quaternary type="primary" size={'small'} onClick={() => edit(row)}>
                 {$t('common.edit')}
               </NButton>
-              { }
+              {}
               <NPopconfirm onPositiveClick={() => del(row.id)}>
                 {{
                   default: () => $t('common.confirmDelete'),
@@ -314,16 +316,16 @@ const updateAttributesData = (data: any) => {
   })
 }
 
-const handleParamsOfEventsAndcommands = data => {
+const handleParamsOfEventsAndcommands = (data) => {
   if (!data || !Array.isArray(data)) {
     return data
   }
-  return data.map(item => {
+  return data.map((item) => {
     const paramsArr = JSON.parse(item.params) || []
     return {
       ...item,
       paramsOrigin: item.params,
-      params: paramsArr.map(param => param.data_name).join(', ')
+      params: paramsArr.map((param) => param.data_name).join(', ')
     }
   })
 }
@@ -350,23 +352,23 @@ const updateCommandsData = (data: any) => {
   columnsList[3].data = handleParamsOfEventsAndcommands(data?.list ?? [])
   columnsList[3].total = data?.total || 0
 }
-const getTableData: (value?: string) => Promise<void> = async value => {
+const getTableData: (value?: string) => Promise<void> = async (value) => {
   startLoading()
   try {
     if (value) {
       // Handle single tab data loading
       if (value === 'telemetry') {
-        const { data: data0 }: any = await telemetryApi(queryParams[0])
-        updateTelemetryData(data0)
+        const result = await telemetryApi(queryParams[0])
+        if (!isFlatRequestFailure(result)) updateTelemetryData(result.data)
       } else if (value === 'attributes') {
-        const { data: data1 }: any = await attributesApi(queryParams[1])
-        updateAttributesData(data1)
+        const result = await attributesApi(queryParams[1])
+        if (!isFlatRequestFailure(result)) updateAttributesData(result.data)
       } else if (value === 'events') {
-        const { data: data2 }: any = await eventsApi(queryParams[2])
-        updateEventsData(data2)
+        const result = await eventsApi(queryParams[2])
+        if (!isFlatRequestFailure(result)) updateEventsData(result.data)
       } else {
-        const { data: data3 }: any = await commandsApi(queryParams[3])
-        updateCommandsData(data3)
+        const result = await commandsApi(queryParams[3])
+        if (!isFlatRequestFailure(result)) updateCommandsData(result.data)
       }
     } else {
       // Load all tabs data concurrently
@@ -377,10 +379,10 @@ const getTableData: (value?: string) => Promise<void> = async value => {
         commandsApi(queryParams[3])
       ])
 
-      updateTelemetryData(telemetryRes.data)
-      updateAttributesData(attributesRes.data)
-      updateEventsData(eventsRes.data)
-      updateCommandsData(commandsRes.data)
+      if (!isFlatRequestFailure(telemetryRes)) updateTelemetryData(telemetryRes.data)
+      if (!isFlatRequestFailure(attributesRes)) updateAttributesData(attributesRes.data)
+      if (!isFlatRequestFailure(eventsRes)) updateEventsData(eventsRes.data)
+      if (!isFlatRequestFailure(commandsRes)) updateCommandsData(commandsRes.data)
     }
   } catch (error) {
     console.error('Error fetching data:', error)
@@ -389,7 +391,7 @@ const getTableData: (value?: string) => Promise<void> = async value => {
   }
 }
 
-getTableData()
+void getTableData()
 </script>
 
 <template>

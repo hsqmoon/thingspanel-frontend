@@ -1,10 +1,10 @@
 import { ref } from 'vue'
 import type { Ref } from 'vue'
-import { createFlatRequest } from '@sa/axios'
+import { createFlatRequest, isFlatRequestFailure } from '@sa/axios'
 import type {
-  AxiosError,
   CreateAxiosDefaults,
   CustomAxiosRequestConfig,
+  FlatRequestError,
   MappedType,
   RequestOption,
   ResponseType
@@ -16,14 +16,14 @@ export type HookRequestInstanceResponseSuccessData<T = any> = {
   error: Ref<null>
 }
 
-export type HookRequestInstanceResponseFailData<T = any> = {
+export type HookRequestInstanceResponseFailData = {
   data: Ref<null>
-  error: Ref<AxiosError<T>>
+  error: Ref<FlatRequestError>
 }
 
 export type HookRequestInstanceResponseData<T = any> = {
   loading: Ref<boolean>
-} & (HookRequestInstanceResponseSuccessData<T> | HookRequestInstanceResponseFailData<T>)
+} & (HookRequestInstanceResponseSuccessData<T> | HookRequestInstanceResponseFailData)
 
 export interface HookRequestInstance {
   <T = any, R extends ResponseType = 'json'>(
@@ -51,19 +51,24 @@ export default function createHookRequest<ResponseData = any>(
     const { loading, startLoading, endLoading } = useLoading()
 
     const data = ref<MappedType<R, T> | null>(null)
-    const error = ref<AxiosError<MappedType<R, T>> | null>(null)
+    const error = ref<FlatRequestError | null>(null)
 
     startLoading()
 
-    request(config).then(res => {
-      if (res.data) {
-        data.value = res.data
-      } else {
-        error.value = res.error
-      }
-
-      endLoading()
-    })
+    request(config)
+      .then(res => {
+        if (isFlatRequestFailure(res)) {
+          error.value = res.error
+        } else {
+          data.value = res.data
+        }
+      })
+      .catch(reason => {
+        error.value = isFlatRequestFailure(reason)
+          ? reason.error
+          : { message: reason instanceof Error ? reason.message : '请求失败' }
+      })
+      .finally(endLoading)
 
     return {
       loading,

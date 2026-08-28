@@ -1,4 +1,5 @@
 import { type Ref } from 'vue'
+import { isFlatRequestFailure } from '@sa/axios'
 import { deviceAlarmStatus } from '@/service/api/device'
 import type { PlatformField } from '@/utils/thingsvis/types'
 
@@ -17,6 +18,9 @@ export function useAlarmPush(
 
     try {
       const res = await deviceAlarmStatus({ device_id: deviceId.value })
+      if (isFlatRequestFailure(res)) {
+        return
+      }
       if (!Array.isArray(res?.data)) return
 
       const alarmFields: Record<string, unknown> = {}
@@ -35,8 +39,9 @@ export function useAlarmPush(
       if (Object.keys(alarmFields).length > 0) {
         pushData(alarmFields)
       }
-    } catch (error) {
-      console.warn('[useAlarmPush] Failed to fetch alarm status:', error)
+    } catch {
+      stop()
+      window.$message?.error('告警状态同步异常，已停止自动刷新；重新打开页面后可恢复。')
     }
   }
 

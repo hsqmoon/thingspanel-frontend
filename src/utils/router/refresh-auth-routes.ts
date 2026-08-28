@@ -1,17 +1,15 @@
 import { router } from '@/router'
-import { useRouteStore } from '@/store/modules/route'
-import { initAuthRoute } from '@/router/auth-route-manager'
+import { initAuthRoute, resetAuthRouteStore } from '@/router/auth-route-manager'
 
 export async function refreshAuthRoutes(fullPath?: string) {
-  const routeStore = useRouteStore()
   const targetPath = fullPath || router.currentRoute.value.fullPath
 
-  await routeStore.resetStore()
-  const success = await initAuthRoute()
+  await resetAuthRouteStore()
+  const result = await initAuthRoute()
 
-  if (success) {
+  if (result === 'success') {
     await router.replace(targetPath)
   }
 
-  return success
+  return result
 }

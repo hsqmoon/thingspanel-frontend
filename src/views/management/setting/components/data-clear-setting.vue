@@ -1,9 +1,10 @@
 <script setup lang="tsx">
-import { reactive, ref } from 'vue'
+import { reactive, ref, watch } from 'vue'
 import type { Ref } from 'vue'
 import { NButton, NSpace, NTag } from 'naive-ui'
 import type { DataTableColumns, FormInst } from 'naive-ui'
 import dayjs from 'dayjs'
+import { isFlatRequestFailure } from '@sa/axios'
 import { useBoolean, useLoading } from '@sa/hooks'
 import { dataClearSettingEnabledTypeOptions } from '@/constants/business'
 import { editDataClear, fetchDataClearList } from '@/service/api/setting'
@@ -14,6 +15,7 @@ const { loading, startLoading, endLoading } = useLoading(false)
 const { bool: visible, setTrue: openModal, setFalse: closeModal } = useBoolean()
 
 const tableData = ref<GeneralSetting.DataClearSetting[]>([])
+let tableRequestEpoch = 0
 
 function setTableData(data: GeneralSetting.DataClearSetting[]) {
   tableData.value = data
@@ -30,12 +32,17 @@ const queryParams = reactive<QueryFormModel>({
 })
 
 async function getTableData() {
+  const epoch = ++tableRequestEpoch
   startLoading()
-  const { data } = await fetchDataClearList(queryParams)
-  if (data) {
-    const list: Api.GeneralSetting.DataClearSetting[] = data.list
-    setTableData(list)
-    endLoading()
+  try {
+    const response = await fetchDataClearList(queryParams)
+    if (epoch !== tableRequestEpoch || isFlatRequestFailure(response) || !response.data) return
+
+    setTableData(response.data.list)
+  } finally {
+    if (epoch === tableRequestEpoch) {
+      endLoading()
+    }
   }
 }
 
@@ -109,6 +116,8 @@ const columns: Ref<DataTableColumns<GeneralSetting.DataClearSetting>> = ref([
 ]) as Ref<DataTableColumns<GeneralSetting.DataClearSetting>>
 
 const formRef = ref<HTMLElement & FormInst>()
+const submitting = ref(false)
+let modalSession = 0
 
 type FormModel = Pick<GeneralSetting.DataClearSetting, 'retention_days' | 'enabled' | 'remark'>
 
@@ -132,15 +141,36 @@ function handleEditTable(row: any) {
 }
 
 async function handleSubmit() {
-  await formRef.value?.validate()
-  const formData = deepClone(editData)
-  const data: any = await editDataClear(formData)
-  if (!data.error) {
-    window.$message?.success(data.msg)
-    getTableData()
+  if (submitting.value) return
+  const session = modalSession
+  submitting.value = true
+  try {
+    try {
+      await formRef.value?.validate()
+    } catch (error) {
+      if (error === undefined || Array.isArray(error)) return
+      throw error
+    }
+    if (session !== modalSession) return
+
+    const formData = deepClone(editData)
+    const response = await editDataClear(formData)
+    if (session !== modalSession || isFlatRequestFailure(response)) return
+
+    window.$message?.success($t('common.editSuccess'))
+    closeModal()
+    await getTableData()
+  } finally {
+    if (session === modalSession) {
+      submitting.value = false
+    }
   }
-  closeModal()
 }
+
+watch(visible, () => {
+  modalSession += 1
+  submitting.value = false
+})
 
 function init() {
   getTableData()
@@ -171,7 +201,9 @@ init()
           </NFormItemGridItem>
         </NGrid>
         <NSpace class="w-full pt-16px" :size="24" justify="center">
-          <NButton class="w-72px" type="primary" @click="handleSubmit">{{ $t('common.edit') }}</NButton>
+          <NButton class="w-72px" type="primary" :loading="submitting" @click="handleSubmit">
+            {{ $t('common.edit') }}
+          </NButton>
         </NSpace>
       </NForm>
     </NModal>

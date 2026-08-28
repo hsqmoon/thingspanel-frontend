@@ -371,15 +371,6 @@ export class ThingsVisClient {
   }
 
   /**
-   * @deprecated Use pushPlatformFieldData() instead.
-   * This method sends a tv:event message which is NOT handled by PlatformFieldAdapter
-   * and therefore never reaches the ring buffer.
-   */
-  public pushData(data: Record<string, unknown>): void {
-    this.send(TV_MSG.EVENT, { event: 'updateData', payload: data })
-  }
-
-  /**
    * [Widget Mode] 瑙﹀彂淇濆瓨 (濡傛灉 Host 鎯充富鍔ㄤ繚瀛?
    * Host -> Guest -> Host(thingsvis:host-save)
    * 瀵瑰簲鍗忚: thingsvis:editor-trigger-save
@@ -409,7 +400,6 @@ export class ThingsVisClient {
    * 瑙﹀彂 Editor 鐨?saveNow()锛岄殢鍚庝細閫氳繃 onWidgetSave 鍥炶皟杩斿洖鏁版嵁
    */
   public requestSave() {
-    console.log('[SDK] Client requesting save from Editor...')
     // Type casting because 'thingsvis:request-save' is not in standard EmbedMessage yet
     this.send(TV_MSG.REQUEST_SAVE)
   }

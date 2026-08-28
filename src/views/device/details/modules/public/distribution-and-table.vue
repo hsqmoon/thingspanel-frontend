@@ -25,7 +25,7 @@ import {
 } from 'naive-ui'
 import { useLoading } from '@sa/hooks'
 import { Refresh } from '@vicons/ionicons5'
-import type { FlatResponseFailData, FlatResponseSuccessData } from '@sa/axios'
+import { isFlatRequestFailure, type FlatResponseFailData, type FlatResponseSuccessData } from '@sa/axios'
 import moment from 'moment'
 import { commandDataById, commandDataPub, deviceCustomCommandsIdList, getAttributeDataSet } from '@/service/api'
 import { $t } from '@/locales'
@@ -64,6 +64,8 @@ const paramsData = ref<any>([])
 const attributeList = ref<any[]>([])
 const attributeLoading = ref(false)
 const isTextArea = ref<any>(true)
+const submitting = ref(false)
+let tableRequestEpoch = 0
 
 // 新增：管理页签切换
 const activeTab = ref('visual')
@@ -79,19 +81,22 @@ const rules = computed<FormRules>(() => {
   return r
 })
 const fetchDataFunction = async () => {
+  const requestEpoch = ++tableRequestEpoch
   startLoading()
+  try {
+    const response = await props.fetchDataApi({
+      page: !props.noRefresh ? the_page.value : undefined,
+      page_size: !props.noRefresh ? 4 : undefined,
+      device_id: props.id
+    })
+    if (isFlatRequestFailure(response) || requestEpoch !== tableRequestEpoch) return false
 
-  const { data, error } = await props.fetchDataApi({
-    page: !props.noRefresh ? the_page.value : undefined,
-    page_size: !props.noRefresh ? 4 : undefined,
-    device_id: props.id
-  })
-  if (!error) {
+    const data = response.data
     tableData.value = data?.value || data?.list || (Array.isArray(data) ? data : []) || []
-    if (data?.count || data?.total) {
-      page_coune.value = Math.ceil((data?.count || data?.total) / 4)
-    }
-    endLoading()
+    page_coune.value = Math.ceil((Number(data?.count ?? data?.total) || 0) / 4)
+    return true
+  } finally {
+    if (requestEpoch === tableRequestEpoch) endLoading()
   }
 }
 
@@ -116,9 +121,17 @@ const closeDialog = () => {
 }
 
 const submit = async () => {
+  if (submitting.value) return
+
+  submitting.value = true
   try {
     await formRef.value?.validate()
+  } catch {
+    submitting.value = false
+    return
+  }
 
+  try {
     let parms
     const params: any = {}
 
@@ -157,25 +170,28 @@ const submit = async () => {
     }
 
     if (formModel.expected) {
-      if (props.expectApi) {
-        const expiry = formModel.time ? new Date().getTime() + formModel.time * 60 * 60 * 1000 : null
-        await props.expectApi({
-          device_id: props.id,
-          payload: formModel.textValue ? formModel.textValue : null,
-          send_type: props.isCommand ? 'command' : 'attribute',
-          expiry: expiry ? moment(expiry).format('YYYY-MM-DDTHH:mm:ssZ') : null,
-          identify: props.isCommand ? formModel.commandValue : null
-        })
-      }
+      if (!props.expectApi) return
+
+      const expiry = formModel.time ? new Date().getTime() + formModel.time * 60 * 60 * 1000 : null
+      const response = await props.expectApi({
+        device_id: props.id,
+        payload: formModel.textValue ? formModel.textValue : null,
+        send_type: props.isCommand ? 'command' : 'attribute',
+        expiry: expiry ? moment(expiry).format('YYYY-MM-DDTHH:mm:ssZ') : null,
+        identify: props.isCommand ? formModel.commandValue : null
+      })
+      if (isFlatRequestFailure(response)) return
     } else if (props.submitApi) {
-      await props.submitApi(parms)
+      const response = await props.submitApi(parms)
+      if (isFlatRequestFailure(response)) return
+    } else {
+      return
     }
 
     await fetchDataFunction()
     closeDialog()
-  } catch (errors) {
-    window.$message?.error($t('common.validateFail') || 'Validation failed, please check your input.')
-    logger.error('Form validation failed:', errors)
+  } finally {
+    submitting.value = false
   }
 }
 
@@ -185,8 +201,10 @@ const onCommandChange = async (row: any) => {
     value: row.instruct,
     identify: row.data_identifier
   }
-  await commandDataPub(parms)
-  fetchDataFunction()
+  const response = await commandDataPub(parms)
+  if (isFlatRequestFailure(response)) return
+
+  await fetchDataFunction()
 }
 
 const updatePage = (page: number) => {
@@ -202,8 +220,9 @@ defineExpose({ refresh })
 const getOptions = async show => {
   if (show) {
     const res = await commandDataById(props.id)
+    if (isFlatRequestFailure(res)) return
 
-    if (res && Array.isArray(res.data)) {
+    if (Array.isArray(res.data)) {
       options.value = res.data
     } else {
       options.value = []
@@ -232,11 +251,13 @@ const handleCommandInput = (value: string) => {
 const commandList = ref()
 
 const getListData = async () => {
-  const { data } = await deviceCustomCommandsIdList(props.id)
-  commandList.value = data
+  const response = await deviceCustomCommandsIdList(props.id)
+  if (isFlatRequestFailure(response)) return
+
+  commandList.value = response.data
 }
 onMounted(() => {
-  props.isCommand && getListData()
+  if (props.isCommand) getListData()
   fetchDataFunction()
 })
 const getPlatform = computed(() => {
@@ -314,16 +335,12 @@ const normalizeAttributeItem = (item: any) => {
 const loadAttributeList = async () => {
   attributeLoading.value = true
   try {
-    const { data, error } = await getAttributeDataSet({ device_id: props.id })
-    if (!error) {
-      const list = data?.value || data?.list || (Array.isArray(data) ? data : []) || []
-      attributeList.value = list.map((item: any) => normalizeAttributeItem(item))
-    } else {
-      attributeList.value = []
-    }
-  } catch (err) {
-    logger.error('loadAttributeList failed:', err)
-    attributeList.value = []
+    const response = await getAttributeDataSet({ device_id: props.id })
+    if (isFlatRequestFailure(response)) return
+
+    const data = response.data
+    const list = data?.value || data?.list || (Array.isArray(data) ? data : []) || []
+    attributeList.value = list.map((item: any) => normalizeAttributeItem(item))
   } finally {
     attributeLoading.value = false
   }
@@ -346,8 +363,7 @@ const parseJsonValue = (value: any) => {
   if (typeof value !== 'string') return value
   try {
     return JSON.parse(value)
-  } catch (error) {
-    logger.warn('attribute payload JSON parse failed:', error)
+  } catch {
     return value
   }
 }
@@ -563,7 +579,7 @@ const buildAttributePayload = () => {
           </NTabs>
           <NFlex justify="end" class="button-group">
             <NButton @click="closeDialog">{{ $t('generate.cancel') }}</NButton>
-            <NButton type="primary" :disabled="isSubmitDisabled" @click="submit">
+            <NButton type="primary" :disabled="isSubmitDisabled" :loading="submitting" @click="submit">
               {{ $t('page.irrigation.distribute') }}
             </NButton>
           </NFlex>

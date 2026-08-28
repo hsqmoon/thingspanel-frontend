@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, watchEffect } from 'vue'
+import type { FormInst } from 'naive-ui'
 import type { SelectMixedOption } from 'naive-ui/es/select/src/interface'
 
 const rules = ref({})
+const formRef = ref<FormInst | null>(null)
 
 const protocol_config = defineModel<any>('protocolConfig', { default: {} })
 
@@ -12,15 +14,14 @@ interface Props {
 
 const props = defineProps<Props>()
 watchEffect(() => {
-  const str = '{}'
-  const thejson = JSON.parse(str)
+  rules.value = {}
   if (props.formElements) {
-    props.formElements.forEach(element => {
+    props.formElements.forEach((element) => {
       if (element.type === 'table') {
-        protocol_config.value[element.dataKey] ??= thejson[element.dataKey] || []
+        protocol_config.value[element.dataKey] ??= []
       } else {
         rules.value[element.dataKey] = element.validate || {}
-        protocol_config.value[element.dataKey] ??= thejson[element.dataKey] || ''
+        protocol_config.value[element.dataKey] ??= ''
       }
     })
   }
@@ -29,11 +30,17 @@ watchEffect(() => {
 const onCreate = () => {
   return {}
 }
+
+async function validate() {
+  await formRef.value?.validate()
+}
+
+defineExpose({ validate })
 </script>
 
 <template>
   <div class="connection-box">
-    <NForm :model="protocol_config" :rules="rules" label-placement="top" class="w-full">
+    <NForm ref="formRef" :model="protocol_config" :rules="rules" label-placement="top" class="w-full">
       <div class="w-full">
         <template v-for="element in props.formElements" :key="element.dataKey">
           <div v-if="element.type === 'input'">
@@ -67,10 +74,10 @@ const onCreate = () => {
               <div class="ml-20px w-68px"></div>
             </div>
             <n-dynamic-input
+              #default="{ index }"
               v-model:value="protocol_config[element.dataKey]"
               item-style="margin-bottom: 0;"
               :on-create="onCreate"
-              #="{ index }"
             >
               <div class="w-full flex justify-between">
                 <template v-for="subElement in element.array" :key="subElement.dataKey">
@@ -80,7 +87,7 @@ const onCreate = () => {
                       ignore-path-change
                       :show-label="false"
                       :label="subElement.label"
-                      :path="`${element.dataKey}[${index}]${subElement.dataKey}`"
+                      :path="`${element.dataKey}[${index}].${subElement.dataKey}`"
                       :rule="element.validate"
                     >
                       <NInputNumber
@@ -103,7 +110,7 @@ const onCreate = () => {
                       ignore-path-change
                       :show-label="false"
                       :label="subElement.label"
-                      :path="`${element.dataKey}[${index}]${subElement.dataKey}`"
+                      :path="`${element.dataKey}[${index}].${subElement.dataKey}`"
                       :rule="element.validate"
                     >
                       <NSelect

@@ -9,7 +9,7 @@ import type { GridLayoutPlusItem } from '../gridLayoutPlusTypes'
  * 生成唯一ID
  */
 export function generateId(prefix = 'item'): string {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
 }
 
 /**

@@ -253,7 +253,6 @@ const selectedAggregateFunctionLabel = computed(() => {
 // --- 数据获取逻辑 ---
 const fetchData = async (isExport = false) => {
   if (!props.deviceId || !props.theKey) {
-    logger.warn('Device ID or Key is missing, skipping fetch.')
     timeSeriesData.value = []
     emit('update:data', [])
     return
@@ -412,9 +411,6 @@ watch(
       logger.info(`Aggregate function changed to: ${newFunction}, triggering validation.`)
       // Trigger validation and fetch/emit
       validateAndFetch()
-    } else {
-      // This case shouldn't happen if logic is correct, but log if it does
-      logger.warn(`Aggregate function changed (${newFunction}) while window is 'no_aggregate'. Ignoring.`)
     }
   }
 )

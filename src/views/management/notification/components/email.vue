@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { reactive, ref, watch } from 'vue'
 import { useMessage } from 'naive-ui'
 import type { FormInst } from 'naive-ui'
+import { isFlatRequestFailure } from '@sa/axios'
 import { useBoolean, useLoading } from '@sa/hooks'
 import { editNotificationServices, fetchNotificationServicesEmail, sendTestEmail } from '@/service/api'
 import { deepClone } from '@/utils/common/tool'
@@ -9,24 +10,44 @@ import { createRequiredFormRule } from '@/utils/form/rule'
 import { $t } from '~/src/locales'
 
 const { loading, startLoading, endLoading } = useLoading(false)
+const { loading: sending, startLoading: startSending, endLoading: endSending } = useLoading(false)
 const { bool: visible, setTrue: openModal, setFalse: closeModal } = useBoolean()
+let configRequestEpoch = 0
+let debugSession = 0
 
 const formModel = reactive<NotificationServices.Email>(createDefaultFormModel())
 
 function setTableData(data: Api.NotificationServices.Email) {
-  Object.assign(formModel, data)
-  if (data.config !== 'null') {
-    formModel.email_config = JSON.parse(data.config)
+  let emailConfig = {}
+  if (data.config && data.config !== 'null') {
+    try {
+      const parsedConfig: unknown = JSON.parse(data.config)
+      if (typeof parsedConfig !== 'object' || parsedConfig === null || Array.isArray(parsedConfig)) {
+        window.$message?.error($t('json.validation.invalid'))
+        return
+      }
+      emailConfig = parsedConfig
+    } catch {
+      window.$message?.error($t('json.validation.invalid'))
+      return
+    }
   }
+  Object.assign(formModel, data, { email_config: emailConfig })
 }
 
 async function getNotificationServices() {
+  const epoch = ++configRequestEpoch
   startLoading()
-  const { data } = await fetchNotificationServicesEmail()
-  if (data) {
-    setTableData(data)
+  try {
+    const response = await fetchNotificationServicesEmail()
+    if (epoch !== configRequestEpoch || isFlatRequestFailure(response) || !response.data) return
+
+    setTableData(response.data)
+  } finally {
+    if (epoch === configRequestEpoch) {
+      endLoading()
+    }
   }
-  endLoading()
 }
 
 function createDefaultFormModel(): NotificationServices.Email {
@@ -50,15 +71,32 @@ const rules = {
 }
 const formRef = ref<HTMLElement & FormInst>()
 async function handleSubmit() {
-  await formRef.value?.validate()
+  if (loading.value) return
+  const epoch = ++configRequestEpoch
   startLoading()
-  const formData = deepClone(formModel)
-  delete formData.config
-  const data: any = await editNotificationServices(formData)
-  if (!data.error) {
-    window.$message?.success('success')
-    endLoading()
-    await getNotificationServices()
+  try {
+    try {
+      await formRef.value?.validate()
+    } catch (error) {
+      if (error === undefined || Array.isArray(error)) return
+      throw error
+    }
+    if (epoch !== configRequestEpoch) return
+
+    const formData = deepClone(formModel)
+    delete formData.config
+    const response = await editNotificationServices(formData)
+    if (epoch !== configRequestEpoch || isFlatRequestFailure(response)) return
+
+    window.$message?.success($t('common.modifySuccess'))
+    const configResponse = await fetchNotificationServicesEmail()
+    if (epoch !== configRequestEpoch || isFlatRequestFailure(configResponse) || !configResponse.data) return
+
+    setTableData(configResponse.data)
+  } finally {
+    if (epoch === configRequestEpoch) {
+      endLoading()
+    }
   }
 }
 
@@ -86,17 +124,41 @@ function handleOpenModal() {
 const message = useMessage()
 const debugFormRef = ref<HTMLElement & FormInst>()
 async function handleSend() {
-  await debugFormRef.value?.validate()
-  const messageReactive = message.loading($t('common.modifySuccess'), {
-    duration: 100000
-  })
-  const data: any = await sendTestEmail(debugData)
-  if (!data.error) {
-    window.$message?.success('success')
+  if (sending.value) return
+  const session = debugSession
+  startSending()
+  try {
+    try {
+      await debugFormRef.value?.validate()
+    } catch (error) {
+      if (error === undefined || Array.isArray(error)) return
+      throw error
+    }
+    if (session !== debugSession) return
+
+    const messageReactive = message.loading($t('common.sending'), {
+      duration: 100000
+    })
+    try {
+      const response = await sendTestEmail(debugData)
+      if (session !== debugSession || isFlatRequestFailure(response)) return
+
+      window.$message?.success($t('generate.sendingSuccess'))
+      closeModal()
+    } finally {
+      messageReactive.destroy()
+    }
+  } finally {
+    if (session === debugSession) {
+      endSending()
+    }
   }
-  messageReactive.destroy()
-  closeModal()
 }
+
+watch(visible, () => {
+  debugSession += 1
+  endSending()
+})
 
 function init() {
   getNotificationServices()
@@ -180,7 +242,9 @@ init()
         </NFormItemGridItem>
       </NGrid>
       <NSpace class="w-full pt-16px" :size="24" justify="center">
-        <NButton class="w-72px" type="primary" @click="handleSend">{{ $t('common.send') }}</NButton>
+        <NButton class="w-72px" type="primary" :loading="sending" @click="handleSend">
+          {{ $t('common.send') }}
+        </NButton>
       </NSpace>
     </NForm>
   </NModal>

@@ -41,14 +41,15 @@ export default [
     rules: {
       // 应用 Vue 3 推荐规则
       ...vuePlugin.configs.recommended.rules,
-      // 由 vue-tsc 负责属性检查，避免宏和模板属性误报
-      'vue/no-undef-properties': 'off',
+      'vue/no-undef-properties': 'error',
       // 关闭组件名必须多单词的限制
       'vue/multi-word-component-names': 'off',
       // 关闭模板中组件名大小写检查
       'vue/component-name-in-template-casing': 'off',
-      // 组合式 API 广泛使用先声明回调、后定义实现的安全闭包模式；该规则不做控制流分析
-      '@typescript-eslint/no-use-before-define': 'off',
+      '@typescript-eslint/no-use-before-define': [
+        'error',
+        { functions: false, variables: false, classes: true, typedefs: false }
+      ],
       '@typescript-eslint/no-unused-vars': [
         'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', ignoreRestSiblings: true }
@@ -69,8 +70,10 @@ export default [
     rules: {
       // 应用 TypeScript 推荐规则
       ...tsPlugin.configs.recommended.rules,
-      // 该规则不区分安全闭包引用与真正的初始化时序错误
-      '@typescript-eslint/no-use-before-define': 'off',
+      '@typescript-eslint/no-use-before-define': [
+        'error',
+        { functions: false, variables: false, classes: true, typedefs: false }
+      ],
       '@typescript-eslint/no-unused-vars': [
         'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', ignoreRestSiblings: true }
@@ -88,10 +91,10 @@ export default [
   {
     rules: {
       'array-callback-return': 'error',
+      'no-unused-expressions': 'error',
       // 关闭 Vue 属性简写偏好检查
       'vue/prefer-true-attribute-shorthand': 'off',
-      // 允许使用 console
-      'no-console': 'off',
+      'no-console': ['error', { allow: ['log', 'error', 'info', 'debug', 'time', 'timeEnd'] }],
       // 关闭未定义变量检查（由 TypeScript 处理）
       'no-undef': 'off',
       'no-unused-vars': 'off',
@@ -112,14 +115,6 @@ export default [
     files: ['**/*.{js,mjs,cjs}'],
     rules: {
       'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', ignoreRestSiblings: true }]
-    }
-  },
-
-  {
-    files: ['./scripts/*.ts'], // 匹配 scripts 目录下的 .ts 文件
-    rules: {
-      // 允许未使用的表达式（脚本文件中常见）
-      'no-unused-expressions': 'off'
     }
   }
 ]
