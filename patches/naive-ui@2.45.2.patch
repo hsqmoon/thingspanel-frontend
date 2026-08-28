@@ -120,11 +120,12 @@ diff --git a/es/menu/src/Submenu.mjs b/es/menu/src/Submenu.mjs
 index 5a3a012a924e13992effd524380891c4c8971747..348d273ab6e86b15495215b086ffa82f64ac4d4b 100644
 --- a/es/menu/src/Submenu.mjs
 +++ b/es/menu/src/Submenu.mjs
-@@ -6,7 +6,6 @@ import { menuItemGroupInjectionKey, submenuInjectionKey } from "./context.mjs";
+@@ -6,7 +6,7 @@ import { menuItemGroupInjectionKey, submenuInjectionKey } from "./context.mjs";
  import MenuOptionContent_default from "./MenuOptionContent.mjs";
  import { useMenuChild } from "./use-menu-child.mjs";
  import { useMenuChildProps } from "./use-menu-child-props.mjs";
 -import { itemRenderer } from "./utils.mjs";
++import { itemRenderer } from "./utils.mjs";
  import { Fragment, computed, createBlock, createElementBlock, defineComponent, mergeProps, openBlock, provide, ref } from "vue";
  import { useMemo } from "vooks";
  //#region src/menu/src/Submenu.tsx
@@ -281,15 +282,16 @@ diff --git a/lib/menu/src/Submenu.js b/lib/menu/src/Submenu.js
 index ea8df082480f982d8cd5a23af8d5c9aa2ff16ad3..9aaba46de654fe0c20cf53514255fd86098f2ddc 100644
 --- a/lib/menu/src/Submenu.js
 +++ b/lib/menu/src/Submenu.js
-@@ -7,7 +7,6 @@ const require_menu_src_context = require("./context.js");
+@@ -7,7 +7,7 @@ const require_menu_src_context = require("./context.js");
  const require_menu_src_MenuOptionContent = require("./MenuOptionContent.js");
  const require_menu_src_use_menu_child = require("./use-menu-child.js");
  const require_menu_src_use_menu_child_props = require("./use-menu-child-props.js");
 -const require_menu_src_utils = require("./utils.js");
++const require_menu_src_utils = require("./utils.js");
  let vue = require("vue");
  let vooks = require("vooks");
  //#region src/menu/src/Submenu.tsx
-@@ -44,7 +43,7 @@ const NSubmenu = (0, vue.defineComponent)({
+@@ -44,7 +44,7 @@ const NSubmenu = (0, vue.defineComponent)({
  	setup(props) {
  		const MenuChild = require_menu_src_use_menu_child.useMenuChild(props);
  		const { NMenu, NSubmenu } = MenuChild;
