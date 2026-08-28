@@ -1,5 +1,5 @@
 <script setup lang="tsx">
-import { createApp, onMounted, ref, watch, watchEffect } from 'vue'
+import { createApp, onMounted, ref, watch } from 'vue'
 import { NCard } from 'naive-ui'
 import { useScriptTag } from '@vueuse/core'
 import dayjs from 'dayjs'
@@ -17,6 +17,7 @@ const props = defineProps<{ devices: any[] }>()
 const { load } = useScriptTag(TENCENT_MAP_SDK_URL)
 
 const domRef = ref<HTMLDivElement | null>(null)
+const mapLoadError = ref(false)
 let map: any = null
 let multiMarker: any = null
 let infoWindow: any = null
@@ -87,7 +88,7 @@ const showMarker = (markerArr, bounds) => {
 }
 let ignoreMapClick = false
 
-async function renderMap() {
+async function renderMapInternal() {
   await load(true)
   if (!domRef.value) return
 
@@ -205,6 +206,16 @@ async function renderMap() {
   showMarker(markers, bounds)
 }
 
+async function renderMap() {
+  mapLoadError.value = false
+  try {
+    await renderMapInternal()
+  } catch {
+    mapLoadError.value = true
+    logger.info('腾讯地图暂不可用，已保留设备列表视图')
+  }
+}
+
 onMounted(() => {
   renderMap()
 })
@@ -221,13 +232,12 @@ watch(
   { deep: true }
 )
 
-watchEffect(async () => {
-  await renderMap()
-})
 </script>
 
 <template>
-  <div ref="domRef" class="h-full w-full"></div>
+  <div ref="domRef" class="h-full w-full">
+    <div v-if="mapLoadError" class="map-load-error">地图服务暂时不可用，请切换到列表或卡片视图。</div>
+  </div>
 </template>
 
 <style lang="scss" scoped>
@@ -247,6 +257,15 @@ watchEffect(async () => {
 
 .card_map {
   padding: 10px !important;
+}
+
+.map-load-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #666;
+  background: #f5f7fa;
 }
 
 :deep(.card_val) {
